@@ -92,6 +92,13 @@ service cloud.firestore {
         && nd().at is number;
     }
 
+    // Telefon eşleştirme: istemciler okuyamaz, sadece sunucu fonksiyonu okur
+    match /phones/{p} {
+      allow read: if false;
+      allow create: if signedIn() && nd().uid == request.auth.uid && nd().keys().hasOnly(['uid']);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // Durumlar
     match /statuses/{uid} {
       allow read: if signedIn();

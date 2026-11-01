@@ -8,6 +8,7 @@ export function where(f,op,v){return{f,op,v}}
 export function query(c,...w){return{kind:'q',path:c.path,w}}
 function snapDoc(path,v){return{id:path.split('/').pop(),exists:()=>v!==undefined,data:()=>v,metadata:{hasPendingWrites:false}}}
 export async function getDoc(r){const st=await all();return snapDoc(r.path,st[r.path])}
+export async function deleteDoc(r){await window.__set(r.path,undefined,false)}
 export async function setDoc(r,d,o){d=JSON.parse(JSON.stringify(d));await window.__set(r.path,d,!!(o&&o.merge))}
 function match(d,ws){return ws.every(({f,op,v})=>op==='=='?d[f]===v:op==='array-contains'?Array.isArray(d[f])&&d[f].includes(v):true)}
 async function runQ(q){const st=await all();const depth=q.path.split('/').length+1;

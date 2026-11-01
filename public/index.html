@@ -132,6 +132,11 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 body.dark .banner{background:#3A2F10;color:#F5DFA0}
 
 .placeholder{display:none}
+.notifbar{display:none;align-items:center;gap:8px;padding:10px 12px 10px 16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:14px}
+.notifbar.show{display:flex}
+.notifbar span{flex:1}
+.notifbar #notifOn{background:var(--brand);color:#fff;border-radius:16px;padding:7px 12px;font-weight:600;font-size:13px}
+.notifbar #notifX{color:var(--muted);padding:6px}
 .chat-title{cursor:pointer}
 .inputwrap #photoBtn{color:var(--muted)}
 .recbar{display:none;align-items:center;gap:8px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));background:var(--chatbg)}
@@ -224,6 +229,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       </div>
     </div>
     <div class="banner" id="banner"></div>
+    <div class="notifbar" id="notifbar"><span>🔔 Yeni mesajlardan haberin olsun</span><button id="notifOn">Bildirimleri aç</button><button id="notifX" aria-label="Kapat">✕</button></div>
     <div class="searchbar" id="searchbar"><input id="searchInput" placeholder="Ara..."></div>
     <div class="content">
       <div class="pane active" id="pane-chats"></div>
@@ -234,6 +240,8 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       <button data-act="myid">Benim TR ID'm</button>
       <button data-act="add">ID ile kişi ekle</button>
       <button data-act="newgroup">Yeni grup</button>
+      <button data-act="findcontacts">Rehberden bul</button>
+      <button data-act="notif">Bildirimler</button>
       <button data-act="profile">Profilim</button>
       <button data-act="readall">Tümünü okundu say</button>
       <button data-act="dark">Karanlık mod</button>
@@ -292,6 +300,13 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
     <div class="glist" id="gList"></div>
     <div class="perr" id="gErr"></div>
     <div class="acts"><button id="gCancel">İptal</button><button class="pri" id="gOk">Oluştur</button></div>
+  </div>
+
+  <div class="modal" id="cmodal">
+    <h3>Rehberindeki TR kullanıcıları</h3>
+    <p class="isub" id="cInfo"></p>
+    <div class="glist" id="cList"></div>
+    <div class="acts"><button id="cCancel">Kapat</button><button class="pri" id="cAdd">Seçilenleri ekle</button></div>
   </div>
 
   <div class="modal" id="imodal">

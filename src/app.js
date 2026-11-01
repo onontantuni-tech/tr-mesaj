@@ -1,6 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
+const VAPID_KEY="BNM0muk8JDXqc6KXABvndnLVHQHpYG-EKDet1qC6zkJq21tbM1P3y6sFlms3sSobLPmGBVkh1sbNQoZKo0s5N5w";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCjT6jaye-XKeBVI-GI_E-qpyAa_w9XzCo",
@@ -157,6 +159,7 @@ async function sendContent(conv,content,{blob,mime,meta}={}){
     plain[ref.id]={...c};msgKey[ref.id]=key;
     if(blob)mediaUrl[ref.id]=Promise.resolve(pv.content._local);
     await setDoc(ref,{...base,iv:b64(iv),ct:b64(ct)});
+    callApi("/api/notify",{id:ref.id}).catch(()=>{});
     if(!isGroupConv(conv)&&!contacts.includes(conv))saveContact(conv);
     pending=pending.filter(x=>x!==pv);
     renderMsgs();renderChats();
@@ -466,7 +469,7 @@ $("#msgs").addEventListener("click",e=>{const img=e.target.closest("img.media");
 const overlay=$("#overlay"),menu=$("#menu"),modal=$("#modal");
 let modalCb=null,profileLocked=false;
 function closeAll(){overlay.classList.remove("show");menu.classList.remove("show");modal.classList.remove("show");overlay.style.background=""}
-overlay.onclick=()=>{if(modal.dataset.locked==="1"||profileLocked)return;closeAll();closeProfile();closeGroupModal();closeInfo()};
+overlay.onclick=()=>{if(modal.dataset.locked==="1"||profileLocked)return;closeAll();closeProfile();closeGroupModal();closeInfo();closeContacts()};
 function openModal({title,text="",placeholder="",value="",ok="Tamam",cancel=true,cancelText="İptal",input=true,locked=false,numeric=false},cb){
   closeAll();overlay.classList.add("show");modal.classList.add("show");modal.dataset.locked=locked?"1":"";
   $("#mTitle").textContent=title;$("#mText").innerHTML=text;$("#mText").style.display=text?"":"none";
@@ -491,6 +494,8 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="myid")showMyId();
   if(a==="add")askAdd();
   if(a==="newgroup")openGroupModal("create");
+  if(a==="findcontacts")findContacts();
+  if(a==="notif")notifMenu();
   if(a==="profile")askProfile(false);
   if(a==="readall"){chatEntries().forEach(x=>markRead(x.c));toast("Tümü okundu")}
   if(a==="dark"){dark=!dark;document.body.classList.toggle("dark",dark);try{localStorage.setItem("tr-dark",dark?"1":"0")}catch(e){}}
@@ -547,7 +552,7 @@ $("#pOk").onclick=async()=>{
   $("#pOk").disabled=true;$("#pErr").textContent="";
   let ok=true;
   try{
-    if(ph!==myPhone){await setDoc(privRef(),{phone:ph},{merge:true});myPhone=ph}
+    if(ph!==myPhone){const old=myPhone;await setDoc(privRef(),{phone:ph},{merge:true});myPhone=ph;await syncPhone(old)}
     const patch={first:f,last:l,nick:f+" "+l,pub:myPub};
     if(!/^\d{6}$/.test(users[me]?.code||""))patch.code=await claimCode();
     ok=await saveMe(patch);
@@ -696,6 +701,8 @@ onAuthStateChanged(auth,async u=>{
   if(!mineU||!mineU.first||!mineU.last||!myPhone||!mineU.code)askProfile(true);
   else if(!mineU.pub||mineU.pub.x!==myPub.x||mineU.pub.y!==myPub.y)saveMe({pub:myPub});
   updateIdLabel();renderAll();
+  syncPhone().catch(()=>{});
+  setupPush(false).catch(()=>{});
 
   watchUser(me);
   unsubs.push(onSnapshot(contactsRef(),s=>{const x=s.exists()?s.data():null;contacts=Array.isArray(x?.list)?x.list.filter(v=>typeof v==="string"):[];contacts.forEach(watchUser);renderAll()},()=>{}));
@@ -714,11 +721,105 @@ onAuthStateChanged(auth,async u=>{
     if(cur)markRead(cur);
     decryptAll();renderAll();
     notifyNew(s);
+    openPendingDeepLink();
   },err=>{banner("Mesajlar yüklenemedi: "+(err.code||err.message))}));
   unsubs.push(onSnapshot(query(collection(fs,"reads"),where("members","array-contains",me)),s=>{
     s.docs.forEach(d=>{const x=d.data();if(x&&typeof x.at==="number"){if(d.id.startsWith(me+"_"))reads[d.id]=Math.max(reads[d.id]||0,x.at);else reads[d.id]=x.at}});
     renderAll()},()=>{}));
 });
+
+/* ---------- sunucu çağrıları ---------- */
+async function callApi(path,body){
+  const u=auth.currentUser;if(!u)throw new Error("auth");
+  const t=await u.getIdToken();
+  const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+t},body:JSON.stringify(body)});
+  if(!r.ok)throw Object.assign(new Error("api"),{status:r.status});
+  return r.json();
+}
+
+/* ---------- bildirimler ---------- */
+let messaging=null;
+const notifSupported=()=>"Notification" in window&&"serviceWorker" in navigator&&"PushManager" in window;
+async function setupPush(ask){
+  if(!me||!notifSupported())return false;
+  if(!(await messagingSupported().catch(()=>false)))return false;
+  if(Notification.permission==="denied")return false;
+  if(Notification.permission!=="granted"){
+    if(!ask){showNotifBar();return false}
+    const p=await Notification.requestPermission();
+    if(p!=="granted"){hideNotifBar(true);return false}
+  }
+  hideNotifBar(false);
+  messaging=messaging||getMessaging(app);
+  const reg=await navigator.serviceWorker.register("/sw.js");await navigator.serviceWorker.ready;
+  const token=await getToken(messaging,{vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+  if(!token)return false;
+  const ref=doc(fs,"private",me,"data","push");
+  let tokens=[];try{const s=await getDoc(ref);if(s.exists()&&Array.isArray(s.data().tokens))tokens=s.data().tokens}catch(e){}
+  if(!tokens.includes(token)){tokens=[...tokens.filter(t=>t!==token),token].slice(-10);await setDoc(ref,{tokens},{merge:true})}
+  return true;
+}
+function showNotifBar(){let d=false;try{d=localStorage.getItem("tr-notif-x")==="1"}catch(e){}if(!d)$("#notifbar").classList.add("show")}
+function hideNotifBar(remember){$("#notifbar").classList.remove("show");if(remember)try{localStorage.setItem("tr-notif-x","1")}catch(e){}}
+$("#notifOn").onclick=async()=>{try{const ok=await setupPush(true);toast(ok?"Bildirimler açıldı 🔔":"Bildirimler açılamadı")}catch(e){toast("Bildirimler açılamadı")}};
+$("#notifX").onclick=()=>hideNotifBar(true);
+function notifMenu(){
+  if(!notifSupported()){openModal({title:"Bildirimler",text:"Bu cihaz ya da tarayıcı bildirimleri desteklemiyor.",input:false,cancel:false});return}
+  const p=Notification.permission;
+  if(p==="granted"){setupPush(false).then(ok=>toast(ok?"Bildirimler açık ✓":"Bildirim kaydı yapılamadı"));return}
+  if(p==="denied"){openModal({title:"Bildirimler kapalı",text:"Bildirim izni daha önce reddedilmiş. Telefonda <b>Ayarlar → Uygulamalar → TR Mesaj → Bildirimler</b>'den açabilirsin. Bilgisayarda adres çubuğundaki kilit simgesinden izin verebilirsin.",input:false,cancel:false});return}
+  setupPush(true).then(ok=>toast(ok?"Bildirimler açıldı 🔔":"Bildirim izni verilmedi")).catch(()=>toast("Bildirimler açılamadı"));
+}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){try{const c=new URL(e.data.url,location.origin).searchParams.get("c");if(c){deepLink=c;openPendingDeepLink()}}catch(_){}}});
+let deepLink=null;
+try{deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
+function openPendingDeepLink(){
+  if(!deepLink||!ready)return;
+  const c=deepLink;
+  if(isGroupConv(c)&&!groups[gidOf(c)])return;
+  deepLink=null;openChat(c);
+}
+
+/* ---------- telefon eşleştirme ---------- */
+const phoneDocId=p=>p.replace("+","p");
+async function syncPhone(old){
+  if(!me||!myPhone)return;
+  const k="tr-phone-"+me;let done=null;try{done=localStorage.getItem(k)}catch(e){}
+  if(old&&old!==myPhone){try{await deleteDoc(doc(fs,"phones",phoneDocId(old)))}catch(e){}}
+  if(done===myPhone&&!old)return;
+  try{await setDoc(doc(fs,"phones",phoneDocId(myPhone)),{uid:me})}catch(e){/* zaten kayıtlı ya da başkası almış */}
+  try{localStorage.setItem(k,myPhone)}catch(e){}
+}
+let cResults=[];
+function closeContacts(){$("#cmodal").classList.remove("show");overlay.classList.remove("show")}
+$("#cCancel").onclick=closeContacts;
+$("#cAdd").onclick=async()=>{
+  const sel=[...document.querySelectorAll("#cList input:checked")].map(i=>i.value);
+  closeContacts();
+  for(const u of sel){watchUser(u);await saveContact(u)}
+  if(sel.length)toast(sel.length+" kişi eklendi");
+};
+async function findContacts(){
+  const supported="contacts" in navigator&&"select" in navigator.contacts;
+  if(!supported){openModal({title:"Rehberden bul",text:"Rehber seçimi sadece Android telefonlarda çalışıyor. Bilgisayarda kişileri TR ID ile ekleyebilirsin.",input:false,ok:"ID ile ekle",cancelText:"Kapat"},askAdd);return}
+  let picked;
+  try{picked=await navigator.contacts.select(["name","tel"],{multiple:true})}catch(e){toast("Rehber açılamadı");return}
+  if(!picked||!picked.length)return;
+  const phones=[],names=[];
+  picked.forEach(c=>(c.tel||[]).forEach(t=>{phones.push(t);names.push((c.name&&c.name[0])||t)}));
+  if(!phones.length){toast("Seçilen kişilerde telefon numarası yok");return}
+  toast("Aranıyor…",3000);
+  let res;
+  try{res=await callApi("/api/contacts",{phones})}catch(e){toast(e.status===429?"Çok sık denedin, biraz sonra tekrar dene":"Arama yapılamadı");return}
+  const byUid={};(res.matches||[]).forEach(m=>{if(!byUid[m.uid])byUid[m.uid]=names[m.i]});
+  cResults=Object.keys(byUid);
+  for(const u of cResults){watchUser(u);if(!users[u]){try{const s=await getDoc(doc(fs,"users",u));if(s.exists())users[u]=cleanUser(s.data())}catch(e){}}}
+  closeAll();
+  $("#cInfo").textContent=cResults.length?`${picked.length} kişiden ${cResults.length} tanesi TR kullanıyor.`:`Seçtiğin ${picked.length} kişiden hiçbiri henüz TR kullanmıyor.`;
+  $("#cList").innerHTML=cResults.map(u=>`<label class="gitem">${avHTML(u)}<div class="gn"><b>${esc(byUid[u])}</b><span>TR'de: ${esc(realName(u))}${contacts.includes(u)?" · zaten ekli":""}</span></div><input type="checkbox" value="${esc(u)}"${contacts.includes(u)?"":" checked"}></label>`).join("");
+  $("#cAdd").style.display=cResults.length?"":"none";
+  overlay.classList.add("show");$("#cmodal").classList.add("show");
+}
 
 /* ---------- başlık bildirimi ---------- */
 let firstSnap=true;
