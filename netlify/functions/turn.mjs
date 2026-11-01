@@ -18,7 +18,9 @@ export default async (req) => {
       });
       if (r.ok) {
         const d = await r.json();
-        const list = Array.isArray(d.iceServers) ? d.iceServers : d.iceServers ? [d.iceServers] : [];
+        const list = (Array.isArray(d.iceServers) ? d.iceServers : d.iceServers ? [d.iceServers] : [])
+          .map((s) => ({ ...s, urls: (Array.isArray(s.urls) ? s.urls : [s.urls]).filter((u) => typeof u === "string" && !/:53(\?|$)/.test(u)) }))
+          .filter((s) => s.urls.length);
         return json(200, { iceServers: list });
       }
     }
