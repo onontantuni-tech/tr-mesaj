@@ -1,5 +1,5 @@
 // TR service worker: çevrimdışı kabuk + bildirimler
-const C = "tr-v5";
+const C = "tr-v6";
 const SHELL = ["/", "/index.html", "/app.js", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -29,8 +29,10 @@ self.addEventListener("push", (e) => {
     // Uygulama açık ve o sohbet ekrandaysa bildirim gösterme
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     if (wins.some((w) => w.visibilityState === "visible" && w.focused)) return;
+    const isCall = d.kind === "call";
     await self.registration.showNotification(title, {
-      body, tag: "tr-" + conv, renotify: true,
+      body, tag: isCall ? "tr-call-" + d.call : "tr-" + conv, renotify: true,
+      requireInteraction: isCall, vibrate: isCall ? [500, 300, 500, 300, 500, 300, 500] : [200],
       icon: "/icons/icon-192.png", badge: "/icons/icon-192.png",
       data: { url: d.url || "/?c=" + encodeURIComponent(conv) },
     });

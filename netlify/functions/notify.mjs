@@ -12,6 +12,7 @@ export default async (req) => {
 
   let body;
   try { body = await req.json(); } catch { return json(400, { error: "body" }); }
+  if (body?.call) return notifyCall(uid, String(body.call));
   const id = String(body?.id || "");
   if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
   if (recent.has(id)) return json(200, { ok: true, dup: true });
@@ -66,5 +67,32 @@ export default async (req) => {
   }
   return json(200, { ok: true, sent });
 };
+
+// Gelen arama bildirimi
+async function notifyCall(uid, id) {
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
+  if (recent.has("c" + id)) return json(200, { ok: true, dup: true });
+  recent.set("c" + id, Date.now());
+  const { db, messaging } = admin();
+  const snap = await db.doc(`calls/${id}`).get();
+  if (!snap.exists) return json(404, { error: "call" });
+  const c = snap.data();
+  if (c.from !== uid || c.state !== "ringing") return json(403, { error: "owner" });
+  const ps = await db.doc(`private/${c.to}/data/push`).get();
+  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  if (!tokens.length) return json(200, { ok: true, sent: 0 });
+  const sender = await db.doc(`users/${uid}`).get();
+  const name = (sender.exists && sender.data().nick) || "Biri";
+  const res = await messaging.sendEachForMulticast({
+    tokens,
+    data: {
+      kind: "call", title: name, body: c.video ? "📹 Görüntülü arama" : "📞 Sesli arama",
+      conv: uid, call: id, url: `${SITE}/?call=${id}&c=${encodeURIComponent(uid)}`,
+    },
+    webpush: { headers: { Urgency: "high", TTL: "45" } },
+    android: { priority: "high", ttl: 45000 },
+  });
+  return json(200, { ok: true, sent: res.successCount });
+}
 
 export const config = { path: "/api/notify" };

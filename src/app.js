@@ -285,6 +285,7 @@ function renderChatHeader(){
   if(!cur)return;
   $("#cAvWrap").innerHTML=avHTML(cur);
   $("#cName").textContent=convTitle(cur);
+  $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)?"none":"";
   if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın"}
   else{const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):""}
 }
@@ -321,7 +322,7 @@ function renderMsgs(){
   const canSend=!g||!!grp;
   $("#composer").style.display=canSend?"":"none";
 }
-function renderAll(){renderChats();renderStatus();if(cur){renderChatHeader();renderMsgs()}}
+function renderAll(){renderChats();renderStatus();if(tabNow==="calls")renderCalls();if(cur){renderChatHeader();renderMsgs()}}
 
 /* ---------- okundu ---------- */
 const readBusy={};
@@ -448,7 +449,8 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   tabNow=t.dataset.tab;
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("active",p.id==="pane-"+tabNow));
-  $("#fab").innerHTML=tabNow==="chats"?'<svg viewBox="0 0 24 24"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"/></svg>';
+  if(tabNow==="calls")renderCalls();
+  $("#fab").innerHTML=tabNow==="chats"||tabNow==="calls"?'<svg viewBox="0 0 24 24"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"/></svg>';
 });
 $("#btnSearch").onclick=()=>{const sb=$("#searchbar");sb.classList.toggle("show");if(sb.classList.contains("show"))$("#searchInput").focus();else{query_="";$("#searchInput").value="";renderChats()}};
 $("#searchInput").oninput=e=>{query_=e.target.value.toLocaleLowerCase("tr").trim();if(tabNow!=="chats")document.querySelector('[data-tab="chats"]').click();renderChats()};
@@ -502,6 +504,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="logout")openModal({title:"Çıkış yap",text:"Hesabından çıkmak istiyor musun?",input:false,ok:"Çıkış yap"},logout);
 };
 $("#fab").onclick=()=>{if(tabNow==="status")askStatus();else askAdd()};
+document.querySelector(".content").addEventListener("click",e=>{const r=e.target.closest("[data-callback]");if(r)startCall(r.dataset.callback,r.dataset.video==="1")});
 
 /* ---------- profil / ID ---------- */
 function cleanUser(x){return{nick:typeof x.nick==="string"?x.nick.slice(0,62):"",first:typeof x.first==="string"?x.first.slice(0,30):"",last:typeof x.last==="string"?x.last.slice(0,30):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0}}
@@ -723,10 +726,179 @@ onAuthStateChanged(auth,async u=>{
     notifyNew(s);
     openPendingDeepLink();
   },err=>{banner("Mesajlar yüklenemedi: "+(err.code||err.message))}));
+  unsubs.push(onSnapshot(query(collection(fs,"calls"),where("members","array-contains",me)),s=>{
+    const next={};s.docs.forEach(d=>{const x=d.data();if(!x||!x.from||!x.to)return;next[d.id]={from:x.from,to:x.to,video:!!x.video,state:String(x.state||""),at:+x.at||0,answeredAt:+x.answeredAt||0,endedAt:+x.endedAt||0,offer:x.offer||null};watchUser(x.from===me?x.to:x.from)});
+    callLog=next;
+    s.docChanges().forEach(ch=>{if(ch.type!=="removed"){const x=next[ch.doc.id];if(x)onIncoming(ch.doc.id,x)}});
+    if(pendingCallId&&next[pendingCallId]){onIncoming(pendingCallId,next[pendingCallId]);pendingCallId=null}
+    renderCalls();
+  },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"reads"),where("members","array-contains",me)),s=>{
     s.docs.forEach(d=>{const x=d.data();if(x&&typeof x.at==="number"){if(d.id.startsWith(me+"_"))reads[d.id]=Math.max(reads[d.id]||0,x.at);else reads[d.id]=x.at}});
     renderAll()},()=>{}));
 });
+
+/* ---------- sesli / görüntülü arama (WebRTC) ---------- */
+// Sinyal: calls/{id} belgesi (offer/answer/durum) + calls/{id}/cands (ICE adayları). Medya iki cihaz arasında doğrudan,
+// DTLS-SRTP ile şifreli akar. TURN gerekirse /api/turn kısa ömürlü kimlik bilgisi verir.
+let callLog={};          // id -> çağrı belgesi (geçmiş)
+let call=null;           // etkin çağrı
+let iceCache=null;
+const RING_MS=45000;
+async function iceServers(){
+  if(iceCache&&iceCache.exp>Date.now())return iceCache.list;
+  let list=[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302"]}];
+  try{const r=await callApi("/api/turn",{});if(Array.isArray(r.iceServers)&&r.iceServers.length)list=list.concat(r.iceServers)}catch(e){}
+  iceCache={list,exp:Date.now()+30*60*1000};return list;
+}
+function callPeer(c){return c.from===me?c.to:c.from}
+function renderCalls(){
+  if(!ready)return;
+  const list=Object.entries(callLog).map(([id,c])=>({id,...c})).sort((a,b)=>b.at-a.at).slice(0,100);
+  const ico=v=>v?'<path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/>':'<path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/>';
+  $("#pane-calls").innerHTML=list.length?`<div class="section">Son aramalar</div>`+list.map(c=>{
+    const p=callPeer(c),out=c.from===me,missed=!out&&(c.state==="missed"||c.state==="declined"&&!c.answeredAt);
+    const dur=c.answeredAt&&c.endedAt?" · "+fmtDur((c.endedAt-c.answeredAt)/1000):"";
+    return`<div class="row callrow" data-callback="${esc(p)}" data-video="${c.video?1:0}">${avHTML(p)}<div class="meta" style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div class="name ${missed?"miss":""}">${esc(realName(p))}</div><div class="prev"><span class="dir ${missed?"miss":""}" style="color:${missed?"":"var(--brand)"}">${out?"↗":"↙"}</span>${when(c.at)}${dur}</div></div><svg class="ci" viewBox="0 0 24 24">${ico(c.video)}</svg></div></div>`}).join("")
+    :`<div class="empty">Henüz arama yok.<br>Bir sohbeti açıp üstteki 📞 ya da 🎥 simgesine dokun.</div>`;
+}
+let ringCtx=null,ringTimer=null;
+function startRing(incoming){
+  stopRing();
+  try{
+    ringCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const beep=()=>{if(!ringCtx)return;const o=ringCtx.createOscillator(),g=ringCtx.createGain();o.type="sine";o.frequency.value=incoming?880:440;g.gain.value=0.0001;o.connect(g);g.connect(ringCtx.destination);const t=ringCtx.currentTime;g.gain.exponentialRampToValueAtTime(incoming?0.25:0.12,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+(incoming?0.9:1.4));o.start(t);o.stop(t+1.5)};
+    beep();ringTimer=setInterval(beep,incoming?2000:3000);
+  }catch(e){}
+  if(incoming&&navigator.vibrate)try{navigator.vibrate([400,300,400,300,400])}catch(e){}
+}
+function stopRing(){clearInterval(ringTimer);ringTimer=null;if(ringCtx){try{ringCtx.close()}catch(e){}ringCtx=null}if(navigator.vibrate)try{navigator.vibrate(0)}catch(e){}}
+function showCallScreen(){
+  const c=call;if(!c)return;
+  const el=$("#callscr");el.classList.add("show");el.classList.toggle("vid",!!c.video);
+  $("#csAv").innerHTML=avHTML(c.peer);$("#csName").textContent=realName(c.peer);
+  updateCallUI();
+}
+function updateCallUI(){
+  const c=call;if(!c)return;
+  $("#csAv").innerHTML=avHTML(c.peer);$("#csName").textContent=realName(c.peer);
+  const st={dialing:"Aranıyor…",ringing:c.video?"Görüntülü arama geliyor…":"Sesli arama geliyor…",connecting:"Bağlanıyor…",live:"",ended:"Arama sona erdi"}[c.phase]||"";
+  if(c.phase==="live"){clearInterval(c.tick);const f=()=>{$("#csState").textContent=fmtDur((Date.now()-c.liveAt)/1000)};f();c.tick=setInterval(f,1000)}
+  else $("#csState").textContent=st;
+  $("#callscr").classList.toggle("live",c.phase==="live");
+  $("#callscr").classList.toggle("inc",c.phase==="ringing");
+  $("#csIncoming").classList.toggle("show",c.phase==="ringing");
+  $("#csActive").classList.toggle("show",c.phase!=="ringing"&&c.phase!=="ended");
+  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";
+}
+async function getMedia(video,facing="user"){
+  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:facing,width:{ideal:640},height:{ideal:480}}:false});
+}
+function attachLocal(stream){const v=$("#localVideo");v.srcObject=stream;v.play().catch(()=>{})}
+async function makePC(id,role){
+  const pc=new RTCPeerConnection({iceServers:await iceServers()});
+  const remote=new MediaStream();
+  pc.ontrack=e=>{remote.addTrack(e.track);const rv=$("#remoteVideo"),ra=$("#remoteAudio");if(call&&call.video){rv.srcObject=remote;rv.play().catch(()=>{})}ra.srcObject=remote;ra.play().catch(()=>{})};
+  pc.onicecandidate=e=>{if(e.candidate)setDoc(doc(collection(fs,"calls",id,"cands")),{by:me,c:e.candidate.toJSON(),at:Date.now()}).catch(()=>{})};
+  pc.onconnectionstatechange=()=>{
+    if(!call||call.pc!==pc)return;
+    if(pc.connectionState==="connected"&&call.phase!=="live"){call.phase="live";call.liveAt=Date.now();stopRing();updateCallUI()}
+    if(pc.connectionState==="failed"){toast("Bağlantı kurulamadı",3000);endCall("failed")}
+  };
+  const pendingCands=[];
+  const unsub=onSnapshot(collection(fs,"calls",id,"cands"),s=>{
+    s.docs.forEach(d=>{const x=d.data();if(!x||x.by===me||call?.seenCands?.has(d.id))return;call&&call.seenCands.add(d.id);
+      if(pc.remoteDescription)pc.addIceCandidate(x.c).catch(()=>{});else pendingCands.push(x.c)});
+  },()=>{});
+  const flush=()=>{while(pendingCands.length)pc.addIceCandidate(pendingCands.shift()).catch(()=>{})};
+  return{pc,unsub,flush};
+}
+async function startCall(peer,video){
+  if(call){toast("Zaten bir arama var");return}
+  if(isGroupConv(peer)){toast("Grup araması henüz yok");return}
+  if(!window.RTCPeerConnection||!navigator.mediaDevices?.getUserMedia){toast("Bu cihaz aramayı desteklemiyor");return}
+  let stream;
+  try{stream=await getMedia(video)}catch(e){toast(video?"Kamera/mikrofon izni verilmedi":"Mikrofon izni verilmedi",3500);return}
+  const ref=doc(collection(fs,"calls"));
+  call={id:ref.id,peer,video,role:"caller",phase:"dialing",stream,facing:"user",seenCands:new Set(),unsubs:[]};
+  if(video)attachLocal(stream);
+  showCallScreen();startRing(false);
+  try{
+    const {pc,unsub,flush}=await makePC(ref.id,"caller");call.pc=pc;call.unsubs.push(unsub);
+    stream.getTracks().forEach(t=>pc.addTrack(t,stream));
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);
+    await setDoc(ref,{from:me,to:peer,members:[me,peer],video:!!video,state:"ringing",at:Date.now(),offer:{type:offer.type,sdp:offer.sdp}});
+    callApi("/api/notify",{call:ref.id}).catch(()=>{});
+    call.unsubs.push(onSnapshot(ref,s=>{
+      const d=s.data();if(!d||!call||call.id!==ref.id)return;
+      if(d.answer&&!pc.currentRemoteDescription){pc.setRemoteDescription(d.answer).then(flush).catch(()=>{});call.phase="connecting";stopRing();updateCallUI()}
+      if(d.state==="declined"){toast(realName(peer)+" aramayı reddetti",3000);endCall(null)}
+      else if(d.state==="ended")endCall(null);
+    },()=>{}));
+    call.timeout=setTimeout(()=>{if(call&&call.id===ref.id&&call.phase==="dialing"){toast("Cevap yok",2500);endCall("missed")}},RING_MS);
+  }catch(e){toast("Arama başlatılamadı");endCall("failed")}
+}
+const handledCalls=new Set();
+function onIncoming(id,d){
+  if(call||handledCalls.has(id)||d.to!==me||d.state!=="ringing"||Date.now()-d.at>RING_MS)return;
+  handledCalls.add(id);
+  call={id,peer:d.from,video:!!d.video,role:"callee",phase:"ringing",offer:d.offer,seenCands:new Set(),unsubs:[],facing:"user"};
+  showCallScreen();startRing(true);
+  if(!users[d.from]||!users[d.from].nick)getDoc(doc(fs,"users",d.from)).then(s=>{if(s.exists()){users[d.from]=cleanUser(s.data());updateCallUI()}}).catch(()=>{});
+  call.unsubs.push(onSnapshot(doc(fs,"calls",id),s=>{const x=s.data();if(!x||!call||call.id!==id)return;if(x.state==="ended"||x.state==="missed"){if(call.phase==="ringing")toast("Cevapsız arama",2500);endCall(null)}},()=>{}));
+  call.timeout=setTimeout(()=>{if(call&&call.id===id&&call.phase==="ringing")endCall(null)},RING_MS);
+}
+async function acceptCall(){
+  const c=call;if(!c||c.phase!=="ringing")return;
+  stopRing();c.phase="connecting";updateCallUI();
+  try{c.stream=await getMedia(c.video)}catch(e){toast("Mikrofon/kamera izni verilmedi",3500);declineCall();return}
+  if(c.video)attachLocal(c.stream);
+  try{
+    const {pc,unsub,flush}=await makePC(c.id,"callee");c.pc=pc;c.unsubs.push(unsub);
+    c.stream.getTracks().forEach(t=>pc.addTrack(t,c.stream));
+    await pc.setRemoteDescription(c.offer);flush();
+    const ans=await pc.createAnswer();await pc.setLocalDescription(ans);
+    await setDoc(doc(fs,"calls",c.id),{answer:{type:ans.type,sdp:ans.sdp},state:"accepted",answeredAt:Date.now()},{merge:true});
+  }catch(e){toast("Arama bağlanamadı");endCall("failed")}
+}
+async function declineCall(){
+  const c=call;if(!c)return;
+  try{await setDoc(doc(fs,"calls",c.id),{state:"declined",endedAt:Date.now()},{merge:true})}catch(e){}
+  endCall(null);
+}
+async function endCall(state){
+  const c=call;if(!c)return;call=null;
+  stopRing();clearTimeout(c.timeout);clearInterval(c.tick);
+  c.unsubs.forEach(u=>{try{u()}catch(e){}});
+  try{c.pc&&c.pc.close()}catch(e){}
+  try{c.stream&&c.stream.getTracks().forEach(t=>t.stop())}catch(e){}
+  $("#remoteVideo").srcObject=null;$("#localVideo").srcObject=null;$("#remoteAudio").srcObject=null;
+  $("#callscr").classList.remove("show","vid","live","back");
+  if(state!==null){
+    const patch={state:state||"ended",endedAt:Date.now()};
+    try{await setDoc(doc(fs,"calls",c.id),patch,{merge:true})}catch(e){}
+  }
+}
+$("#csAccept").onclick=acceptCall;
+$("#csDecline").onclick=declineCall;
+$("#csHang").onclick=()=>endCall(call&&call.phase==="dialing"?"missed":"ended");
+$("#csMute").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csMute").classList.toggle("on",!t.enabled)};
+$("#csCam").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csCam").classList.toggle("on",!t.enabled)};
+$("#csFlip").onclick=async()=>{
+  const c=call;if(!c||!c.video||!c.stream)return;
+  const facing=c.facing==="user"?"environment":"user";
+  try{
+    const ns=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:640},height:{ideal:480}}});
+    const nt=ns.getVideoTracks()[0],ot=c.stream.getVideoTracks()[0];
+    const sender=c.pc&&c.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
+    if(sender)await sender.replaceTrack(nt);
+    if(ot){c.stream.removeTrack(ot);ot.stop()}c.stream.addTrack(nt);c.facing=facing;
+    attachLocal(c.stream);$("#callscr").classList.toggle("back",facing==="environment");
+  }catch(e){toast("Kamera çevrilemedi")}
+};
+$("#acallBtn").onclick=()=>cur&&startCall(cur,false);
+$("#vcallBtn").onclick=()=>cur&&startCall(cur,true);
+window.addEventListener("beforeunload",()=>{if(call)endCall(call.phase==="dialing"?"missed":"ended")});
 
 /* ---------- sunucu çağrıları ---------- */
 async function callApi(path,body){
@@ -770,9 +942,9 @@ function notifMenu(){
   if(p==="denied"){openModal({title:"Bildirimler kapalı",text:"Bildirim izni daha önce reddedilmiş. Telefonda <b>Ayarlar → Uygulamalar → TR Mesaj → Bildirimler</b>'den açabilirsin. Bilgisayarda adres çubuğundaki kilit simgesinden izin verebilirsin.",input:false,cancel:false});return}
   setupPush(true).then(ok=>toast(ok?"Bildirimler açıldı 🔔":"Bildirim izni verilmedi")).catch(()=>toast("Bildirimler açılamadı"));
 }
-if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){try{const c=new URL(e.data.url,location.origin).searchParams.get("c");if(c){deepLink=c;openPendingDeepLink()}}catch(_){}}});
-let deepLink=null;
-try{deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){try{const c=new URL(e.data.url,location.origin).searchParams.get("c");if(c){deepLink=c;openPendingDeepLink()}const k=new URL(e.data.url,location.origin).searchParams.get("call");if(k&&callLog[k])onIncoming(k,callLog[k])}catch(_){}}});
+let deepLink=null,pendingCallId=null;
+try{pendingCallId=new URLSearchParams(location.search).get("call");deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
 function openPendingDeepLink(){
   if(!deepLink||!ready)return;
   const c=deepLink;

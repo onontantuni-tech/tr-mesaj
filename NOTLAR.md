@@ -13,6 +13,10 @@
 - [ ] Telefonda bildirim ve "Rehberden bul" denemesi
 - [ ] Yeni bayraklı ikon için APK'yı PWABuilder'da yeniden üret (mevcut signing.keystore ile, yoksa yeni parmak izini assetlinks.json'a ekle)
 
+## Aramalar
+- Sesli/görüntülü arama eklendi (WebRTC, Firestore sinyal). Mobil hatlar için TURN gerekli:
+  Netlify ortam değişkenleri `CF_TURN_KEY_ID` + `CF_TURN_API_TOKEN` (Cloudflare Realtime TURN, aylık 1000 GB ücretsiz)
+
 ## Sıradakiler
 1. Yanıtla, tepki, mesaj silme/düzenleme
 2. Profil fotoğrafı, çevrimiçi/son görülme, "yazıyor…"

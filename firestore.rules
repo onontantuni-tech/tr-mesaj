@@ -99,6 +99,27 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
+    // Aramalar: sinyal bilgisi sadece iki tarafa açık. Medya cihazlar arasında doğrudan ve şifreli akar.
+    match /calls/{cid} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && nd().from == request.auth.uid
+        && nd().to is string && nd().to != request.auth.uid
+        && nd().members == [request.auth.uid, nd().to]
+        && nd().state == 'ringing';
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.members
+        && nd().from == resource.data.from
+        && nd().to == resource.data.to
+        && nd().members == resource.data.members
+        && nd().offer == resource.data.offer;
+      match /cands/{x} {
+        allow read: if signedIn() && request.auth.uid in get(/databases/$(database)/documents/calls/$(cid)).data.members;
+        allow create: if signedIn() && nd().by == request.auth.uid
+          && request.auth.uid in get(/databases/$(database)/documents/calls/$(cid)).data.members;
+      }
+    }
+
     // Durumlar
     match /statuses/{uid} {
       allow read: if signedIn();

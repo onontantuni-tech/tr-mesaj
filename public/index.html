@@ -132,6 +132,34 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 body.dark .banner{background:#3A2F10;color:#F5DFA0}
 
 .placeholder{display:none}
+.chat-top #vcallBtn,.chat-top #acallBtn{color:#fff}
+.callrow .ci{width:22px;height:22px;fill:var(--brand);flex-shrink:0}
+.callrow .miss{color:#E53935}
+.callrow .dir{font-size:13px;margin-right:4px}
+.callscr{position:absolute;inset:0;z-index:60;display:none;flex-direction:column;justify-content:space-between;color:#fff;background:linear-gradient(165deg,#A3121C,#3a0a0e 70%);overflow:hidden}
+.callscr.show{display:flex}
+.callscr video{position:absolute;background:#000}
+#remoteVideo{inset:0;width:100%;height:100%;object-fit:cover;display:none}
+#localVideo{right:14px;bottom:130px;width:110px;height:160px;border-radius:12px;object-fit:cover;display:none;transform:scaleX(-1);box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:2}
+.callscr.vid.live #remoteVideo,.callscr.vid #localVideo{display:block}
+.callscr.inc #localVideo{display:none!important}
+.callscr.vid.back #localVideo{transform:none}
+.cs-top{position:relative;z-index:2;text-align:center;padding:calc(64px + env(safe-area-inset-top)) 20px 0;display:flex;flex-direction:column;align-items:center}
+.cs-top .av{width:110px;height:110px;font-size:40px;border:3px solid rgba(255,255,255,.3)}
+.callscr.vid.live .cs-top{padding-top:calc(18px + env(safe-area-inset-top));text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.callscr.vid.live .cs-top .av,.callscr.vid.live .cs-lock{display:none}
+.cs-top h2{margin-top:18px;font-size:26px}
+.cs-top p{opacity:.85;margin-top:6px;font-variant-numeric:tabular-nums}
+.cs-lock{font-size:12px;opacity:.65!important}
+.cs-bottom{position:relative;z-index:2;display:none;justify-content:space-evenly;align-items:flex-start;padding:20px 10px calc(40px + env(safe-area-inset-bottom))}
+.cs-bottom.show{display:flex}
+.cbtn{display:flex;flex-direction:column;align-items:center;gap:8px;color:#fff;font-size:12.5px}
+.cbtn svg{width:64px;height:64px;padding:18px;border-radius:50%;fill:#fff;box-sizing:border-box}
+.cbtn.red svg{background:#E53935}
+.cbtn.green svg{background:#22C55E;animation:ring 1.2s infinite}
+.cbtn.dim svg{background:rgba(255,255,255,.18)}
+.cbtn.on svg{background:#fff;fill:#111}
+@keyframes ring{0%,100%{transform:rotate(0)}10%,30%{transform:rotate(-14deg)}20%,40%{transform:rotate(14deg)}50%{transform:rotate(0)}}
 .notifbar{display:none;align-items:center;gap:8px;padding:10px 12px 10px 16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:14px}
 .notifbar.show{display:flex}
 .notifbar span{flex:1}
@@ -226,6 +254,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       <div class="tabs">
         <button class="tab active" data-tab="chats">Sohbetler</button>
         <button class="tab" data-tab="status">Durum</button>
+        <button class="tab" data-tab="calls">Aramalar</button>
       </div>
     </div>
     <div class="banner" id="banner"></div>
@@ -234,6 +263,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
     <div class="content">
       <div class="pane active" id="pane-chats"></div>
       <div class="pane" id="pane-status"></div>
+      <div class="pane" id="pane-calls"></div>
     </div>
     <button class="fab" id="fab" aria-label="Yeni"><svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 9h-4v4h-2v-4H7V9h4V5h2v4h4v2z"/></svg></button>
     <div class="menu" id="menu">
@@ -254,6 +284,8 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       <button class="ibtn" id="back" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
       <div id="cAvWrap"></div>
       <div class="chat-title" id="chatTitle"><div class="name" id="cName"></div><div class="sub" id="cSub"></div></div>
+      <button class="ibtn" id="vcallBtn" aria-label="Görüntülü ara"><svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
+      <button class="ibtn" id="acallBtn" aria-label="Sesli ara"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>
     </div>
     <div class="msgs" id="msgs"></div>
     <div class="emojis" id="emojis"></div>
@@ -317,6 +349,28 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
   </div>
 
   <div class="viewer" id="viewer"><img id="viewerImg" alt=""><button class="ibtn vclose" id="viewerClose" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+
+  <div class="callscr" id="callscr">
+    <video id="remoteVideo" autoplay playsinline></video>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <audio id="remoteAudio" autoplay></audio>
+    <div class="cs-top">
+      <div id="csAv"></div>
+      <h2 id="csName"></h2>
+      <p id="csState"></p>
+      <p class="cs-lock">🔒 Uçtan uca şifreli</p>
+    </div>
+    <div class="cs-bottom" id="csIncoming">
+      <button class="cbtn red" id="csDecline" aria-label="Reddet"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.96.96 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.3 11.3 0 0 0-2.67-1.85.99.99 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg><span>Reddet</span></button>
+      <button class="cbtn green" id="csAccept" aria-label="Cevapla"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span>Cevapla</span></button>
+    </div>
+    <div class="cs-bottom" id="csActive">
+      <button class="cbtn dim" id="csMute" aria-label="Mikrofonu kapat"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-1.7z"/></svg><span>Sessiz</span></button>
+      <button class="cbtn dim" id="csCam" aria-label="Kamera"><svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg><span>Kamera</span></button>
+      <button class="cbtn dim" id="csFlip" aria-label="Kamerayı çevir"><svg viewBox="0 0 24 24"><path d="M20 5h-3.2L15 3H9L7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-8 13a5 5 0 0 1-4.9-4H5l3-3 3 3H9.1a3 3 0 0 0 5.4 1.2l1.4 1.4A5 5 0 0 1 12 18zm4-5-3-3h1.9a3 3 0 0 0-5.4-1.2L8.1 7.4A5 5 0 0 1 16.9 10H19l-3 3z"/></svg><span>Çevir</span></button>
+      <button class="cbtn red" id="csHang" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.96.96 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.3 11.3 0 0 0-2.67-1.85.99.99 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg><span>Kapat</span></button>
+    </div>
+  </div>
 
   <div class="story" id="story">
     <div class="bar"><i id="storyBar"></i></div>
