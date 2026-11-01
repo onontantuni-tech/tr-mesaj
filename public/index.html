@@ -30,7 +30,7 @@ input{font:inherit;color:inherit}
 .top{background:var(--brand);color:#fff;padding:14px 16px 0}
 .top-row{display:flex;align-items:center;justify-content:space-between;height:40px}
 .logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:24px;letter-spacing:1px}
-.logo .mark{width:30px;height:30px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.logo .mark{display:grid;place-items:center;box-shadow:0 0 0 1.5px rgba(255,255,255,.85);border-radius:4px}
 .conn{font-size:11px;font-weight:500;letter-spacing:0;opacity:.85;margin-left:4px}
 .icons{display:flex;gap:4px}
 .ibtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center}
@@ -217,7 +217,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
   <section class="screen" id="main">
     <div class="top">
       <div class="top-row">
-        <div class="logo"><span class="mark"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></span>TR<span class="conn" id="conn"></span></div>
+        <div class="logo"><span class="mark"><svg viewBox="0 0 1200 800" width="26" height="17" style="border-radius:3px;display:block"><rect width="1200" height="800" fill="#E30A17"/><circle cx="425" cy="400" r="200" fill="#fff"/><circle cx="475" cy="400" r="160" fill="#E30A17"/><polygon fill="#fff" points="583.334,400 764.235,458.779 652.431,304.894 652.431,495.106 764.235,341.221"/></svg></span>TR<span class="conn" id="conn"></span></div>
         <div class="icons">
           <button class="ibtn" id="btnSearch" aria-label="Ara"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
           <button class="ibtn" id="btnMenu" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button>
@@ -326,7 +326,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
 
   <div class="login" id="login">
     <div class="lg-top">
-      <div class="lg-logo"><svg viewBox="0 0 24 24" width="64" height="64"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></div>
+      <div class="lg-logo"><svg viewBox="0 0 1200 800" width="84" height="56" style="border-radius:8px;display:block"><rect width="1200" height="800" fill="#E30A17"/><circle cx="425" cy="400" r="200" fill="#fff"/><circle cx="475" cy="400" r="160" fill="#E30A17"/><polygon fill="#fff" points="583.334,400 764.235,458.779 652.431,304.894 652.431,495.106 764.235,341.221"/></svg></div>
       <h1>TR</h1>
       <p>Uçtan uca şifreli, hızlı ve sade mesajlaşma.</p>
     </div>
@@ -336,7 +336,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       <p class="lg-note">Devam ederek profil oluşturursun. Telefon numaran kimseye gösterilmez.</p>
     </div>
   </div>
-  <div class="splash show" id="splash"><div class="lg-logo"><svg viewBox="0 0 24 24" width="56" height="56"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></div><div style="margin-top:14px;color:#fff;opacity:.9">Bağlanıyor…</div></div>
+  <div class="splash show" id="splash"><div class="lg-logo"><svg viewBox="0 0 1200 800" width="74" height="49" style="border-radius:7px;display:block"><rect width="1200" height="800" fill="#E30A17"/><circle cx="425" cy="400" r="200" fill="#fff"/><circle cx="475" cy="400" r="160" fill="#E30A17"/><polygon fill="#fff" points="583.334,400 764.235,458.779 652.431,304.894 652.431,495.106 764.235,341.221"/></svg></div><div style="margin-top:14px;color:#fff;opacity:.9">Bağlanıyor…</div></div>
 
   <div class="toast" id="toast"></div>
 </div>

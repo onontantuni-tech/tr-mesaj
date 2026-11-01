@@ -11,6 +11,7 @@
 ## Yarım kalan
 - [ ] Netlify'a `FIREBASE_SERVICE_ACCOUNT` ortam değişkenini ekle (Firebase → Service accounts → Generate new private key; JSON'un tamamı), sonra Trigger deploy
 - [ ] Telefonda bildirim ve "Rehberden bul" denemesi
+- [ ] Yeni bayraklı ikon için APK'yı PWABuilder'da yeniden üret (mevcut signing.keystore ile, yoksa yeni parmak izini assetlinks.json'a ekle)
 
 ## Sıradakiler
 1. Yanıtla, tepki, mesaj silme/düzenleme
