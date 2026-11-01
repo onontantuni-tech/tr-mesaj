@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.trtr.mesaj",
+    "sha256_cert_fingerprints": ["A5:B5:60:32:78:14:BE:91:9E:27:87:BA:D6:09:C1:76:E2:65:DA:B0:D0:EC:0A:A5:C5:1D:A6:AA:20:7B:00:DD"]
+  }
+}]

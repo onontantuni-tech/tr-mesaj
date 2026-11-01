@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+    function nd() { return request.resource.data; }
+
+    // Herkese açık profil: ad, soyad, TR ID, şifreleme açık anahtarı
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if isMe(uid)
+        && nd().keys().hasOnly(['first','last','nick','code','pub','joined'])
+        && nd().nick is string && nd().nick.size() <= 62;
+    }
+
+    // TR ID'lerin benzersizliği
+    match /codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && nd().uid == request.auth.uid && code.matches('^[0-9]{6}$');
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Gizli alan: telefon, özel anahtar, kişiler. Sadece sahibi okuyup yazabilir.
+    match /private/{uid}/{document=**} {
+      allow read, write: if isMe(uid);
+    }
+
+    // Gruplar: sadece üyeler görür; yöneticiler düzenler; herkes kendini çıkarabilir
+    match /groups/{gid} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && nd().createdBy == request.auth.uid
+        && nd().admins == [request.auth.uid]
+        && request.auth.uid in nd().members
+        && nd().members.size() <= 50
+        && nd().name is string && nd().name.size() > 0 && nd().name.size() <= 50;
+      allow update: if signedIn()
+        && nd().createdBy == resource.data.createdBy
+        && nd().members.size() <= 50
+        && nd().name is string && nd().name.size() > 0 && nd().name.size() <= 50
+        && nd().admins.hasOnly(nd().members)
+        && (
+          request.auth.uid in resource.data.admins
+          ||
+          (request.auth.uid in resource.data.members
+            && !(request.auth.uid in nd().members)
+            && resource.data.members.removeAll([request.auth.uid]).hasAll(nd().members)
+            && nd().members.hasAll(resource.data.members.removeAll([request.auth.uid]))
+            && nd().name == resource.data.name)
+        );
+    }
+
+    // Mesajlar: sadece mesajın üyeleri okuyabilir. İçerik şifreli.
+    match /msgs/{id} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && nd().from == request.auth.uid
+        && request.auth.uid in nd().members
+        && nd().ct is string && nd().ct.size() < 20000
+        && nd().iv is string && nd().iv.size() < 40
+        && (
+          (nd().to is string
+            && nd().to != request.auth.uid
+            && nd().members == [request.auth.uid, nd().to]
+            && !('gid' in nd()))
+          ||
+          (nd().gid is string
+            && !('to' in nd())
+            && get(/databases/$(database)/documents/groups/$(nd().gid)).data.members == nd().members)
+        );
+      allow delete: if signedIn() && resource.data.from == request.auth.uid;
+    }
+
+    // Şifreli fotoğraf ve ses parçaları
+    match /blobs/{id} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && nd().from == request.auth.uid
+        && request.auth.uid in nd().members
+        && nd().members.size() <= 50
+        && nd().d is string && nd().d.size() < 850000;
+      allow delete: if signedIn() && resource.data.from == request.auth.uid;
+    }
+
+    // Okundu bilgisi: belge adı "okuyan_sohbet". Sadece ilgili kişiler görür, sadece okuyan yazar.
+    match /reads/{id} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow write: if signedIn()
+        && nd().members[0] == request.auth.uid
+        && nd().members.size() == 2
+        && id == request.auth.uid + '_' + nd().members[1]
+        && nd().at is number;
+    }
+
+    // Durumlar
+    match /statuses/{uid} {
+      allow read: if signedIn();
+      allow write: if isMe(uid)
+        && nd().text is string && nd().text.size() <= 300;
+    }
+  }
+}

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#D81E2A">
+<meta name="description" content="TR — uçtan uca şifreli mesajlaşma">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<title>TR</title>
+<style>
+:root{
+  --brand:#D81E2A; --brand-dark:#A3121C;
+  --bg:#F2F2F4; --panel:#FFFFFF; --text:#111318; --muted:#6B7080; --line:#E6E7EB;
+  --out:#FFE1E3; --in:#FFFFFF; --chatbg:#EFEAE6; --tick:#2F80ED;
+}
+body.dark{
+  --bg:#0E1013; --panel:#16191E; --text:#E8EAED; --muted:#8A909C; --line:#262A31;
+  --out:#5A1A20; --in:#1F232A; --chatbg:#0B0D10;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{position:relative;max-width:480px;height:100%;margin:0 auto;background:var(--panel);overflow:hidden;box-shadow:0 0 30px rgba(0,0,0,.08)}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--panel);transition:transform .25s ease}
+.screen.hidden{transform:translateX(100%);pointer-events:none}
+.top{background:var(--brand);color:#fff;padding:14px 16px 0}
+.top-row{display:flex;align-items:center;justify-content:space-between;height:40px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:24px;letter-spacing:1px}
+.logo .mark{width:30px;height:30px;border-radius:50%;background:#fff;display:grid;place-items:center}
+.conn{font-size:11px;font-weight:500;letter-spacing:0;opacity:.85;margin-left:4px}
+.icons{display:flex;gap:4px}
+.ibtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center}
+.ibtn:active{background:rgba(255,255,255,.2)}
+.ibtn svg{width:22px;height:22px;fill:currentColor}
+.tabs{display:flex;margin-top:6px}
+.tab{flex:1;padding:12px 0;text-align:center;font-weight:600;font-size:14px;opacity:.75;border-bottom:3px solid transparent;text-transform:uppercase;letter-spacing:.5px}
+.tab.active{opacity:1;border-color:#fff}
+.searchbar{display:none;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.searchbar.show{display:block}
+.searchbar input{width:100%;padding:10px 14px;border-radius:20px;border:none;background:var(--bg);outline:none}
+.content{flex:1;overflow-y:auto}
+.pane{display:none}.pane.active{display:block}
+.row{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer}
+.row:active{background:var(--bg)}
+.av{width:50px;height:50px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;color:#fff;font-weight:700;font-size:19px;background-size:cover;background-position:center;position:relative}
+.av .dot{position:absolute;right:1px;bottom:1px;width:13px;height:13px;border-radius:50%;background:#22C55E;border:2px solid var(--panel)}
+.meta{flex:1;min-width:0;border-bottom:1px solid var(--line);padding-bottom:10px}
+.l1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.name{font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.time{font-size:12px;color:var(--muted);flex-shrink:0}
+.time.unread{color:var(--brand);font-weight:600}
+.l2{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px}
+.prev{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prev.typ{color:var(--brand);font-style:italic}
+.badge{background:var(--brand);color:#fff;font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 6px}
+.section{padding:14px 16px 6px;font-size:13px;font-weight:600;color:var(--brand)}
+.empty{padding:40px 24px;text-align:center;color:var(--muted);line-height:1.5}
+.fab{position:absolute;right:18px;bottom:22px;width:56px;height:56px;border-radius:16px;background:var(--brand);color:#fff;display:grid;place-items:center;box-shadow:0 4px 14px rgba(216,30,42,.4)}
+.fab svg{width:24px;height:24px;fill:#fff}
+.ring{padding:2px;border-radius:50%;border:2.5px solid var(--brand)}
+.ring.seen{border-color:var(--line)}
+.ring .av{width:46px;height:46px}
+.chat-top{background:var(--brand);color:#fff;display:flex;align-items:center;gap:8px;padding:10px 8px;min-height:62px}
+.chat-top .av{width:40px;height:40px;font-size:16px;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
+.chat-top .av .dot{display:none}
+.chat-title{flex:1;min-width:0}
+.chat-title .name{font-size:16px}
+.chat-title .sub{font-size:12px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msgs{flex:1;overflow-y:auto;padding:10px 12px;background:var(--chatbg);
+  background-image:radial-gradient(rgba(216,30,42,.06) 1px,transparent 1px);background-size:18px 18px}
+.day{text-align:center;margin:10px 0}
+.day span{background:var(--panel);color:var(--muted);font-size:12px;padding:5px 12px;border-radius:8px;box-shadow:0 1px 1px rgba(0,0,0,.06);display:inline-block}
+.b{max-width:80%;padding:6px 9px 6px 10px;border-radius:10px;margin:3px 0;font-size:15px;line-height:1.35;position:relative;word-wrap:break-word;white-space:pre-wrap;box-shadow:0 1px 1px rgba(0,0,0,.08);clear:both}
+.b.out{background:var(--out);float:right;border-top-right-radius:3px}
+.b.in{background:var(--in);float:left;border-top-left-radius:3px}
+.b .who{display:block;font-size:12.5px;font-weight:700;margin-bottom:2px;white-space:nowrap}
+.b .s{float:right;font-size:11px;color:var(--muted);margin:6px 0 -4px 10px;display:flex;align-items:center;gap:2px}
+.b.pending{opacity:.7}
+.tk{width:16px;height:11px}
+.tk path{fill:none;stroke:var(--muted);stroke-width:1.6}
+.tk.read path{stroke:var(--tick)}
+.clear{clear:both}
+.composer{display:flex;align-items:flex-end;gap:6px;padding:8px;background:var(--chatbg)}
+.inputwrap{flex:1;display:flex;align-items:center;background:var(--panel);border-radius:24px;padding:4px 6px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.inputwrap input{flex:1;border:none;outline:none;background:transparent;padding:8px 4px;font-size:15px;min-width:0}
+.inputwrap .ibtn{width:36px;height:36px;color:var(--muted)}
+.send{width:48px;height:48px;border-radius:50%;background:var(--brand);display:grid;place-items:center;flex-shrink:0}
+.send svg{width:22px;height:22px;fill:#fff}
+.send:disabled{opacity:.5}
+.emojis{display:none;grid-template-columns:repeat(8,1fr);gap:4px;padding:8px;background:var(--panel);border-top:1px solid var(--line);max-height:180px;overflow-y:auto}
+.emojis.show{display:grid}
+.emojis button{font-size:24px;padding:4px;border-radius:8px}
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);display:none;z-index:10}
+.overlay.show{display:block}
+.menu{position:absolute;top:52px;right:10px;background:var(--panel);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.2);z-index:11;display:none;min-width:200px;overflow:hidden}
+.menu.show{display:block}
+.menu button{display:block;width:100%;text-align:left;padding:13px 18px;font-size:15px}
+.menu button:active{background:var(--bg)}
+.modal{position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);background:var(--panel);border-radius:16px;padding:20px;z-index:12;display:none}
+.modal.show{display:block}
+.modal h3{margin-bottom:6px}
+.modal p{color:var(--muted);font-size:14px;margin-bottom:12px;line-height:1.45}
+.modal input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);outline:none;margin-bottom:12px}
+.modal .acts{display:flex;justify-content:flex-end;gap:8px}
+.modal .acts button{padding:10px 16px;border-radius:10px;font-weight:600;color:var(--brand)}
+.modal .acts .pri{background:var(--brand);color:#fff}
+.story{position:absolute;inset:0;background:#000;z-index:20;display:none;flex-direction:column;color:#fff}
+.story.show{display:flex}
+.bar{height:3px;background:rgba(255,255,255,.3);margin:10px 10px 0;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:#fff}
+.story .hd{display:flex;align-items:center;gap:10px;padding:12px}
+.story .hd .av{width:38px;height:38px;font-size:15px}
+.story .bd{flex:1;display:grid;place-items:center;padding:30px;font-size:28px;font-weight:700;text-align:center;line-height:1.3;white-space:pre-wrap;word-break:break-word}
+.toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none;text-align:center;max-width:90%}
+.toast.show{opacity:1}
+.idbox{font-size:30px;font-weight:800;letter-spacing:4px;text-align:center;padding:14px;background:var(--bg);border-radius:12px;margin-bottom:12px;color:var(--brand);user-select:all}
+.lock{font-size:12px;text-align:center;margin:8px auto;max-width:300px;background:#FFF4D6;color:#5C4400;padding:6px 10px;border-radius:8px;line-height:1.4}
+body.dark .lock{background:#3A2F10;color:#F5DFA0}
+.fl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:2px 0 4px}
+.fl .priv{font-weight:500;color:var(--brand);margin-left:4px}
+.acct{display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:10px;padding:10px 12px;margin:10px 0 14px;font-size:13px;color:var(--muted)}
+.acct img{width:32px;height:32px;border-radius:50%}
+.acct b{color:var(--text);display:block;font-size:14px}
+.perr{color:#E53935;font-size:13px;min-height:18px;margin:-4px 0 6px}
+#pmodal input{margin-bottom:10px}
+.banner{background:#FFF4D6;color:#5C4400;font-size:13px;padding:10px 14px;line-height:1.4;display:none}
+.banner.show{display:block}
+body.dark .banner{background:#3A2F10;color:#F5DFA0}
+
+.placeholder{display:none}
+.chat-title{cursor:pointer}
+.inputwrap #photoBtn{color:var(--muted)}
+.recbar{display:none;align-items:center;gap:8px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));background:var(--chatbg)}
+.recbar.show{display:flex}
+.recbar #recCancel{color:#E53935;width:48px;height:48px}
+.recinfo{flex:1;display:flex;align-items:center;gap:10px;background:var(--panel);border-radius:24px;padding:12px 16px;font-variant-numeric:tabular-nums}
+.recdot{width:10px;height:10px;border-radius:50%;background:#E53935;animation:bl 1s infinite}
+@keyframes bl{50%{opacity:.2}}
+.rechint{color:var(--muted);font-size:13px;margin-left:auto}
+.b .media{display:block;max-width:260px;width:100%;border-radius:8px;margin:-2px -4px 4px;cursor:zoom-in;background:rgba(0,0,0,.06);min-height:80px;object-fit:cover}
+.b .mload{display:grid;place-items:center;width:240px;height:160px;border-radius:8px;background:rgba(0,0,0,.06);color:var(--muted);font-size:13px;margin-bottom:4px}
+.b audio{display:block;width:240px;max-width:100%;height:40px;margin:2px 0 4px}
+.b .who{display:block;font-size:12.5px;font-weight:700;margin-bottom:2px;white-space:nowrap}
+.glist{max-height:46vh;overflow-y:auto;margin:6px -8px 12px}
+.gitem{display:flex;align-items:center;gap:12px;padding:8px;border-radius:10px;cursor:pointer}
+.gitem:active,.gitem:hover{background:var(--bg)}
+.gitem .av{width:40px;height:40px;font-size:15px}
+.gitem .gn{flex:1;min-width:0}
+.gitem .gn b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gitem .gn span{font-size:12.5px;color:var(--muted)}
+.gitem input{width:20px;height:20px;accent-color:var(--brand);margin:0}
+.gitem .tag{font-size:11px;color:var(--brand);border:1px solid var(--brand);border-radius:6px;padding:1px 6px}
+.ihead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ihead .av{width:56px;height:56px;font-size:22px}
+.ihead h3{margin:0}
+.isub{font-size:13px;color:var(--muted)}
+#iActs{flex-wrap:wrap}
+#iActs .danger{color:#E53935}
+.viewer{position:absolute;inset:0;z-index:50;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center}
+.viewer.show{display:flex}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain}
+.vclose{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;color:#fff;background:rgba(255,255,255,.12)}
+.av.grp{font-size:22px}
+.plus{position:absolute;right:-2px;bottom:-2px;background:var(--brand);color:#fff;border:2px solid var(--panel);border-radius:50%;width:20px;height:20px;display:grid;place-items:center;font-size:14px;font-weight:700}
+.login,.splash{position:absolute;inset:0;z-index:40;display:none;flex-direction:column;background:linear-gradient(170deg,#D81E2A 0%,#A3121C 60%,#6E0B12 100%);color:#fff}
+.login.show,.splash.show{display:flex}
+.splash{align-items:center;justify-content:center}
+.lg-top{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 24px;gap:10px}
+.lg-logo{width:110px;height:110px;border-radius:30px;background:#fff;display:grid;place-items:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.lg-top h1{font-size:44px;letter-spacing:4px;margin-top:10px}
+.lg-top p{opacity:.9;font-size:16px}
+.lg-bottom{padding:24px 24px calc(34px + env(safe-area-inset-bottom))}
+.gbtn{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;color:#1f1f1f;font-weight:600;font-size:16px;padding:15px;border-radius:14px;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+.gbtn:active{transform:scale(.98)}
+.login .perr{color:#FFD7D9}
+.lg-note{text-align:center;font-size:12.5px;opacity:.8;margin-top:14px;line-height:1.4}
+.top{padding-top:calc(14px + env(safe-area-inset-top))}
+.chat-top{padding-top:calc(10px + env(safe-area-inset-top))}
+.composer{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+@media (min-width:900px){
+  body{background:#E3E1DE;padding:20px}
+  body.dark{background:#050607}
+  .app{max-width:1400px;height:calc(100vh - 40px);border-radius:8px}
+  #main{right:auto;width:380px;border-right:1px solid var(--line);z-index:2}
+  #chat{left:380px}
+  .screen.hidden{transform:none;pointer-events:auto}
+  #back{display:none}
+  .chat-top{padding-left:16px}
+  .placeholder{display:flex;position:absolute;top:0;bottom:0;left:380px;right:0;z-index:1;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--muted);gap:14px;padding:40px;border-bottom:6px solid var(--brand)}
+  .placeholder.off{display:none}
+  .placeholder .big{width:110px;height:110px;border-radius:50%;background:var(--brand);display:grid;place-items:center;color:#fff;font-size:42px;font-weight:800;letter-spacing:2px}
+  .placeholder h2{color:var(--text);font-weight:600;font-size:28px}
+  .placeholder p{max-width:420px;line-height:1.5}
+  #chat.hidden{z-index:0}
+  .modal{left:50%;right:auto;width:420px;transform:translate(-50%,-50%)}
+  .menu{left:300px;right:auto}
+  .story{left:0;right:0}
+  .msgs{padding:16px 8%}
+  .b{max-width:65%}
+  .fab{left:306px;right:auto}
+  .row:hover{background:var(--bg)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <section class="screen" id="main">
+    <div class="top">
+      <div class="top-row">
+        <div class="logo"><span class="mark"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></span>TR<span class="conn" id="conn"></span></div>
+        <div class="icons">
+          <button class="ibtn" id="btnSearch" aria-label="Ara"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
+          <button class="ibtn" id="btnMenu" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button>
+        </div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="chats">Sohbetler</button>
+        <button class="tab" data-tab="status">Durum</button>
+      </div>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="searchbar" id="searchbar"><input id="searchInput" placeholder="Ara..."></div>
+    <div class="content">
+      <div class="pane active" id="pane-chats"></div>
+      <div class="pane" id="pane-status"></div>
+    </div>
+    <button class="fab" id="fab" aria-label="Yeni"><svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-3 9h-4v4h-2v-4H7V9h4V5h2v4h4v2z"/></svg></button>
+    <div class="menu" id="menu">
+      <button data-act="myid">Benim TR ID'm</button>
+      <button data-act="add">ID ile kişi ekle</button>
+      <button data-act="newgroup">Yeni grup</button>
+      <button data-act="profile">Profilim</button>
+      <button data-act="readall">Tümünü okundu say</button>
+      <button data-act="dark">Karanlık mod</button>
+      <button data-act="logout">Çıkış yap</button>
+    </div>
+  </section>
+
+  <section class="screen hidden" id="chat">
+    <div class="chat-top">
+      <button class="ibtn" id="back" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
+      <div id="cAvWrap"></div>
+      <div class="chat-title" id="chatTitle"><div class="name" id="cName"></div><div class="sub" id="cSub"></div></div>
+    </div>
+    <div class="msgs" id="msgs"></div>
+    <div class="emojis" id="emojis"></div>
+    <form class="composer" id="composer">
+      <div class="inputwrap">
+        <button type="button" class="ibtn" id="emojiBtn" aria-label="Emoji"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-3.5-9A1.5 1.5 0 1 0 8.5 8a1.5 1.5 0 0 0 0 3zm7 0A1.5 1.5 0 1 0 15.5 8a1.5 1.5 0 0 0 0 3zM12 17.5c2.3 0 4.3-1.5 5.1-3.5H6.9c.8 2 2.8 3.5 5.1 3.5z"/></svg></button>
+        <input id="msgInput" placeholder="Mesaj yaz" autocomplete="off" maxlength="2000">
+        <button type="button" class="ibtn" id="photoBtn" aria-label="Fotoğraf"><svg viewBox="0 0 24 24"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg></button>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+      </div>
+      <button class="send" type="submit" id="sendBtn" aria-label="Gönder"><svg id="icoSend" viewBox="0 0 24 24" style="display:none"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg><svg id="icoMic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-1.7z"/></svg></button>
+    </form>
+    <div class="recbar" id="recbar">
+      <button class="ibtn" id="recCancel" aria-label="Kaydı sil"><svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+      <div class="recinfo"><span class="recdot"></span><span id="recTime">0:00</span><span class="rechint">Kaydediliyor…</span></div>
+      <button class="send" id="recSend" aria-label="Sesli mesajı gönder"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
+    </div>
+  </section>
+
+  <div class="placeholder" id="placeholder"><div class="big">TR</div><h2>TR Web</h2><p>Soldan bir sohbet seç ya da <b>+</b> ile TR ID'si girerek yeni birini ekle.</p><p style="font-size:13px">🔒 Mesajların uçtan uca şifreli</p></div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="modal" id="modal">
+    <h3 id="mTitle"></h3>
+    <p id="mText"></p>
+    <input id="mInput">
+    <div class="acts"><button id="mCancel">İptal</button><button class="pri" id="mOk">Tamam</button></div>
+  </div>
+
+  <div class="modal" id="pmodal">
+    <h3 id="pTitle">Profilini oluştur</h3>
+    <div class="acct" id="pAcct"></div>
+    <label class="fl">Ad</label><input id="pFirst" maxlength="30" autocomplete="given-name">
+    <label class="fl">Soyad</label><input id="pLast" maxlength="30" autocomplete="family-name">
+    <label class="fl">Telefon numarası <span class="priv">🔒 Kimse göremez</span></label><input id="pPhone" type="tel" inputmode="tel" placeholder="05xx xxx xx xx" maxlength="17" autocomplete="tel">
+    <div class="perr" id="pErr"></div>
+    <div class="acts"><button id="pCancel">İptal</button><button class="pri" id="pOk">Kaydet</button></div>
+  </div>
+
+  <div class="modal" id="gmodal">
+    <h3 id="gTitle">Yeni grup</h3>
+    <input id="gName" maxlength="50" placeholder="Grup adı">
+    <div class="fl" id="gListLabel">Üyeleri seç</div>
+    <div class="glist" id="gList"></div>
+    <div class="perr" id="gErr"></div>
+    <div class="acts"><button id="gCancel">İptal</button><button class="pri" id="gOk">Oluştur</button></div>
+  </div>
+
+  <div class="modal" id="imodal">
+    <div class="ihead"><div id="iAv"></div><div><h3 id="iName"></h3><div class="isub" id="iSub"></div></div></div>
+    <div class="fl" id="iLabel"></div>
+    <div class="glist" id="iList"></div>
+    <div class="acts" id="iActs"></div>
+  </div>
+
+  <div class="viewer" id="viewer"><img id="viewerImg" alt=""><button class="ibtn vclose" id="viewerClose" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+
+  <div class="story" id="story">
+    <div class="bar"><i id="storyBar"></i></div>
+    <div class="hd"><div id="sAvWrap"></div><div><b id="sName"></b><div style="font-size:12px;opacity:.7" id="sTime"></div></div></div>
+    <div class="bd" id="sBody"></div>
+  </div>
+
+  <div class="login" id="login">
+    <div class="lg-top">
+      <div class="lg-logo"><svg viewBox="0 0 24 24" width="64" height="64"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></div>
+      <h1>TR</h1>
+      <p>Uçtan uca şifreli, hızlı ve sade mesajlaşma.</p>
+    </div>
+    <div class="lg-bottom">
+      <button class="gbtn" id="googleBtn"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Google ile devam et</button>
+      <div class="perr" id="loginErr" style="text-align:center;margin-top:12px"></div>
+      <p class="lg-note">Devam ederek profil oluşturursun. Telefon numaran kimseye gösterilmez.</p>
+    </div>
+  </div>
+  <div class="splash show" id="splash"><div class="lg-logo"><svg viewBox="0 0 24 24" width="56" height="56"><path fill="#D81E2A" d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.3-2.2c.9.2 1.8.3 2.7.3 5 0 9-3.6 9-8s-4-8-9-8z"/><circle cx="13.5" cy="11" r="2.4" fill="#fff"/><circle cx="14.2" cy="11" r="1.9" fill="#D81E2A"/></svg></div><div style="margin-top:14px;color:#fff;opacity:.9">Bağlanıyor…</div></div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="/app.js" defer></script>
+</body>
+</html>
