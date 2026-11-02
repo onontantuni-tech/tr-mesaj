@@ -799,11 +799,15 @@ async function makePC(id,role){
   const pc=new RTCPeerConnection({iceServers:await iceServers()});
   const remote=new MediaStream();
   pc.ontrack=e=>{remote.addTrack(e.track);const rv=$("#remoteVideo"),ra=$("#remoteAudio");if(call&&call.video){rv.srcObject=remote;rv.play().catch(()=>{})}ra.srcObject=remote;ra.play().catch(()=>{})};
-  pc.onicecandidate=e=>{if(e.candidate)setDoc(doc(collection(fs,"calls",id,"cands")),{by:me,c:e.candidate.toJSON(),at:Date.now()}).catch(()=>{})};
+  // Arama belgesi sunucuda oluşmadan aday yazılırsa kurallar reddeder: o yüzden belge hazır olana kadar biriktir
+  const outQ=[];let docReady=role==="callee";
+  const sendCand=c=>setDoc(doc(collection(fs,"calls",id,"cands")),{by:me,c,at:Date.now()}).catch(()=>setTimeout(()=>setDoc(doc(collection(fs,"calls",id,"cands")),{by:me,c,at:Date.now()}).catch(()=>{}),1500));
+  pc.onicecandidate=e=>{if(!e.candidate)return;const c=e.candidate.toJSON();if(docReady)sendCand(c);else outQ.push(c)};
+  const markReady=()=>{docReady=true;while(outQ.length)sendCand(outQ.shift())};
   pc.onconnectionstatechange=()=>{
     if(!call||call.pc!==pc)return;
     if(pc.connectionState==="connected"&&call.phase!=="live"){call.phase="live";call.liveAt=Date.now();stopRing();updateCallUI()}
-    if(pc.connectionState==="failed"){toast("Bağlantı kurulamadı",3000);endCall("failed")}
+    if(pc.connectionState==="failed"||pc.iceConnectionState==="failed"){toast("Bağlantı kurulamadı",3000);endCall("failed")}
   };
   const pendingCands=[];
   const unsub=onSnapshot(collection(fs,"calls",id,"cands"),s=>{
@@ -811,7 +815,7 @@ async function makePC(id,role){
       if(pc.remoteDescription)pc.addIceCandidate(x.c).catch(()=>{});else pendingCands.push(x.c)});
   },()=>{});
   const flush=()=>{while(pendingCands.length)pc.addIceCandidate(pendingCands.shift()).catch(()=>{})};
-  return{pc,unsub,flush};
+  return{pc,unsub,flush,markReady};
 }
 async function startCall(peer,video){
   if(call){toast("Zaten bir arama var");return}
@@ -824,10 +828,11 @@ async function startCall(peer,video){
   if(video)attachLocal(stream);
   showCallScreen();startRing(false);
   try{
-    const {pc,unsub,flush}=await makePC(ref.id,"caller");call.pc=pc;call.unsubs.push(unsub);
+    const {pc,unsub,flush,markReady}=await makePC(ref.id,"caller");call.pc=pc;call.unsubs.push(unsub);
     stream.getTracks().forEach(t=>pc.addTrack(t,stream));
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
     await setDoc(ref,{from:me,to:peer,members:[me,peer],video:!!video,state:"ringing",at:Date.now(),offer:{type:offer.type,sdp:offer.sdp}});
+    markReady();
     callApi("/api/notify",{call:ref.id}).catch(()=>{});
     call.unsubs.push(onSnapshot(ref,s=>{
       const d=s.data();if(!d||!call||call.id!==ref.id)return;
