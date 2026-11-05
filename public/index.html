@@ -132,6 +132,64 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 body.dark .banner{background:#3A2F10;color:#F5DFA0}
 
 .placeholder{display:none}
+.chat-top #gameBtn{color:#fff}
+.gitem.soon{opacity:.5;pointer-events:none}
+.b .gamecard{display:flex;align-items:center;gap:10px;background:rgba(14,124,58,.1);border:1px solid rgba(14,124,58,.35);border-radius:10px;padding:10px 12px;margin:2px 0 4px;min-width:210px;cursor:pointer}
+.b .gamecard .gi{font-size:30px}
+.b .gamecard b{display:block}
+.b .gamecard span{font-size:12.5px;color:var(--muted)}
+.b .gamecard .go{margin-left:auto;background:#0E7C3A;color:#fff;border-radius:14px;padding:6px 10px;font-weight:600;font-size:13px}
+.gamescr{position:absolute;inset:0;z-index:55;display:none;flex-direction:column;background:radial-gradient(ellipse at center,#16804a 0%,#0b5a31 70%,#08401f 100%);color:#fff;user-select:none;-webkit-user-select:none}
+.gamescr.show{display:flex}
+.g-top{display:flex;align-items:center;gap:6px;padding:calc(8px + env(safe-area-inset-top)) 8px 6px;background:rgba(0,0,0,.25)}
+.g-title{flex:1;display:flex;flex-direction:column}
+.g-title span{font-size:12px;opacity:.8}
+.g-leave{color:#fff;font-size:12.5px;border:1px solid rgba(255,255,255,.4);border-radius:14px;padding:6px 10px}
+.g-table{flex:1;position:relative;min-height:0}
+.g-msg{text-align:center;font-size:14px;font-weight:600;padding:6px 10px;min-height:30px;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.g-rack{background:linear-gradient(#a8763e,#7c5428);margin:0 6px;border-radius:10px 10px 4px 4px;padding:8px 6px 10px;display:grid;grid-template-columns:repeat(8,1fr);gap:5px;box-shadow:0 -2px 10px rgba(0,0,0,.35) inset;min-height:132px}
+.g-actions{display:flex;gap:6px;padding:8px 8px calc(10px + env(safe-area-inset-bottom))}
+.g-actions button{flex:1;padding:11px 4px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-weight:600;font-size:14px}
+.g-actions button.pri{background:#D81E2A}
+.g-actions button.gold{background:#E0A800;color:#222}
+.g-actions button:disabled{opacity:.35}
+.tile{position:relative;background:linear-gradient(#fffdf6,#efe6cf);border-radius:6px;aspect-ratio:3/4.1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:22px;box-shadow:0 2px 0 #c9b98f,0 3px 5px rgba(0,0,0,.35);color:#222;transition:transform .12s;cursor:pointer;line-height:1}
+.tile .dot{width:7px;height:7px;border-radius:50%;background:currentColor;margin-top:4px;opacity:.85}
+.tile.c0{color:#D32F2F}.tile.c1{color:#D79A00}.tile.c2{color:#1565C0}.tile.c3{color:#1b1b1b}
+.tile.fake{color:#0E7C3A;font-size:24px}
+.tile.wild{box-shadow:0 0 0 2px #FFD54F,0 2px 0 #c9b98f,0 3px 8px rgba(255,213,79,.8)}
+.tile.sel{transform:translateY(-10px);box-shadow:0 0 0 3px #4FC3F7,0 6px 10px rgba(0,0,0,.4)}
+.tile.new{animation:tnew .6s}
+@keyframes tnew{from{transform:translateY(-14px);opacity:.3}}
+.tile.sm{font-size:17px;width:36px;border-radius:5px}
+.tile.empty{background:rgba(0,0,0,.18);box-shadow:inset 0 0 0 2px rgba(255,255,255,.25);color:rgba(255,255,255,.7);font-size:11px;font-weight:600;cursor:default}
+.seat{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;text-align:center;max-width:110px}
+.seat .av{width:44px;height:44px;font-size:16px;border:2px solid rgba(255,255,255,.4)}
+.seat.turn .av{border-color:#FFD54F;box-shadow:0 0 0 4px rgba(255,213,79,.35);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(255,213,79,.1)}}
+.seat .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.seat .ct{opacity:.8;font-size:11px}
+.seat.p-top{top:8px;left:50%;transform:translateX(-50%)}
+.seat.p-left{left:8px;top:34%}
+.seat.p-right{right:8px;top:34%}
+.disc{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;opacity:.95}
+.disc.d-left{left:12px;bottom:10px}.disc.d-right{right:12px;bottom:10px}.disc.d-top{left:50%;transform:translateX(-50%);top:98px}.disc.d-ro{right:24px;top:calc(34% + 92px)}.disc.d-lo{left:24px;top:calc(34% + 92px)}
+.disc.take .tile{box-shadow:0 0 0 3px #4FC3F7,0 3px 5px rgba(0,0,0,.35);animation:pulse2 1s infinite}
+@keyframes pulse2{50%{transform:translateY(-3px)}}
+.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:18px;align-items:center}
+.pile{width:46px;aspect-ratio:3/4.1;border-radius:6px;background:repeating-linear-gradient(45deg,#e9dfc3,#e9dfc3 6px,#ddd0ad 6px,#ddd0ad 12px);box-shadow:0 3px 0 #b9a77a,0 5px 0 #a99668,0 7px 8px rgba(0,0,0,.4);display:grid;place-items:center;color:#5a4a28;font-weight:800;font-size:15px;cursor:pointer}
+.pile.take{box-shadow:0 0 0 3px #4FC3F7,0 3px 0 #b9a77a,0 5px 0 #a99668,0 7px 8px rgba(0,0,0,.4);animation:pulse2 1s infinite}
+.center .lbl{font-size:10.5px;text-align:center;margin-top:4px;opacity:.85}
+.lobby{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px}
+.lobby .seats{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:340px}
+.lobby .st{background:rgba(0,0,0,.22);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px;font-size:14px}
+.lobby .st .av{width:36px;height:36px;font-size:14px}
+.lobby button{background:#E0A800;color:#222;font-weight:700;border-radius:24px;padding:12px 26px;font-size:16px}
+.lobby button.sec{background:rgba(255,255,255,.18);color:#fff}
+.overbox{position:absolute;left:10px;right:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.72);border-radius:16px;padding:16px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+.overbox .wh{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:100%}
+.overbox .sc{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;font-size:13px}
+.overbox button{background:#E0A800;color:#222;font-weight:700;border-radius:22px;padding:10px 22px}
 .chat-top #vcallBtn,.chat-top #acallBtn{color:#fff}
 .callrow .ci{width:22px;height:22px;fill:var(--brand);flex-shrink:0}
 .callrow .miss{color:#E53935}
@@ -284,6 +342,7 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
       <button class="ibtn" id="back" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
       <div id="cAvWrap"></div>
       <div class="chat-title" id="chatTitle"><div class="name" id="cName"></div><div class="sub" id="cSub"></div></div>
+      <button class="ibtn" id="gameBtn" aria-label="Oyun"><svg viewBox="0 0 24 24"><path d="M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg></button>
       <button class="ibtn" id="vcallBtn" aria-label="Görüntülü ara"><svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
       <button class="ibtn" id="acallBtn" aria-label="Sesli ara"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>
     </div>
@@ -349,6 +408,35 @@ body.dark .banner{background:#3A2F10;color:#F5DFA0}
   </div>
 
   <div class="viewer" id="viewer"><img id="viewerImg" alt=""><button class="ibtn vclose" id="viewerClose" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button></div>
+
+  <div class="modal" id="gpick">
+    <h3>Oyun seç</h3>
+    <p class="isub">Sohbetteki herkes masaya katılabilir. Boş yerlere bilgisayar oturur.</p>
+    <div class="glist">
+      <div class="gitem" data-newgame="okey"><div class="av" style="background:#0E7C3A">🀄</div><div class="gn"><b>Okey</b><span>4 kişilik · seri ve çift</span></div></div>
+      <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
+      <div class="gitem soon"><div class="av" style="background:#555">🃏</div><div class="gn"><b>Pişti · Batak · King</b><span>Yakında</span></div></div>
+      <div class="gitem soon"><div class="av" style="background:#555">🎲</div><div class="gn"><b>Tavla</b><span>Yakında</span></div></div>
+    </div>
+    <div class="acts"><button id="gpickClose">Kapat</button></div>
+  </div>
+
+  <div class="gamescr" id="gamescr">
+    <div class="g-top">
+      <button class="ibtn" id="gBack" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
+      <div class="g-title"><b id="gTitleTxt">Okey</b><span id="gSub"></span></div>
+      <button class="g-leave" id="gLeave">Masadan kalk</button>
+    </div>
+    <div class="g-table" id="gTable"></div>
+    <div class="g-msg" id="gMsg"></div>
+    <div class="g-rack" id="gRack"></div>
+    <div class="g-actions" id="gActions">
+      <button id="gSortRun">Seri diz</button>
+      <button id="gSortPair">Çift diz</button>
+      <button id="gDiscard" class="pri">At</button>
+      <button id="gFinish" class="gold">Bitir</button>
+    </div>
+  </div>
 
   <div class="callscr" id="callscr">
     <video id="remoteVideo" autoplay playsinline></video>
