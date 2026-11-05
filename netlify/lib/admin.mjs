@@ -5,7 +5,8 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 
-export const SITE = "https://luminous-syrniki-b2dc9b.netlify.app";
+// Bildirim linkleri göreli: hangi alan adında yayınlanırsa orada açılır
+export const SITE = "";
 
 function init() {
   if (getApps().length) return getApps()[0];

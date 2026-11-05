@@ -1,5 +1,10 @@
 # TR — Nerede kaldık (1 Kasım 2026)
 
+## Yayın yeri
+- Netlify ücretsiz kredisi bitti (ayda ~20 yayın). Vercel'e taşınıyor: `vercel.json` + `api/*.mjs` (Netlify fonksiyonlarını sarar).
+- Vercel ortam değişkenleri: FIREBASE_SERVICE_ACCOUNT, CF_TURN_KEY_ID, CF_TURN_API_TOKEN
+- Yeni alan adı Firebase Authentication > Authorized domains'e eklenmeli; APK yeni adresle yeniden üretilmeli.
+
 ## Çalışanlar
 - Site: https://luminous-syrniki-b2dc9b.netlify.app (GitHub `main` → Netlify otomatik yayın)
 - APK: PWABuilder ile üretildi, paket adı `com.trtr.mesaj` (imza anahtarı Harun'da, güvenli sakla)
