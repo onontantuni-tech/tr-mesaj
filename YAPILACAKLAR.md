@@ -280,6 +280,18 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 207. Haftalık özet bildirimi
 208. Sesli mesaj arka planda çalmaya devam etsin
 
+## Onaylanan ek özellikler — 12. liste (6 Kasım 2026)
+209. Kullanıcının kendi jeton hareketleri ekranı (öncelikli öneri)
+210. Kesintide masa ücreti otomatik iade (öncelikli öneri)
+211. Hileli oyuncu bildirme
+212. Rakiple geçmiş skor
+213. Kulağa götürünce sesli mesaj ahizeden
+214. Aramayı sesli ↔ görüntülü çevirme
+215. Grup aramasına sonradan katılma
+216. Kilit ekranında bildirim içeriğini gizleme
+
+Fikir toplama kapandı (6 Kasım 2026). Kullanıcı "başla" deyince öncelik sırasıyla kodlamaya geçilecek.
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57, 155
