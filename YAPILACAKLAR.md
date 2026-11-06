@@ -172,6 +172,33 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 
 İstenmeyenler: 94 Yapay zekâ ipucu, 105 İşletme karşılama mesajı, 106 İşletme hesabı.
 
+## Onaylanan ek özellikler — 6. liste (6 Kasım 2026; 119 ve 120 istenmedi)
+114. Çanak Okey — her elden %5 kasaya + %5 çanağa birikir; okey atan çanaktaki jetonları alır (18 yaş onayı arkasında)
+115. Tavla çeşitleri: Mahbusa, Gülbahar
+116. Kızma Birader
+117. Domino
+118. Canlı bilgi yarışması (18 yaş onayı arkasında)
+121. Sohbet içinde mesaj sabitleme
+122. Yıldızlı mesajlar
+123. Sohbet arşivleme
+124. Sessize alma (8 saat / 1 hafta / her zaman)
+125. Okundu bilgisini kapatma
+126. Grupta @bahsetme
+127. Topluluklar
+128. QR kod ile arkadaş ekleme
+129. Sohbeti dışa aktarma
+130. Kullanıcı adı (@harun)
+131. Yazı boyutu ayarı
+132. Erişilebilirlik (ekran okuyucu)
+133. Veri ve depolama ayarı
+134. Bildirimden hızlı yanıt
+135. Ana ekran kısayolları
+136. Fenomen / ortaklık kodu
+137. Etkinlik takvimi
+138. Geri dönen kullanıcıya hediye ("Seni özledik")
+
+İstenmeyenler: 119 Masa müziği/ortam sesi, 120 Kahve falı.
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57
