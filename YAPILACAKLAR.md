@@ -117,6 +117,37 @@ Son güncelleme: 6 Kasım 2026
 
 Sonraya bırakılanlar: 58 Sorumlu oyun (harcama limiti, süre hatırlatıcı), 61 iPhone / App Store sürümü.
 
+## Onaylanan ek özellikler — 4. liste (6 Kasım 2026; 87 sonraya bırakıldı)
+63. Kahvehane odası (sanal salon, masalar yan yana, boş sandalyeye otur)
+64. Avatar ve kıyafet (şapka, gözlük, bıyık…)
+65. Masada yazılı sohbet balonu
+66. Masaya çay ısmarlama (herkes görür)
+67. Ünvanlar ("Okey Ağası", "Bilardo Ustası")
+68. Haftanın oyuncusu
+69. Rakip değerlendirme (👍/👎, kötü davranan az eşleşir)
+70. Açık masada seviye dengeli eşleşme
+71. Bağlantı kopunca masaya geri dönme
+72. Şehir sıralaması
+73. Takım (kulüp) ligleri
+74. Arkadaş önerisi (ortak arkadaş)
+75. Doğum günü hatırlatma ve hediye jeton
+76. Bayram tebrik kartları
+77. Duruma müzik ve fotoğraf
+78. Yuvarlak video mesaj
+79. Görüntülü aramada ekran paylaşımı
+80. Arama kaydı (karşı tarafa bildirimli)
+81. Kaydedilen mesajlar (kendine not)
+82. Toplu mesaj listesi
+83. Otomatik yenilenen VIP aboneliği
+84. Reklamsız paket
+85. Mağazada günün fırsatı
+86. Hediye kodu / kartı
+88. Moderatör rolü
+89. Şüpheli hesap ve jeton aktarma hilesi tespiti
+90. Bakım modu duyurusu
+
+Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekebilir).
+
 ## Notlar
 - Hileli dağıtım (para yükleyenin kazanma oranını düşürme) yapılmayacak — reddedildi.
 - Vercel Hobby ticari kullanıma izin vermiyor; satışa başlayınca Pro gerekir.
