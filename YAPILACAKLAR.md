@@ -259,6 +259,17 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 190. İlk açılış tanıtım turu
 191. Aramadan önce mikrofon/kamera testi
 
+## Onaylanan ek özellikler — 10. liste ("hepsi", 6 Kasım 2026)
+192. Sohbet listesi filtre sekmeleri (Tümü / Okunmamış / Gruplar / Favoriler)
+193. Favori kişiler
+194. Toplu seçme (sil / okundu / arşivle)
+195. Yarım mesaj taslağı
+196. Sohbet medya galerisi
+197. Kişisel kelime filtresi
+198. Arkadaş listesini gruplama
+199. Profil ziyaretçi defteri
+200. Masada alkış animasyonu
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57, 155
