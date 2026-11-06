@@ -242,6 +242,23 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 
 İstenmeyen: 169 Telefon numarası değiştirme.
 
+## Onaylanan ek özellikler — 9. liste ("hepsi", 6 Kasım 2026)
+177. Sıra süresi çubuğu
+178. Açık masada oylamayla masadan atma
+179. Solak modu
+180. Tablet düzeni
+181. Android ana ekran aracı (widget)
+182. Akıllı saat bildirimleri
+183. Paylaş menüsünde TR (share target)
+184. Bildirimde gönderenin fotoğrafı
+185. Windows'a kurulabilen sürüm
+186. Sohbet renk temaları
+187. GIF arama
+188. Yıl sonu özeti kartı
+189. Rekorlar tablosu
+190. İlk açılış tanıtım turu
+191. Aramadan önce mikrofon/kamera testi
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57, 155
