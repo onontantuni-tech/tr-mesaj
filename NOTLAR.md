@@ -37,3 +37,8 @@
 4. Kanallar, topluluk, anket, fotoğraflı durum, ortak liste, etkinlik
 5. Tanıtım sitesi, yönetim paneli
 6. (İsteğe bağlı) SMS ile numara doğrulama, sesli/görüntülü arama, Play Store
+
+## Kasım 2026
+- Arkadaşlık isteği: friends/{küçükUid_büyükUid}. Mesaj/arama kurallarla, oyun sunucuda arkadaşlık ister. Eski yazışmalar /api/wallet "me" ile otomatik arkadaş olur (wallet.fm).
+- VIP: 30 gün 250.000 jeton (economy.VIP). badges/{uid}.vipUntil sunucu yazar. VIP desenler vip:true. profile_views/{bakılan}/v/{bakan}; listeyi /api/wallet "views" verir (VIP değilse sadece sayı).
+- Bilardo (8 top): netlify/lib/pool.mjs (ortak fizik, kurallar, bot), /api/pool. İstemci lastShots'u aynı fizikle tekrar oynatır.

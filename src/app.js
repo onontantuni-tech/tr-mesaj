@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import * as P from "../netlify/lib/pool.mjs";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
 const VAPID_KEY="BNM0muk8JDXqc6KXABvndnLVHQHpYG-EKDet1qC6zkJq21tbM1P3y6sFlms3sSobLPmGBVkh1sbNQoZKo0s5N5w";
 
@@ -234,7 +235,7 @@ function tick(m){
   return`<svg class="tk ${read?"read":""}" viewBox="0 0 16 11"><path d="M1 6l3 3 6-7"/><path d="M6 9l1 0 6-7"/></svg>`;
 }
 const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return"🀄 Okey daveti";if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return c.kind==="pool"?"🎱 Bilardo daveti":"🀄 Okey daveti";if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 function convMsgs(c){return raw.filter(m=>convOfMsg(m)===c).concat(pending.filter(m=>m.conv===c)).sort((a,b)=>a.at-b.at)}
@@ -305,7 +306,7 @@ function bubbleBody(m,c){
     const ar=c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:"";
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
-  if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">🀄</span><div><b>Okey masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
+  if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">${c.kind==="pool"?"🎱":"🀄"}</span><div><b>${c.kind==="pool"?"Bilardo masası":"Okey masası"}</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
   if(c.t==="voice"){
     if(c._local)return`<audio controls src="${esc(c._local)}"></audio>`;
     return`<div class="mload" style="height:44px" data-media="${esc(m.id)}">🎤 Yükleniyor… ${c.dur?fmtDur(c.dur):""}</div>`;
@@ -1144,8 +1145,9 @@ function tileHTML(t,ok,{sm=false,sel=false,cls=""}={}){
   return`<div class="tile c${tColor(t)} ${w?"wild":""} ${sm?"sm":""} ${sel?"sel":""} ${cls}" data-t="${t}" aria-label="${T_COLORS[tColor(t)]} ${tNum(t)}${w?" okey":""}">${tNum(t)}<span class="dot"></span></div>`;
 }
 let game=null;            // {id, data, hand, order, sel, unsubs, busy}
-async function gameApi(body){
-  const r=await callApi("/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
+async function gameApi(body,type){
+  const t=type||(game&&game.data&&game.data.type);
+  const r=await callApi(t==="pool"?"/api/pool":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
   return r;
 }
 $("#gameBtn").onclick=()=>{if(!cur)return;closeAll();overlay.classList.add("show");$("#gpick").classList.add("show")};
@@ -1155,9 +1157,9 @@ $("#gpick").addEventListener("click",async e=>{
   const conv=cur,type=it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
   pickStake(async stake=>{
     toast("Masa kuruluyor…",2500);
-    const r=await gameApi({action:"create",type,conv,stake});
+    const r=await gameApi({action:"create",type,conv,stake},type);
     if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
-    await sendContent(conv,{t:"game",gid:r.id,kind:"okey",stake});
+    await sendContent(conv,{t:"game",gid:r.id,kind:type,stake});
     openGame(r.id);
   });
 });
@@ -1186,10 +1188,10 @@ function openGame(id){
     if(game.sel!=null&&!tiles.includes(game.sel))game.sel=null;
     renderGame();
   },()=>{}));
-  game.poke=setInterval(()=>{const d=game&&game.data;if(!d||d.status!=="play")return;const s=d.seats[d.turn];if(s&&!s.bot&&s.uid!==me&&Date.now()-(d.lastMoveAt||0)>47000)gameApi({action:"poke",id})},10000);
+  game.poke=setInterval(()=>{const d=game&&game.data;if(!d||d.status!=="play")return;const s=d.seats[d.turn];if(s&&!s.bot&&s.uid!==me&&Date.now()-(d.lastMoveAt||0)>(d.type==="pool"?62000:47000))gameApi({action:"poke",id})},10000);
 }
 function closeGame(silent){
-  if(!game)return;game.unsubs.forEach(u=>{try{u()}catch(e){}});clearInterval(game.poke);game=null;
+  if(!game)return;game.unsubs.forEach(u=>{try{u()}catch(e){}});clearInterval(game.poke);if(game.raf)cancelAnimationFrame(game.raf);game=null;$("#gamescr").classList.remove("pool");
   $("#gamescr").classList.remove("show");
 }
 $("#gBack").onclick=()=>{try{if(history.state&&history.state.game){history.back();return}}catch(e){}closeGame()};
@@ -1201,6 +1203,7 @@ function renderGame(){
   if(!game||!game.data)return;
   const d=game.data,my=mySeatIdx(d);
   const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack");
+  if(d.type==="pool"){gs.classList.add("pool");return renderPool(d,my)}
   $("#gTitleTxt").textContent="Okey";
   $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
@@ -1241,7 +1244,7 @@ function renderGame(){
   let rack=tiles.map(t=>tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})).join("");
   for(let i=tiles.length;i<16;i++)rack+=`<div></div>`;
   $("#gRack").innerHTML=my>=0?rack:"";
-  $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";
+  $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";$("#pCtrl").style.display="none";
   $("#gDiscard").disabled=!(canDiscard&&game.sel!=null)||game.busy;
   $("#gFinish").disabled=!(canDiscard&&game.sel!=null)||game.busy;
   const pile=$("#gPile");if(pile)pile.onclick=()=>canDraw&&gameMove({action:"draw",from:"pile"});
@@ -1249,11 +1252,11 @@ function renderGame(){
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 function renderLobby(d,my){
-  $("#gRack").style.display="none";$("#gActions").style.display="none";$("#gMsg").textContent="";
+  $("#gRack").style.display="none";$("#gActions").style.display="none";$("#gMsg").textContent="";$("#pCtrl").style.display="none";game.pbuilt=false;
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
-  const host=d.host===me,free=d.seats.some(s=>!s);
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">🀄</div><b style="font-size:20px">Okey masası</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
+  const host=d.host===me,free=d.seats.some(s=>!s),pool=d.type==="pool";
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${pool?"🎱":"🀄"}</div><b style="font-size:20px">${pool?"Bilardo masası · 8 top":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>gameMove({action:"join"});
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
 }
@@ -1274,6 +1277,161 @@ $("#gRack").addEventListener("click",e=>{
   else{const a=game.order.indexOf(game.sel),b=game.order.indexOf(t);if(a>=0&&b>=0){[game.order[a],game.order[b]]=[game.order[b],game.order[a]]}game.sel=null}
   game.newTiles=null;renderGame();
 });
+/* ---------- oyunlar: Bilardo (8 top) ---------- */
+// Vuruş sunucuda simüle edilir. İstemci aynı fizik koduyla vuruşları tekrar oynatır (animasyon), sonra sunucunun sonucuna oturur.
+const BALL_COL=["#fff","#F2C200","#1E4FD8","#D7261E","#5B2A86","#F07A12","#127A3A","#7A1B1B","#111"];
+const FELT_COL={yesil:"#0f6b3a",lacivert:"#1d3d7a",bordo:"#7a1a28",siyah:"#2e2e2e",ay:"#b30f27",vip_mor:"#4d1c70",vip_mermer:"#5d7a8c",vip_altin:"#1b4a32"};
+const RAIL_COL={ceviz:"#6b4423",abanoz:"#2a1c14",kiraz:"#7a2a22",altin:"#c79a2a",vip_sedef:"#d9cfc2",vip_elmas:"#7fb8dc"};
+const GROUP_TR={solid:"düz",stripe:"çizgili"};
+function renderPool(d,my){
+  $("#gTitleTxt").textContent="Bilardo";
+  $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. oyun`:"";
+  $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
+  if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
+  $("#gRack").style.display="none";$("#gActions").style.display="none";
+  if(!game.pbuilt){
+    $("#gTable").innerHTML='<div class="pwrap"><div class="pbar" id="pBar"></div><div class="pcv"><canvas id="pc"></canvas></div><div id="pOver"></div></div>';
+    game.pbuilt=true;game.pseq=null;game.pview=null;game.aim=null;game.place=null;
+    poolInput();
+  }
+  const g=d.groups;
+  const left=k=>(game.pview||d.balls||[]).filter(b=>P.typeOf(b.i)===k).length;
+  $("#pBar").innerHTML=d.seats.map((s,i)=>`<div class="pp ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div><b>${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""}</b><span>${g?GROUP_TR[g[i]]+" · "+left(g[i])+" top kaldı":"Grup belli değil"} · ${(d.scores||[])[i]||0} galibiyet</span></div></div>`).join('<div class="vs">vs</div>');
+  // yeni vuruş(lar) geldiyse oynat
+  if(game.pseq!==d.seq){
+    const first=game.pseq==null;game.pseq=d.seq;
+    if(!first&&(d.lastShots||[]).length)playShots(d.lastShots.slice(),()=>{game.pview=null;afterShots()});
+    else{game.pview=null;afterShots()}
+  }else if(!game.anim)afterShots();
+  function afterShots(){
+    if(!game||!game.data)return;
+    const d=game.data;
+    const myTurn=d.status==="play"&&d.turn===mySeatIdx(d);
+    if(myTurn&&(d.ballInHand||!d.balls.some(b=>b.i===0))){
+      const c=d.balls.find(b=>b.i===0);const others=d.balls.filter(b=>b.i!==0);
+      if(!game.place||!P.canPlace(others,game.place.x,game.place.y,d.ballInHand==="kitchen"))
+        game.place=c&&P.canPlace(others,c.x,c.y,d.ballInHand==="kitchen")?{x:c.x,y:c.y}:findSpot(others,d.ballInHand==="kitchen");
+    }else game.place=null;
+    if(myTurn&&!game.aim){const c=curCue();const t=d.balls.find(b=>b.i!==0);game.aim=c&&t?{x:t.x-c.x,y:t.y-c.y}:{x:1,y:0}}
+    $("#pCtrl").style.display=myTurn?"":"none";
+    $("#pShoot").disabled=!myTurn||game.busy;
+    let msg="";
+    if(d.status==="play"){
+      if(my<0)msg="İzliyorsun";
+      else if(myTurn)msg=game.place?"Beyaz topu sürükleyip yerleştir, sonra nişan al":"Sıra sende: masaya dokunup nişan al, gücü seç, Vur";
+      else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
+      if(d.log)msg=`<span style="opacity:.8;font-weight:500">${esc(d.log)}</span><br>`+msg;
+    }
+    $("#gMsg").innerHTML=msg;
+    const ov=$("#pOver");
+    if(d.status==="over"){
+      const w=d.winner;
+      ov.innerHTML=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}</div>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`;
+      const ag=$("#gAgain");if(ag)ag.onclick=()=>{game.aim=null;gameMove({action:"again"})};
+      $("#pCtrl").style.display="none";
+    }else ov.innerHTML="";
+    drawPool();
+  }
+}
+function findSpot(others,kitchen){for(const [x,y] of [[200,250],[150,250],[200,150],[200,350],[100,250],[500,250]])if(P.canPlace(others,x,y,kitchen))return{x,y};return{x:120,y:250}}
+function curCue(){const d=game.data;if(game.place)return game.place;return(game.pview||d.balls||[]).find(b=>b.i===0)||null}
+function poolBalls(){const d=game.data;let bs=(game.pview||d.balls||[]);if(game.place&&!game.pview)bs=bs.filter(b=>b.i!==0).concat([{i:0,...game.place}]);return bs}
+function playShots(list,done){
+  game.anim=true;$("#pCtrl").style.display="none";
+  const next=()=>{
+    if(!game)return;const sh=list.shift();
+    if(!sh){game.anim=false;done();return}
+    const frames=[];P.simulate(sh.before,{x:sh.dx,y:sh.dy},sh.power,bs=>frames.push(bs));
+    let k=0;const d=game.data;
+    $("#gMsg").innerHTML=`${esc(seatName(d.seats[sh.seat]))} vurdu…`;
+    const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=2;
+      if(k<frames.length+2)game.raf=requestAnimationFrame(tick);
+      else{if(sh.foul)$("#gMsg").innerHTML=`Faul: ${esc(sh.reason)}`;setTimeout(next,list.length?450:150)}};
+    game.pview=sh.before;drawPool();setTimeout(()=>{game.raf=requestAnimationFrame(tick)},250);
+  };
+  next();
+}
+function poolLayout(){
+  const cv=$("#pc");if(!cv)return null;const box=cv.parentElement;const cw=box.clientWidth,ch=box.clientHeight;const dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.width=cw+"px";cv.style.height=ch+"px"}
+  const M=42,TW=P.W+2*M,TH=P.H+2*M,rot=ch>cw;
+  const s=rot?Math.min(cw/TH,ch/TW):Math.min(cw/TW,ch/TH);
+  const ox=rot?(cw-TH*s)/2+M*s:(cw-TW*s)/2+M*s,oy=rot?(ch-TW*s)/2+M*s:(ch-TH*s)/2+M*s;
+  return{cv,dpr,s,ox,oy,rot,M,
+    m:rot?[0,s*dpr,-s*dpr,0,(ox+P.H*s)*dpr,oy*dpr]:[s*dpr,0,0,s*dpr,ox*dpr,oy*dpr],
+    toT:(sx,sy)=>rot?{x:(sy-oy)/s,y:P.H-(sx-ox)/s}:{x:(sx-ox)/s,y:(sy-oy)/s}};
+}
+function drawPool(){
+  if(!game||!game.data)return;const L=poolLayout();if(!L)return;const {cv,M}=L;const c=cv.getContext("2d");
+  c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,cv.width,cv.height);c.setTransform(...L.m);
+  const felt=FELT_COL[mySkin("table")]||FELT_COL.yesil,rail=RAIL_COL[mySkin("rack")]||RAIL_COL.ceviz;
+  c.fillStyle=rail;roundRect(c,-M,-M,P.W+2*M,P.H+2*M,26);c.fill();
+  c.fillStyle="rgba(0,0,0,.25)";c.fillRect(-6,-6,P.W+12,P.H+12);
+  c.fillStyle=felt;c.fillRect(0,0,P.W,P.H);
+  const gr=c.createRadialGradient(P.W/2,P.H/2,40,P.W/2,P.H/2,P.W*0.6);gr.addColorStop(0,"rgba(255,255,255,.10)");gr.addColorStop(1,"rgba(0,0,0,.22)");c.fillStyle=gr;c.fillRect(0,0,P.W,P.H);
+  if(mySkin("table")==="vip_altin"){c.strokeStyle="#c9a43a";c.lineWidth=4;c.strokeRect(6,6,P.W-12,P.H-12)}
+  c.strokeStyle="rgba(255,255,255,.18)";c.lineWidth=2;c.beginPath();c.moveTo(P.HEAD_X,0);c.lineTo(P.HEAD_X,P.H);c.stroke();
+  c.fillStyle="rgba(255,255,255,.35)";[[250,P.H/2],[750,P.H/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3,0,7);c.fill()});
+  for(const [x,y,r] of P.POCKETS){c.fillStyle="#0a0a0a";c.beginPath();c.arc(x,y,r*0.85,0,7);c.fill()}
+  // elmas işaretler
+  c.fillStyle="rgba(255,255,255,.7)";for(let k=1;k<8;k++){if(k===4)continue;[[k*P.W/8,-M/2],[k*P.W/8,P.H+M/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3.5,0,7);c.fill()})}
+  for(let k=1;k<4;k++)[[-M/2,k*P.H/4],[P.W+M/2,k*P.H/4]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3.5,0,7);c.fill()});
+  const d=game.data,bs=poolBalls(),my=mySeatIdx(d);
+  const myTurn=d.status==="play"&&d.turn===my&&!game.anim&&!game.busy;
+  // nişan çizgisi
+  const cue=bs.find(b=>b.i===0);
+  if(myTurn&&cue&&game.aim){
+    const dl=Math.hypot(game.aim.x,game.aim.y)||1,ux=game.aim.x/dl,uy=game.aim.y/dl;
+    let tBest=Infinity,hit=null;
+    for(const b of bs){if(b.i===0)continue;const fx=cue.x-b.x,fy=cue.y-b.y;const bq=fx*ux+fy*uy,cq=fx*fx+fy*fy-4*P.R*P.R;const disc=bq*bq-cq;if(disc<0)continue;const t=-bq-Math.sqrt(disc);if(t>0&&t<tBest){tBest=t;hit=b}}
+    const tw=Math.min(ux>0?(P.W-P.R-cue.x)/ux:ux<0?(P.R-cue.x)/ux:Infinity,uy>0?(P.H-P.R-cue.y)/uy:uy<0?(P.R-cue.y)/uy:Infinity);
+    const t=Math.min(tBest,tw),gx=cue.x+ux*t,gy=cue.y+uy*t;
+    c.setLineDash([10,8]);c.strokeStyle="rgba(255,255,255,.85)";c.lineWidth=2.5;c.beginPath();c.moveTo(cue.x,cue.y);c.lineTo(gx,gy);c.stroke();c.setLineDash([]);
+    c.strokeStyle="rgba(255,255,255,.9)";c.lineWidth=2;c.beginPath();c.arc(gx,gy,P.R,0,7);c.stroke();
+    if(hit&&tBest<=tw){const nx=hit.x-gx,ny=hit.y-gy,nl=Math.hypot(nx,ny)||1;c.strokeStyle="rgba(255,235,120,.9)";c.lineWidth=3;c.beginPath();c.moveTo(hit.x,hit.y);c.lineTo(hit.x+nx/nl*90,hit.y+ny/nl*90);c.stroke()}
+    // ıstaka
+    const pw=(+$("#pPow").value||60)/100,back=P.R+8+pw*60;
+    c.strokeStyle="#d9b77c";c.lineWidth=7;c.lineCap="round";c.beginPath();c.moveTo(cue.x-ux*back,cue.y-uy*back);c.lineTo(cue.x-ux*(back+330),cue.y-uy*(back+330));c.stroke();
+    c.strokeStyle="#333";c.lineWidth=7;c.beginPath();c.moveTo(cue.x-ux*(back+250),cue.y-uy*(back+250));c.lineTo(cue.x-ux*(back+330),cue.y-uy*(back+330));c.stroke();c.lineCap="butt";
+  }
+  if(game.place&&!game.pview&&myTurn){c.strokeStyle="rgba(255,255,255,.6)";c.setLineDash([4,4]);c.lineWidth=2;c.beginPath();c.arc(game.place.x,game.place.y,P.R+7,0,7);c.stroke();c.setLineDash([])}
+  for(const b of bs)drawBall(c,b,L.rot);
+}
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function drawBall(c,b,rot){
+  const R=P.R,col=BALL_COL[b.i>8?b.i-8:b.i];
+  c.save();c.translate(b.x,b.y);if(rot)c.rotate(-Math.PI/2);
+  c.fillStyle="rgba(0,0,0,.3)";c.beginPath();c.arc(1.8,2.2,R,0,7);c.fill();
+  c.beginPath();c.arc(0,0,R,0,7);c.fillStyle=b.i>8?"#fff":col;c.fill();
+  if(b.i>8){c.save();c.beginPath();c.arc(0,0,R,0,7);c.clip();c.fillStyle=col;c.fillRect(-R,-R*0.55,2*R,R*1.1);c.restore()}
+  if(b.i>0){c.fillStyle="#fff";c.beginPath();c.arc(0,0,R*0.5,0,7);c.fill();c.fillStyle="#111";c.font=`bold ${b.i>9?8:9}px sans-serif`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(b.i),0,0.5)}
+  const hl=c.createRadialGradient(-R*0.35,-R*0.4,1,0,0,R);hl.addColorStop(0,"rgba(255,255,255,.55)");hl.addColorStop(0.35,"rgba(255,255,255,0)");hl.addColorStop(1,"rgba(0,0,0,.25)");
+  c.fillStyle=hl;c.beginPath();c.arc(0,0,R,0,7);c.fill();
+  c.restore();
+}
+function poolInput(){
+  const cv=$("#pc");let drag=null;
+  const pt=e=>{const r=cv.getBoundingClientRect();const L=poolLayout();return L.toT(e.clientX-r.left,e.clientY-r.top)};
+  const myTurn=()=>{const d=game&&game.data;return d&&d.status==="play"&&d.turn===mySeatIdx(d)&&!game.anim&&!game.busy};
+  cv.addEventListener("pointerdown",e=>{if(!myTurn())return;const p=pt(e);e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(_){}
+    if(game.place&&Math.hypot(p.x-game.place.x,p.y-game.place.y)<P.R*3){drag="cue";return}
+    drag="aim";aimAt(p)});
+  cv.addEventListener("pointermove",e=>{if(!drag||!myTurn())return;const p=pt(e);
+    if(drag==="cue"){const d=game.data,others=d.balls.filter(b=>b.i!==0),k=d.ballInHand==="kitchen";
+      const x=Math.max(P.R,Math.min(k?P.HEAD_X:P.W-P.R,p.x)),y=Math.max(P.R,Math.min(P.H-P.R,p.y));
+      if(P.canPlace(others,x,y,k)){game.place={x,y};drawPool()}}
+    else aimAt(p)});
+  const up=()=>{drag=null};cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+  function aimAt(p){const c=curCue();if(!c)return;const ax=p.x-c.x,ay=p.y-c.y;if(Math.hypot(ax,ay)<4)return;game.aim={x:ax,y:ay};drawPool()}
+}
+$("#pPow").addEventListener("input",()=>{$("#pPowV").textContent=$("#pPow").value+"%";drawPool()});
+$("#pShoot").onclick=async()=>{
+  if(!game||!game.data||!game.aim||game.anim)return;
+  const body={action:"shoot",dx:game.aim.x,dy:game.aim.y,power:(+$("#pPow").value||60)/100};
+  if(game.place){body.cx=game.place.x;body.cy=game.place.y}
+  game.aim=null;await gameMove(body);
+};
+window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type==="pool")drawPool()});
 $("#gDiscard").onclick=()=>{if(game&&game.sel!=null)gameMove({action:"discard",tile:game.sel})};
 $("#gFinish").onclick=()=>{if(game&&game.sel!=null)gameMove({action:"finish",tile:game.sel})};
 function sortRack(mode){

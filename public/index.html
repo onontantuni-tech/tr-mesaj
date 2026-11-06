@@ -244,6 +244,23 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .pile{width:46px;aspect-ratio:3/4.1;border-radius:6px;background:repeating-linear-gradient(45deg,#e9dfc3,#e9dfc3 6px,#ddd0ad 6px,#ddd0ad 12px);box-shadow:0 3px 0 #b9a77a,0 5px 0 #a99668,0 7px 8px rgba(0,0,0,.4);display:grid;place-items:center;color:#5a4a28;font-weight:800;font-size:15px;cursor:pointer}
 .pile.take{box-shadow:0 0 0 3px #4FC3F7,0 3px 0 #b9a77a,0 5px 0 #a99668,0 7px 8px rgba(0,0,0,.4);animation:pulse2 1s infinite}
 .center .lbl{font-size:10.5px;text-align:center;margin-top:4px;opacity:.85}
+.pwrap{position:absolute;inset:0;display:flex;flex-direction:column}
+.pbar{display:flex;align-items:center;gap:6px;padding:6px 8px}
+.pbar .pp{flex:1;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:12px;background:rgba(0,0,0,.22);min-width:0;border:2px solid transparent}
+.pbar .pp.turn{border-color:#ffd970}
+.pbar .pp .av{width:32px;height:32px;font-size:13px;flex-shrink:0}
+.pbar .pp b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pbar .pp span{font-size:11px;opacity:.85}
+.pbar .vs{font-weight:800;font-size:12px;opacity:.7}
+.pcv{flex:1;min-height:0;position:relative}
+.pcv canvas{position:absolute;inset:0;touch-action:none}
+#pOver .overbox{z-index:5}
+.gamescr.pool{background:radial-gradient(ellipse at center,#2a2f38 0%,#15181e 100%)}
+.p-ctrl{display:flex;align-items:center;gap:10px;padding:8px 12px calc(12px + env(safe-area-inset-bottom))}
+.p-ctrl .pl{font-size:13px;white-space:nowrap}
+.p-ctrl input{flex:1;accent-color:#ffd970;height:28px}
+.p-ctrl button{background:var(--brand);color:#fff;border:0;border-radius:22px;padding:11px 26px;font-weight:800;font-size:16px}
+.p-ctrl button:disabled{opacity:.5}
 .lobby{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px}
 .lobby .seats{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:340px}
 .lobby .st{background:rgba(0,0,0,.22);border-radius:12px;padding:12px;display:flex;align-items:center;gap:10px;font-size:14px}
@@ -483,6 +500,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <p class="isub">Sohbetteki herkes masaya katılabilir. Boş yerlere bilgisayar oturur.</p>
     <div class="glist">
       <div class="gitem" data-newgame="okey"><div class="av" style="background:#0E7C3A">🀄</div><div class="gn"><b>Okey</b><span>4 kişilik · seri ve çift</span></div></div>
+      <div class="gitem" data-newgame="pool"><div class="av" style="background:#1d3d7a">🎱</div><div class="gn"><b>Bilardo</b><span>2 kişilik · 8 top</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">🃏</div><div class="gn"><b>Pişti · Batak · King</b><span>Yakında</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">🎲</div><div class="gn"><b>Tavla</b><span>Yakında</span></div></div>
@@ -510,6 +528,11 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button id="gSortPair">Çift diz</button>
       <button id="gDiscard" class="pri">At</button>
       <button id="gFinish" class="gold">Bitir</button>
+    </div>
+    <div class="p-ctrl" id="pCtrl" style="display:none">
+      <span class="pl">Güç <b id="pPowV">60%</b></span>
+      <input type="range" id="pPow" min="5" max="100" value="60" aria-label="Vuruş gücü">
+      <button id="pShoot">Vur</button>
     </div>
   </div>
 
