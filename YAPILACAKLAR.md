@@ -270,6 +270,16 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 199. Profil ziyaretçi defteri
 200. Masada alkış animasyonu
 
+## Onaylanan ek özellikler — 11. liste (6 Kasım 2026)
+201. Bildirim merkezi (zil: ödüller, istekler, davetler)
+202. Davet sıralaması (ayın ilk 3'üne ek ödül)
+203. Çift dokunuşla ❤️
+204. Sohbete oyun sonucu kartı
+205. Sohbette kişi kartı paylaşma (tek dokunuşla istek)
+206. Kulüp logosu ve kulüp kanalı
+207. Haftalık özet bildirimi
+208. Sesli mesaj arka planda çalmaya devam etsin
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57, 155
