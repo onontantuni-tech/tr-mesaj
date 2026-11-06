@@ -148,6 +148,36 @@ Sonraya bırakılanlar: 58 Sorumlu oyun (harcama limiti, süre hatırlatıcı), 
 
 Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekebilir).
 
+## Onaylanan ek özellikler — 5. liste (6 Kasım 2026; 94, 105, 106 istenmedi)
+91. Okey kural seçenekleri (çifte git, renk okey)
+92. Masa kuralı seçenekleri (süre, puan sınırı, el sayısı)
+93. Bitmiş oyunu tekrar izleme
+95. Günlük bulmaca (küçük ödüllü)
+96. Mini oyunlar: langırt, dart, mini golf
+97. Yakınımdakiler (isteğe bağlı, kapalı başlar, açık izin — KVKK)
+98. Grup içi turnuva
+99. Aile grubu / çocuk ayarı (ek yasal kurallar)
+100. Hatıra albümü (büyük eller)
+101. Mesaj çevirisi
+102. Sesli mesaj hızı (1,5x / 2x)
+103. Bağlantı önizlemesi
+104. Mesaj düzenleme (15 dk)
+107. İki adımlı doğrulama (PIN)
+108. Oturum listesi ve uzaktan çıkış
+109. Güvenlik kodu karşılaştırma (QR)
+110. Tanıtım web sayfası
+111. Sosyal medyada paylaşım kartı
+112. Geri bildirim ve "sıradaki oyun" anketi
+113. Kullanım istatistikleri
+
+İstenmeyenler: 94 Yapay zekâ ipucu, 105 İşletme karşılama mesajı, 106 İşletme hesabı.
+
+## Önerilen öncelik sırası
+1. Vercel ve Play Store'a çıkış
+2. Zorunlular: 18, 32, 55, 56, 57
+3. Açık oyunlar, sadakat, davet
+4. Diğerleri
+
 ## Notlar
 - Hileli dağıtım (para yükleyenin kazanma oranını düşürme) yapılmayacak — reddedildi.
 - Vercel Hobby ticari kullanıma izin vermiyor; satışa başlayınca Pro gerekir.
