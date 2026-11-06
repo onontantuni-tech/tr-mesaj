@@ -140,6 +140,8 @@ service cloud.firestore {
     }
     match /ledger/{x} { allow read, write: if false; }
     match /rewards/{x} { allow read, write: if false; }
+    match /house/{x} { allow read, write: if false; }
+    match /house_ledger/{x} { allow read, write: if false; }
     // Sıralama: giriş yapan herkes görür, sadece sunucu yazar
     match /lb_day/{d}/u/{u} {
       allow read: if signedIn();

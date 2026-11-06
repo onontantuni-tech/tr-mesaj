@@ -6,6 +6,7 @@
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as O from "../lib/okey.mjs";
 import * as E from "../lib/economy.mjs";
+import { FieldValue } from "firebase-admin/firestore";
 
 const BOT_NAMES = ["Bot Ayşe", "Bot Mehmet", "Bot Zeynep", "Bot Ali"];
 const IDLE_MS = 45 * 1000; // sırası gelen oyuncu bu kadar oynamazsa onun yerine otomatik oynanır
@@ -43,8 +44,9 @@ export default async (req) => {
       const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
       const ws = await db.doc(`wallets/${uid}`).get();
       const lvl = E.levelFromXp(ws.exists ? ws.data().xp || 0 : 0).level;
-      if (!E.stakeAllowed(stake, lvl)) return json(403, { error: "stake" });
-      if (stake && (!ws.exists || (ws.data().balance || 0) < stake)) return json(402, { error: "balance" });
+      const bal = ws.exists ? ws.data().balance || 0 : 0;
+      if (stake && bal < stake) return json(402, { error: "balance" });
+      if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
         type, conv: b.conv, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl),
@@ -103,6 +105,8 @@ export default async (req) => {
         g.seats = g.seats.map((s) => s || { uid: null, bot: true, name: BOT_NAMES[bi++ % 4] });
         g.paid = [];
         g.pot = 0;
+        // Bilgisayarların masa ücretini kasa öder
+        g.botStake = stake * g.seats.filter((s) => s.bot).length;
         for (const u of humansNow) {
           if (stake) { E.credit(tx, db, u, wallets[u], -stake, "Okey masa ücreti"); g.pot += stake; g.paid.push(u); }
         }
@@ -240,20 +244,28 @@ function finish(st, seat, kind, rest, withOkey) {
 }
 
 // El bitince jetonları dağıt, seviye ve sıralama güncelle (bir kez)
+//  - İnsan kazanırsa: pot (oyuncuların ücreti + bilgisayarların kasadan ödenen ücreti) - %5 kesinti
+//  - Bilgisayar kazanırsa: oyuncuların ücreti kasaya
+//  - Berabere: oyuncuların ücreti kesintisiz iade
 function settle(tx, db, st, wallets) {
   if (st.status !== "over" || st.settled) return;
   st.settled = true;
   const w = st.winner;
   const winnerUid = w != null && !st.seats[w].bot ? st.seats[w].uid : null;
-  const pot = st.pot || 0;
-  if (pot) {
+  const humanPot = st.pot || 0;
+  if (humanPot || st.botStake) {
     if (winnerUid && wallets[winnerUid]) {
-      E.credit(tx, db, winnerUid, wallets[winnerUid], pot, "Okey kazanç");
-      st.payout = { uid: winnerUid, amount: pot };
+      const total = humanPot + (st.botStake || 0);
+      const rake = Math.round(total * E.RAKE);
+      E.credit(tx, db, winnerUid, wallets[winnerUid], total - rake, "Okey kazanç");
+      st.payout = { uid: winnerUid, amount: total - rake, rake };
+      houseLog(tx, db, rake - (st.botStake || 0), { rake, botStake: st.botStake || 0 });
+    } else if (w != null) {
+      st.payout = { house: true, amount: humanPot };
+      houseLog(tx, db, humanPot, { botWin: humanPot });
     } else {
-      // Bilgisayar kazandı ya da berabere: masada kalan oyuncuların ücreti iade
       const seated = new Set(st.seats.filter((s) => !s.bot).map((s) => s.uid));
-      for (const u of st.paid || []) if (seated.has(u) && wallets[u]) E.credit(tx, db, u, wallets[u], st.stake, "Okey iade");
+      for (const u of st.paid || []) if (seated.has(u) && wallets[u]) E.credit(tx, db, u, wallets[u], st.stake, "Okey iade (berabere)");
       st.payout = { refund: true, amount: st.stake };
     }
   }
@@ -267,6 +279,12 @@ function settle(tx, db, st, wallets) {
     E.addStats(tx, db, s.uid, won ? st.points || 2 : 0, won);
   }
   st.pot = 0;
+}
+
+// Kasa hesabı: net değişim ve ayrıntılar
+function houseLog(tx, db, net, parts) {
+  tx.set(db.doc("house/stats"), { net: FieldValue.increment(net), rake: FieldValue.increment(parts.rake || 0), botWin: FieldValue.increment(parts.botWin || 0), botStake: FieldValue.increment(parts.botStake || 0), hands: FieldValue.increment(1) }, { merge: true });
+  tx.set(db.collection("house_ledger").doc(), { net, ...parts, at: Date.now() });
 }
 
 function endDraw(st) {

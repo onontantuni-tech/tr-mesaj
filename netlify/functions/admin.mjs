@@ -20,7 +20,10 @@ export default async (req) => {
   let b;
   try { b = await req.json(); } catch { b = {}; }
   const act = String(b?.action || "check");
-  if (act === "check") return json(200, { admin: true });
+  if (act === "check") {
+    const h = await db.doc("house/stats").get();
+    return json(200, { admin: true, house: h.exists ? h.data() : { net: 0, rake: 0, botWin: 0, botStake: 0, hands: 0 } });
+  }
 
   const code = String(b.code || "").replace(/\D/g, "");
   if (!/^\d{6}$/.test(code)) return json(400, { error: "code" });

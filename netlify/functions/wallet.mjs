@@ -52,7 +52,7 @@ function view(w) {
   return {
     balance: w.balance || 0, xp: w.xp || 0, level: lv.level, levelCur: lv.cur, levelNext: lv.next,
     wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin,
-    catalog: { skins: E.SKINS, packages: E.PACKAGES, stakes: E.STAKES, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
+    catalog: { skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
   };
 }
 

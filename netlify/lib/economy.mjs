@@ -15,12 +15,18 @@ export const PACKAGES = [
   { id: "p7", coins: 6000000, price: 2500 },
 ];
 
-// Masa ücretleri ve açılması için gereken seviye
-export const STAKES = [
-  { v: 0, lvl: 1 }, { v: 1000, lvl: 1 }, { v: 5000, lvl: 1 }, { v: 10000, lvl: 2 },
-  { v: 50000, lvl: 3 }, { v: 100000, lvl: 5 }, { v: 500000, lvl: 8 }, { v: 1000000, lvl: 12 },
+// Salonlar: jeton bakiyesine göre açılır. Oyuncu kendi salonuna ve alttakilere girebilir.
+export const TIERS = [
+  { id: "caylak", name: "Çaylak Salonu", icon: "🌱", min: 0, stakes: [0, 1000, 2500, 5000] },
+  { id: "kahve", name: "Kahvehane", icon: "☕", min: 100000, stakes: [10000, 20000, 30000] },
+  { id: "usta", name: "Ustalar Salonu", icon: "🎯", min: 300000, stakes: [50000, 75000, 100000] },
+  { id: "kral", name: "Kral Salonu", icon: "👑", min: 600000, stakes: [150000, 200000, 250000] },
+  { id: "sultan", name: "Sultan Salonu", icon: "🏰", min: 1000000, stakes: [300000, 500000, 1000000] },
 ];
-export const stakeAllowed = (v, level) => STAKES.some((s) => s.v === v && level >= s.lvl);
+export const tierIndex = (balance) => { let i = 0; TIERS.forEach((t, k) => { if ((balance || 0) >= t.min) i = k; }); return i; };
+export const stakeAllowed = (v, balance) => TIERS.some((t, k) => k <= tierIndex(balance) && t.stakes.includes(v)) && (balance || 0) >= v;
+// Kasa kesintisi: her elde potun %5'i
+export const RAKE = 0.05;
 
 // Ödüller: sıralamada ilk 3
 export const DAILY_PRIZES = [100000, 50000, 20000];

@@ -910,14 +910,14 @@ window.addEventListener("beforeunload",()=>{if(call)endCall(call.phase==="dialin
 
 /* ---------- jeton, seviye, sıralama, mağaza, yönetim ---------- */
 // Bakiye sadece sunucuda değişir; burada sadece gösterilir. Jeton paraya çevrilemez, başkasına gönderilemez.
-let wallet=null,catalog=null,isAdminUser=false;
+let wallet=null,catalog=null,isAdminUser=false,houseStats=null;
 const fmtCoin=n=>(n||0).toLocaleString("tr-TR");
 function levelFromXp(xp){let lvl=1,need=200,acc=0;while(xp>=acc+need&&lvl<50){acc+=need;lvl++;need=Math.round(need*1.35)}return{level:lvl,cur:xp-acc,next:need}}
 function trDay(ms=Date.now()){const d=new Date(ms+3*3600*1000);return{day:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}`,month:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}`}}
 async function initWallet(){
   try{const r=await callApi("/api/wallet",{action:"me"});catalog=r.wallet.catalog;applyWallet(r.wallet);if(r.welcomed)setTimeout(()=>openInfoModal("🎁 Hoş geldin!",`<div style="text-align:center;font-size:15px;line-height:1.5"><div style="font-size:44px">🎉</div>Sana <b>${fmtCoin(100000)}</b> <span class="coin"></span> jeton hediye ettik.<br>Oyun sekmesinden harcayabilirsin.</div>`),1500)}catch(e){}
   unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin})},()=>{}));
-  callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);renderGamesTab()}).catch(()=>{});
+  callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
 function applyWallet(w){wallet=w;renderGamesTab();if(game)renderGame()}
 function renderGamesTab(){
@@ -926,7 +926,7 @@ function renderGamesTab(){
   const pct=Math.min(100,Math.round(100*(wallet.levelCur||0)/(wallet.levelNext||1)));
   el.innerHTML=`<div class="wcard"><div style="font-size:13px;opacity:.85">Jeton bakiyen</div><div class="bal"><span class="coin"></span>${fmtCoin(wallet.balance)}</div>
     <div class="lv"><b>Seviye ${wallet.level}</b><div class="bar"><i style="width:${pct}%"></i></div><span>${fmtCoin(wallet.levelCur)}/${fmtCoin(wallet.levelNext)} XP</span></div>
-    <div class="st">${wallet.wins||0} galibiyet · ${wallet.games||0} oyun · Kazandıkça seviye atlarsın; yüksek seviyede rakipler zorlaşır, büyük masalar açılır.</div></div>
+    <div class="st">${(()=>{const t=(catalog?.tiers||[])[tierIdx(wallet.balance)];return t?`${t.icon} <b>${esc(t.name)}</b> · `:""})()}${wallet.wins||0} galibiyet · ${wallet.games||0} oyun<br>Bakiyen arttıkça üst salonlar açılır. Seviye atladıkça bilgisayar rakipler zorlaşır.</div></div>
   <div class="gbtns">
     <button data-g="play"><span>🀄</span>Okey oyna</button>
     <button data-g="store"><span>🪙</span>Jeton al</button>
@@ -974,7 +974,8 @@ function openRanking(kind){
 }
 $("#eClose").addEventListener("click",()=>{if(lbUnsub){lbUnsub();lbUnsub=null}});
 function openAdmin(){
-  openInfoModal("Yönetim paneli",`<input id="adCode" inputmode="numeric" placeholder="Kullanıcının TR ID'si (örn. 482 913)"><div class="row2"><button id="adFind" style="background:var(--brand)">Bul</button></div><div id="adOut" style="margin-top:10px"></div>`);
+  const h=houseStats||{};
+  openInfoModal("Yönetim paneli",`<div class="pk" style="display:block;margin-bottom:10px"><div class="isub">Kasa (net)</div><div style="font-size:20px;font-weight:800"><span class="coin"></span> ${fmtCoin(h.net||0)}</div><div class="isub">%5 kesinti: ${fmtCoin(h.rake||0)} · Bilgisayar kazancı: ${fmtCoin(h.botWin||0)} · Bilgisayar ücreti: −${fmtCoin(h.botStake||0)} · ${fmtCoin(h.hands||0)} el</div></div><input id="adCode" inputmode="numeric" placeholder="Kullanıcının TR ID'si (örn. 482 913)"><div class="row2"><button id="adFind" style="background:var(--brand)">Bul</button></div><div id="adOut" style="margin-top:10px"></div>`);
   $("#adFind").onclick=adminLookup;$("#adCode").onkeydown=e=>{if(e.key==="Enter")adminLookup()};setTimeout(()=>$("#adCode").focus(),60);
 }
 async function adminLookup(){
@@ -993,14 +994,15 @@ async function adminLookup(){
     $("#adYes").onclick=async()=>{$("#adYes").disabled=true;try{const x=await callApi("/api/admin",{action:"adjust",code,amount:sign*a,reason:why});toast("Yeni bakiye: "+fmtCoin(x.balance));adminLookup()}catch(e){toast("İşlem yapılamadı");$("#adYes").disabled=false}}};
   $("#adAdd").onclick=()=>go(1);$("#adSub").onclick=()=>go(-1);
 }
-// Masa ücreti seçimi
+// Masa ücreti seçimi: salonlar bakiyeye göre açılır
+function tierIdx(bal){const t=catalog?.tiers||[];let i=0;t.forEach((x,k)=>{if((bal||0)>=x.min)i=k});return i}
 function pickStake(cb){
-  const lvl=wallet?.level||1,bal=wallet?.balance||0;
-  const btns=(catalog?.stakes||[{v:0,lvl:1}]).map(s=>{const locked=lvl<s.lvl,poor=s.v>bal;return`<button data-stake="${s.v}" ${locked||poor?"disabled":""}>${s.v?fmtCoin(s.v):"Ücretsiz"}<small>${locked?"Seviye "+s.lvl+" gerekir":poor?"Bakiye yetmez":s.v?"Kazanan potu alır":"Jetonsuz oyun"}</small></button>`}).join("");
-  openInfoModal("Masa ücreti",`<p class="isub" style="margin-bottom:10px">Oturan her oyuncudan alınır. Kazanan potun hepsini alır. Bilgisayar kazanırsa ya da berabere biterse herkese iade edilir.</p><div class="stk">${btns}</div>`);
+  const bal=wallet?.balance||0,ti=tierIdx(bal),tiers=catalog?.tiers||[{name:"Çaylak Salonu",icon:"🌱",min:0,stakes:[0]}];
+  const rk=Math.round((catalog?.rake??0.05)*100);
+  const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open||v>bal?"disabled":""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
+  openInfoModal("Masa ücreti",`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html}`);
   $("#eBody").onclick=e=>{const b=e.target.closest("[data-stake]");if(b&&!b.disabled){closeE();cb(+b.dataset.stake)}};
 }
-
 /* ---------- oyunlar: Okey ---------- */
 // Masa durumu games/{id}, kendi taşlarım games/{id}/hands/{me}. Bütün hamleler /api/game üzerinden sunucuda doğrulanır.
 const T_COLORS=["kırmızı","sarı","mavi","siyah"];
@@ -1094,7 +1096,7 @@ function renderGame(){
   html+=`<div class="center"><div><div class="pile ${canDraw?"take":""}" id="gPile">${d.pileCount}</div><div class="lbl">${canDraw?"Çek":"Deste"}</div></div><div><div>${tileHTML(d.indicator,null,{sm:true})}</div><div class="lbl">Gösterge</div></div><div><div>${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><div class="lbl">Okey</div></div></div>`;
   if(d.status==="over"){
     const w=d.winner;
-    html+=`<div class="overbox"><b style="font-size:18px">${w==null?"El berabere bitti":(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Masa ücretleri iade edildi</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>`):""}${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
+    html+=`<div class="overbox"><b style="font-size:18px">${w==null?"El berabere bitti":(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
   $("#gTable").innerHTML=html;
   // mesaj
@@ -1123,7 +1125,7 @@ function renderLobby(d,my){
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
   const host=d.host===me,free=d.seats.some(s=>!s);
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">🀄</div><b style="font-size:20px">Okey masası</b><div style="opacity:.9">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)} · kazanan potu alır`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">🀄</div><b style="font-size:20px">Okey masası</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>gameMove({action:"join"});
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
 }

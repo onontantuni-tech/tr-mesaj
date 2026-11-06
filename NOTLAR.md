@@ -26,6 +26,7 @@
 - Cüzdan (wallets), defter (ledger), hoş geldin 100.000, masa ücreti, seviye/XP, desenler, sıralama (lb_day, lb_month), gece ödülü (/api/cron, Vercel cron 21:01 UTC = 00:01 TR), yönetim paneli (ADMIN_CODES, varsayılan 794985)
 - Vercel'de ek ortam değişkeni: CRON_SECRET (rastgele uzun bir metin)
 - Ödeme: Play Store + Google Play Billing bağlanınca açılacak
+- Salonlar bakiyeye göre (economy.mjs TIERS); %5 kesinti (RAKE); bilgisayar kazanırsa pot kasaya; bilgisayarların ücretini kasa öder; berabere iade. Kasa: house/stats
 - Aylık ödüller şimdilik 1.000.000 / 500.000 / 200.000 (economy.mjs)
 - Firestore kurallarının son hali firestore.rules dosyasında; konsola elle yapıştırılmalı
 
