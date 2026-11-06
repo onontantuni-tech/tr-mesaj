@@ -22,6 +22,13 @@
 - Sesli/görüntülü arama eklendi (WebRTC, Firestore sinyal). Mobil hatlar için TURN gerekli:
   Netlify ortam değişkenleri `CF_TURN_KEY_ID` + `CF_TURN_API_TOKEN` (Cloudflare Realtime TURN, aylık 1000 GB ücretsiz)
 
+## Jeton ekonomisi (eklendi)
+- Cüzdan (wallets), defter (ledger), hoş geldin 100.000, masa ücreti, seviye/XP, desenler, sıralama (lb_day, lb_month), gece ödülü (/api/cron, Vercel cron 21:01 UTC = 00:01 TR), yönetim paneli (ADMIN_CODES, varsayılan 794985)
+- Vercel'de ek ortam değişkeni: CRON_SECRET (rastgele uzun bir metin)
+- Ödeme: Play Store + Google Play Billing bağlanınca açılacak
+- Aylık ödüller şimdilik 1.000.000 / 500.000 / 200.000 (economy.mjs)
+- Firestore kurallarının son hali firestore.rules dosyasında; konsola elle yapıştırılmalı
+
 ## Sıradakiler
 1. Yanıtla, tepki, mesaj silme/düzenleme
 2. Profil fotoğrafı, çevrimiçi/son görülme, "yazıyor…"
