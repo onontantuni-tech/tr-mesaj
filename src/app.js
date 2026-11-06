@@ -41,7 +41,8 @@ let msgKey={};       // msg id -> içeriği çözen CryptoKey
 let reads={};        // "okuyan_conv" -> zaman
 let statuses={};
 let contacts=[];
-let friends={};      // karşı uid -> {id,status,from,to,at}
+let friends={};
+let vipU={};         // uid -> VIP bitiş zamanı (badges/{uid})      // karşı uid -> {id,status,from,to,at}
 let pending=[];
 let cur=null,tabNow="chats",query_="";
 let ready=false;
@@ -208,6 +209,8 @@ function hydrateMedia(){
 function hash(s){let h=0;for(const c of s)h=(h*31+c.codePointAt(0))|0;return Math.abs(h)}
 const colorOf=id=>COLORS[hash(id||"x")%COLORS.length];
 function realName(uid){if(uid===me)return"Sen";return users[uid]?.nick||(users[uid]?.code?"TR "+fmtCode(users[uid].code):"Biri")}
+const isVipU=u=>(vipU[u]||0)>Date.now();
+const vipMark=u=>isVipU(u)?'<span class="vipb" title="VIP">👑</span>':"";
 function convTitle(c){return isGroupConv(c)?(groups[gidOf(c)]?.name||"Grup"):realName(c)}
 const initials=n=>(n.replace(/[^\p{L}\s]/gu,"").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("")||"?").toLocaleUpperCase("tr");
 function avHTML(c,{size}={}){
@@ -261,7 +264,7 @@ function renderChats(){
     if(l){const who=l.from===me?tick(l)+" ":(g?esc(realName(l.from).split(" ")[0])+": ":"");prev=`<span class="prev">${who}${esc(previewText(contentOf(l)))}</span>`}
     else prev=`<span class="prev">${g?"Grup oluşturuldu":(isFriend(e.c)?"Mesaj göndermek için dokun":esc(friendNote(e.c)))}</span>`;
     return`<div class="row" data-open="${esc(e.c)}"${e.c===cur?' style="background:var(--bg)"':''}>${avHTML(e.c)}
-      <div class="meta"><div class="l1"><span class="name">${esc(e.title)}</span><span class="time ${e.unread?"unread":""}">${e.at?when(e.at):""}</span></div>
+      <div class="meta"><div class="l1"><span class="name">${esc(e.title)}${g?"":vipMark(e.c)}</span><span class="time ${e.unread?"unread":""}">${e.at?when(e.at):""}</span></div>
       <div class="l2">${prev}${e.unread?`<span class="badge">${e.unread>99?"99+":e.unread}</span>`:""}</div></div></div>`}).join("");
   $("#pane-chats").innerHTML=html||(q?`<div class="empty">Sonuç bulunamadı</div>`:
     `<div class="empty">Henüz sohbetin yok.<br><br>Senin TR ID'n:<div class="idbox" style="margin:12px auto;max-width:220px">${esc(fmtCode(users[me]?.code)||"…")}</div>Arkadaşının ID'sini eklemek için <b>+</b> düğmesine dokun.</div>`);
@@ -289,7 +292,7 @@ let lastRenderedCount=0;
 function renderChatHeader(){
   if(!cur)return;
   $("#cAvWrap").innerHTML=avHTML(cur);
-  $("#cName").textContent=convTitle(cur);
+  $("#cName").innerHTML=esc(convTitle(cur))+(isGroupConv(cur)?"":vipMark(cur));
   $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)||!isFriend(cur)?"none":"";
   $("#gameBtn").style.display=isGroupConv(cur)||isFriend(cur)?"":"none";
   if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın"}
@@ -427,7 +430,7 @@ $("#frbar").addEventListener("click",friendButtons);
 function openFriends(){
   const list=Object.keys(friends).filter(isFriend).sort((a,b)=>realName(a).localeCompare(realName(b),"tr"));
   openModal({title:"Arkadaşlarım ("+list.length+")",input:false,ok:"Arkadaş ekle",cancelText:"Kapat",
-    text:list.length?`<div class="flist">${list.map(u=>`<div class="gitem" data-fopen="${esc(u)}">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}</b><span>${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):""}</span></div></div>`).join("")}</div>`:"Henüz arkadaşın yok. TR ID ile istek gönderebilirsin."},askAdd);
+    text:list.length?`<div class="flist">${list.map(u=>`<div class="gitem" data-fopen="${esc(u)}">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}${vipMark(u)}</b><span>${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):""}</span></div></div>`).join("")}</div>`:"Henüz arkadaşın yok. TR ID ile istek gönderebilirsin."},askAdd);
 }
 $("#mText").addEventListener("click",e=>{const r=e.target.closest("[data-fopen]");if(r){closeAll();openChat(r.dataset.fopen)}});
 
@@ -493,7 +496,7 @@ function openInfo(){
         try{await setDoc(doc(fs,"groups",gid),{...g,members:g.members.filter(x=>x!==u),admins:g.admins.filter(x=>x!==u)});toast("Çıkarıldı")}catch(e){toast("Çıkarılamadı")}})};
   }else{
     const u=users[cur]||{};
-    $("#iAv").innerHTML=avHTML(cur);$("#iName").textContent=realName(cur);$("#iSub").textContent=u.code?"TR ID "+fmtCode(u.code):"";
+    $("#iAv").innerHTML=avHTML(cur);$("#iName").innerHTML=esc(realName(cur))+vipMark(cur);recordView(cur);$("#iSub").textContent=u.code?"TR ID "+fmtCode(u.code):"";
     $("#iLabel").textContent="";
     const common=Object.entries(groups).filter(([,g])=>g.members.includes(cur));
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
@@ -573,6 +576,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="myid")showMyId();
   if(a==="add")askAdd();
   if(a==="friends")openFriends();
+  if(a==="views")openViews();
   if(a==="newgroup")openGroupModal("create");
   if(a==="findcontacts")findContacts();
   if(a==="notif")notifMenu();
@@ -767,6 +771,7 @@ const watched=new Set();
 function watchUser(uid){
   if(!uid||watched.has(uid)||!me)return;watched.add(uid);
   unsubs.push(onSnapshot(doc(fs,"users",uid),s=>{if(s.exists()){users[uid]=cleanUser(s.data());decryptAll();renderAll();if(uid===me)updateIdLabel()}},()=>{}));
+  unsubs.push(onSnapshot(doc(fs,"badges",uid),s=>{const v=s.exists()?+s.data().vipUntil||0:0;if((vipU[uid]||0)!==v){vipU[uid]=v;renderAll()}},()=>{}));
   unsubs.push(onSnapshot(doc(fs,"statuses",uid),s=>{const x=s.exists()?s.data():null;if(x&&x.text)statuses[uid]={text:String(x.text).slice(0,300),at:+x.at||0,bg:/^#[0-9a-fA-F]{6}$/.test(x.bg)?x.bg:"#111"};else delete statuses[uid];renderStatus()},()=>{}));
 }
 
@@ -999,10 +1004,46 @@ function levelFromXp(xp){let lvl=1,need=200,acc=0;while(xp>=acc+need&&lvl<50){ac
 function trDay(ms=Date.now()){const d=new Date(ms+3*3600*1000);return{day:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}`,month:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}`}}
 async function initWallet(){
   try{const r=await callApi("/api/wallet",{action:"me"});catalog=r.wallet.catalog;applyWallet(r.wallet);if(r.welcomed)setTimeout(()=>openInfoModal("🎁 Hoş geldin!",`<div style="text-align:center;font-size:15px;line-height:1.5"><div style="font-size:44px">🎉</div>Sana <b>${fmtCoin(100000)}</b> <span class="coin"></span> jeton hediye ettik.<br>Oyun sekmesinden harcayabilirsin.</div>`),1500)}catch(e){}
-  unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin})},()=>{}));
+  unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin,vipUntil:+x.vipUntil||0})},()=>{}));
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
-function applyWallet(w){wallet=w;renderGamesTab();if(game)renderGame()}
+function applyWallet(w){wallet=w;if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
+function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ceviz");if(id.startsWith("vip_")&&!isVipU(me))return kind==="table"?"yesil":"ceviz";return id}
+
+/* ---------- VIP ---------- */
+function openVip(){
+  const v=catalog?.vip||{price:250000,days:30},on=isVipU(me);
+  const perks=[["👑","Adının yanında VIP tacı","Sohbetlerde, masada ve sıralamada herkes görür"],["🎨","VIP masa ve ıstaka desenleri","Kraliyet moru, beyaz mermer, altın işlemeli, sedef, elmas"],["👀","Profilimi kimler gördü","Son 30 günde profiline bakanların listesi"]];
+  openInfoModal("👑 TR VIP",`<div class="vipcard"><div class="vt">${on?"VIP üyeliğin aktif":"VIP ol, farkını göster"}</div><div class="vs">${on?esc(new Date(vipU[me]).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"}))+" tarihine kadar":v.days+" gün · "+fmtCoin(v.price)+" jeton"}</div></div>
+    ${perks.map(p=>`<div class="pk"><span style="font-size:26px">${p[0]}</span><div><b style="font-size:15px">${p[1]}</b><div class="isub">${p[2]}</div></div></div>`).join("")}
+    <div class="row2" style="margin-top:10px"><button id="vipBuy" class="vipbuy">${on?"30 gün uzat":"VIP ol"} · ${fmtCoin(v.price)} <span class="coin"></span></button></div>
+    <div class="row2"><button id="vipViews" class="neg" style="background:var(--bg);color:var(--text)">👀 Profilimi kimler gördü</button></div>`);
+  $("#vipViews").onclick=openViews;
+  $("#vipBuy").onclick=async()=>{
+    if((wallet?.balance||0)<v.price){toast("Yeterli jetonun yok");return}
+    $("#vipBuy").disabled=true;
+    try{const r=await callApi("/api/wallet",{action:"buyVip"});applyWallet({...r.wallet});catalog=r.wallet.catalog;vipU[me]=r.wallet.vipUntil;renderAll();openVip();toast("👑 VIP oldun!",3000)}
+    catch(e){toast(e.status===402?"Yeterli jetonun yok":"İşlem yapılamadı");$("#vipBuy").disabled=false}
+  };
+}
+async function openViews(){
+  openInfoModal("👀 Profilimi kimler gördü",'<div class="empty">Yükleniyor…</div>');
+  let r;try{r=await callApi("/api/wallet",{action:"views"})}catch(e){$("#eBody").innerHTML='<div class="empty">Yüklenemedi</div>';return}
+  if(!r.vip){
+    $("#eBody").innerHTML=`<div class="vipcard"><div class="vt">Son 30 günde ${fmtCoin(r.count||0)} kişi profiline baktı</div><div class="vs">Kim olduklarını görmek için VIP ol</div></div><div class="row2" style="margin-top:10px"><button id="vGo" class="vipbuy">👑 VIP ol</button></div>`;
+    $("#vGo").onclick=openVip;return;
+  }
+  (r.list||[]).forEach(x=>watchUser(x.uid));
+  for(const x of r.list||[])if(!users[x.uid]){try{const u=await getDoc(doc(fs,"users",x.uid));if(u.exists())users[x.uid]=cleanUser(u.data())}catch(e){}}
+  $("#eBody").innerHTML=(r.list||[]).length?`<div class="isub" style="margin-bottom:6px">Son 30 gün · ${r.list.length} kişi</div>`+r.list.map(x=>`<div class="gitem" data-vopen="${esc(x.uid)}">${avHTML(x.uid)}<div class="gn"><b>${esc(realName(x.uid))}${vipMark(x.uid)}</b><span>${when(x.at)}</span></div></div>`).join(""):'<div class="empty">Son 30 günde profiline bakan olmadı</div>';
+  $("#eBody").onclick=e=>{const g=e.target.closest("[data-vopen]");if(g){closeE();openChat(g.dataset.vopen)}};
+}
+const viewedAt={};
+function recordView(u){
+  if(!u||u===me||isGroupConv(u))return;
+  if(Date.now()-(viewedAt[u]||0)<3600e3)return;viewedAt[u]=Date.now();
+  setDoc(doc(fs,"profile_views",u,"v",me),{at:Date.now()}).catch(()=>{});
+}
 function renderGamesTab(){
   const el=$("#pane-games");if(!el||!ready)return;
   if(!wallet){el.innerHTML='<div class="empty">Yükleniyor…</div>';return}
@@ -1015,13 +1056,14 @@ function renderGamesTab(){
     <button data-g="store"><span>🪙</span>Jeton al</button>
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
+    <button data-g="vip" class="vipbtn" style="grid-column:span 2"><span>👑</span>${isVipU(me)?"VIP üyesin · "+new Date(vipU[me]).toLocaleDateString("tr-TR")+" tarihine kadar":"VIP ol"}</button>
     ${isAdminUser?'<button data-g="admin" style="grid-column:span 2"><span>🛠️</span>Yönetim paneli</button>':""}
   </div>
   <div class="empty" style="padding:6px 20px 30px;font-size:12.5px">Jetonlar sadece oyun içinde kullanılır; paraya çevrilemez ve başkasına gönderilemez.</div>`;
 }
 document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
   if(g==="play"){openInfoModal("Okey oyna","Okey bir sohbetin içinde oynanır. Bir kişi ya da grup sohbeti aç, üstteki 🎮 düğmesine dokun.");}
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
 function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
 $("#eClose").onclick=closeE;
@@ -1030,13 +1072,16 @@ function openStore(){
   openInfoModal("Jeton al",pk+`<p class="isub" style="margin-top:8px">Ödeme, TR Play Store'da yayınlandığında Google Play üzerinden açılacak. Şimdilik jeton yükleme için yöneticiyle iletişime geç.</p>`);
   $("#eBody").onclick=e=>{if(e.target.closest("[data-buy]"))toast("Ödeme henüz açık değil. Play Store yayınından sonra aktif olacak.",3500)};
 }
-const SW_COLORS={yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
+const SW_COLORS={vip_mor:"linear-gradient(135deg,#4a1a6b,#2a0b40)",vip_mermer:"linear-gradient(135deg,#f4f1ea,#cfc8bb)",vip_altin:"linear-gradient(135deg,#1b3d2a,#c9a43a)",vip_sedef:"linear-gradient(135deg,#f6efe6,#c9d6e8,#e8d3e6)",vip_elmas:"linear-gradient(135deg,#dff3ff,#8fc6e8)",yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
 function openSkins(){
-  const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=(wallet.owned?.[kind]||[]).includes(it.id),eq=wallet.skin?.[kind]===it.id;
+  const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=it.vip?isVipU(me):(wallet.owned?.[kind]||[]).includes(it.id),eq=mySkin(kind)===it.id;
+    if(it.vip)return`<div class="pk"><span class="sw" style="background:${SW_COLORS[it.id]||"#888"}"></span><div><b style="font-size:15px">${esc(it.name)}</b><div class="isub">👑 VIP'e özel</div></div><button class="pr ${eq?"eq":own?"own":"vipx"}" data-skin="${kind}:${it.id}" ${eq?"disabled":""}>${eq?"Kullanılıyor":own?"Kullan":"VIP ol"}</button></div>`;
     return`<div class="pk"><span class="sw" style="background:${SW_COLORS[it.id]||"#888"}"></span><div><b style="font-size:15px">${esc(it.name)}</b><div class="isub">${it.price?fmtCoin(it.price)+" jeton":"Ücretsiz"}</div></div><button class="pr ${eq?"eq":own?"own":""}" data-skin="${kind}:${it.id}" ${eq?"disabled":""}>${eq?"Kullanılıyor":own?"Kullan":"Satın al"}</button></div>`}).join("");
   openInfoModal("Masa ve ıstaka",sec("table","Masa deseni")+sec("rack","Istaka"));
   $("#eBody").onclick=async e=>{const b=e.target.closest("[data-skin]");if(!b)return;const [kind,id]=b.dataset.skin.split(":");const own=(wallet.owned?.[kind]||[]).includes(id);
     const it=catalog.skins[kind].find(x=>x.id===id);
+    if(it.vip&&!isVipU(me)){openVip();return}
+    if(it.vip){b.disabled=true;try{const r=await callApi("/api/wallet",{action:"equip",kind,id});applyWallet({...r.wallet});openSkins();toast("Değiştirildi")}catch(err){toast("İşlem yapılamadı");b.disabled=false}return}
     if(!own&&(wallet.balance||0)<it.price){toast("Yeterli jetonun yok");return}
     b.disabled=true;try{const r=await callApi("/api/wallet",{action:own?"equip":"buySkin",kind,id});applyWallet({...r.wallet});catalog=r.wallet.catalog;openSkins();toast(own?"Değiştirildi":"Satın alındı 🎉")}catch(err){toast("İşlem yapılamadı");b.disabled=false}};
 }
@@ -1052,7 +1097,7 @@ function openRanking(kind){
     rows.forEach(r=>watchUser(r.uid));
     const medal=i=>i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1;
     const el=$("#lbList");if(!el)return;
-    el.innerHTML=rows.length?rows.map((r,i)=>`<div class="lbrow ${r.uid===me?"me":""}"><span class="rk">${medal(i)}</span>${avHTML(r.uid)}<span class="nm">${esc(r.uid===me?"Sen":realName(r.uid))}</span><span class="isub">${r.wins||0} galibiyet</span><span class="pt">${fmtCoin(r.points)} p</span></div>`).join(""):`<div class="empty">${kind==="day"?"Bugün":"Bu ay"} henüz kimse puan almadı. İlk sen ol!</div>`;
+    el.innerHTML=rows.length?rows.map((r,i)=>`<div class="lbrow ${r.uid===me?"me":""}"><span class="rk">${medal(i)}</span>${avHTML(r.uid)}<span class="nm">${esc(r.uid===me?"Sen":realName(r.uid))}${vipMark(r.uid)}</span><span class="isub">${r.wins||0} galibiyet</span><span class="pt">${fmtCoin(r.points)} p</span></div>`).join(""):`<div class="empty">${kind==="day"?"Bugün":"Bu ay"} henüz kimse puan almadı. İlk sen ol!</div>`;
   },()=>{const el=$("#lbList");if(el)el.innerHTML='<div class="empty">Sıralama yüklenemedi</div>'});
 }
 $("#eClose").addEventListener("click",()=>{if(lbUnsub){lbUnsub();lbUnsub=null}});
@@ -1155,7 +1200,7 @@ function mySeatIdx(d){return(d.seats||[]).findIndex(s=>s&&!s.bot&&s.uid===me)}
 function renderGame(){
   if(!game||!game.data)return;
   const d=game.data,my=mySeatIdx(d);
-  const gs=$("#gamescr");gs.className="gamescr show felt-"+(wallet?.skin?.table||"yesil")+" rack-"+(wallet?.skin?.rack||"ceviz");
+  const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack");
   $("#gTitleTxt").textContent="Okey";
   $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
@@ -1168,7 +1213,7 @@ function renderGame(){
   const leftSeat=(me4+3)%4;
   let html="";
   d.seats.forEach((s,i)=>{const p=pos(i);if(p==="bottom")return;
-    html+=`<div class="seat p-${p} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div class="nm">${esc(seatName(s))}</div><div class="ct">${(d.handCounts||[])[i]??""} taş · ${(d.scores||[])[i]||0} puan</div></div>`});
+    html+=`<div class="seat p-${p} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div class="nm">${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""}</div><div class="ct">${(d.handCounts||[])[i]??""} taş · ${(d.scores||[])[i]||0} puan</div></div>`});
   // atılan taşlar: her oyuncunun son attığı
   const dpos={left:"d-lo",right:"d-ro",top:"d-top"};
   d.seats.forEach((s,i)=>{const p=pos(i);const arr=(d.discards||{})[i]||[];const top=arr.length?arr[arr.length-1]:null;

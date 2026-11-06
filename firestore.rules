@@ -111,6 +111,18 @@ service cloud.firestore {
       allow delete: if signedIn() && request.auth.uid in resource.data.members;
     }
 
+    // VIP rozeti: herkes görür, sadece sunucu yazar
+    match /badges/{u} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    // Profil görüntüleme: bakan kişi kendi kaydını yazar; listeyi sadece sunucu okur (VIP'e gösterir)
+    match /profile_views/{viewed}/v/{viewer} {
+      allow read: if false;
+      allow create, update: if isMe(viewer) && viewed != viewer
+        && nd().keys().hasOnly(['at']) && nd().at is number;
+    }
+
     // Şifreli fotoğraf ve ses parçaları
     match /blobs/{id} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;

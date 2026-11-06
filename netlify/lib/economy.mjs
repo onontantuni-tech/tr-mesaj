@@ -40,12 +40,17 @@ export const SKINS = {
     { id: "bordo", name: "Bordo kadife", price: 75000 },
     { id: "siyah", name: "Siyah deri", price: 120000 },
     { id: "ay", name: "Ay yıldız", price: 250000 },
+    { id: "vip_mor", name: "Kraliyet moru", price: 0, vip: true },
+    { id: "vip_mermer", name: "Beyaz mermer", price: 0, vip: true },
+    { id: "vip_altin", name: "Altın işlemeli", price: 0, vip: true },
   ],
   rack: [
     { id: "ceviz", name: "Ceviz", price: 0 },
     { id: "abanoz", name: "Abanoz", price: 60000 },
     { id: "kiraz", name: "Kiraz", price: 60000 },
     { id: "altin", name: "Altın varak", price: 300000 },
+    { id: "vip_sedef", name: "Sedef kakma", price: 0, vip: true },
+    { id: "vip_elmas", name: "Elmas", price: 0, vip: true },
   ],
 };
 
@@ -65,6 +70,10 @@ export function trDate(ms = Date.now()) {
   const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, "0"), day = String(d.getUTCDate()).padStart(2, "0");
   return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate() };
 }
+
+// VIP: 30 gün. Jetonla alınır (Play Store'da parayla da satılabilir).
+export const VIP = { price: 250000, days: 30 };
+export const isVip = (w, now = Date.now()) => (w?.vipUntil || 0) > now;
 
 export function newWallet() {
   return { balance: WELCOME_BONUS, xp: 0, wins: 0, games: 0, owned: { table: ["yesil"], rack: ["ceviz"] }, skin: { table: "yesil", rack: "ceviz" }, createdAt: Date.now() };

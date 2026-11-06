@@ -31,10 +31,29 @@ export default async (req) => {
         welcomed = true;
       }
 
+      if (act === "buyVip") {
+        if ((w.balance || 0) < E.VIP.price) return { status: 402, body: { error: "balance" } };
+        E.credit(tx, db, uid, w, -E.VIP.price, `VIP üyelik (${E.VIP.days} gün)`);
+        const now = Date.now();
+        w.vipUntil = Math.max(now, w.vipUntil || 0) + E.VIP.days * 86400000;
+        tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil });
+      }
+
+      if (act === "views") {
+        const vip = E.isVip(w);
+        return { status: 200, body: { vip, ...(await profileViews(db, uid, vip)) } };
+      }
+
       if (act === "buySkin" || act === "equip") {
         const kind = b.kind === "rack" ? "rack" : "table";
         const item = E.SKINS[kind].find((x) => x.id === b.id);
         if (!item) return { status: 400, body: { error: "item" } };
+        if (item.vip) {
+          if (!E.isVip(w)) return { status: 403, body: { error: "vip" } };
+          w.skin = { ...(w.skin || {}), [kind]: item.id };
+          tx.set(ref, w);
+          return { status: 200, body: { wallet: view(w), welcomed } };
+        }
         w.owned = w.owned || { table: ["yesil"], rack: ["ceviz"] };
         w.owned[kind] = w.owned[kind] || [];
         if (act === "buySkin" && !w.owned[kind].includes(item.id)) {
@@ -47,6 +66,13 @@ export default async (req) => {
       }
 
       if (migrate) w.fm = 1;
+      // VIP bittiyse VIP desenlerinden standart desene dön
+      if (!E.isVip(w) && w.skin) {
+        for (const k of ["table", "rack"]) {
+          const it = E.SKINS[k].find((x) => x.id === w.skin[k]);
+          if (it && it.vip) w.skin[k] = k === "table" ? "yesil" : "ceviz";
+        }
+      }
       tx.set(ref, w);
       return { status: 200, body: { wallet: view(w), welcomed } };
     });
@@ -56,12 +82,20 @@ export default async (req) => {
   }
 };
 
+// Profilimi kimler gördü: VIP ise liste, değilse sadece sayı
+async function profileViews(db, uid, vip) {
+  const since = Date.now() - 30 * 86400000;
+  const q = await db.collection(`profile_views/${uid}/v`).get();
+  const rows = q.docs.map((d) => ({ uid: d.id, at: d.data().at || 0 })).filter((r) => r.at > since && r.uid !== uid).sort((a, b) => b.at - a.at);
+  return vip ? { count: rows.length, list: rows.slice(0, 100) } : { count: rows.length };
+}
+
 function view(w) {
   const lv = E.levelFromXp(w.xp || 0);
   return {
     balance: w.balance || 0, xp: w.xp || 0, level: lv.level, levelCur: lv.cur, levelNext: lv.next,
-    wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin,
-    catalog: { skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
+    wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0,
+    catalog: { vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
   };
 }
 
