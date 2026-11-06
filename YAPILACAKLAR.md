@@ -51,6 +51,40 @@ Son güncelleme: 6 Kasım 2026
 - 101 Okey, Pişti, Batak, King, Tavla (zaten planda)
 - Mesaj tarafı: mesajı yanıtla / ilet / sil, sohbet sabitleme, kaybolan mesajlar, grup görüntülü arama
 
+## Onaylanan ek özellikler — 2. liste ("hepsi", 6 Kasım 2026)
+1. Haftalık lig (bronz/gümüş/altın/elmas, yüksel-düş, lig ödülleri)
+2. Saatlik bedava jeton kutusu (4 saatte bir)
+3. Jeton bitince günde bir kez 10.000 destek
+4. Rövanş butonu
+5. İzleyici modu
+6. Masada sesli sohbet
+7. Ses efektleri ve titreşim
+8. Oyun geçmişi ve istatistikler
+9. Mevsimlik etkinlikler (Ramazan, bayram, yılbaşı)
+10. Aylık sezon kartı (ücretsiz + VIP yolu)
+11. Eşli Okey (2'ye 2)
+12. Eşli Batak
+13. Satranç ve dama
+14. Türkçe kelime oyunu
+15. Mesajlara emoji tepkisi
+16. Çevrimiçi ve "yazıyor…" göstergesi
+17. Son görülme (gizlenebilir)
+18. Engelle ve şikâyet et (Play Store için gerekli — öncelikli)
+19. Konum paylaşma
+20. Dosya/belge gönderme
+21. TR çıkartma paketi
+22. Sohbet duvar kâğıdı
+23. Kanallar
+24. Mesaj zamanlama
+25. Şifreli sohbet yedekleme
+26. Çoklu cihaz
+27. Yönetim paneline grafikler
+28. Toplu duyuru bildirimi
+29. İndirimli jeton kampanyaları
+30. İlk yüklemeye 2 kat jeton
+31. Reklam izle jeton kazan
+32. Kötü söz filtresi ve şikâyet takibi (açık masalar için gerekli — öncelikli)
+
 ## Notlar
 - Hileli dağıtım (para yükleyenin kazanma oranını düşürme) yapılmayacak — reddedildi.
 - Vercel Hobby ticari kullanıma izin vermiyor; satışa başlayınca Pro gerekir.
