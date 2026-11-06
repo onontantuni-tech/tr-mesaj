@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteDoc, collection, query, where, onSnapshot } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
 const VAPID_KEY="BNM0muk8JDXqc6KXABvndnLVHQHpYG-EKDet1qC6zkJq21tbM1P3y6sFlms3sSobLPmGBVkh1sbNQoZKo0s5N5w";
 
@@ -296,7 +296,7 @@ function bubbleBody(m,c){
     const ar=c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:"";
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
-  if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">🀄</span><div><b>Okey masası</b><span>Dokun, masaya otur</span></div><span class="go">Masaya git</span></div>`;
+  if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">🀄</span><div><b>Okey masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
   if(c.t==="voice"){
     if(c._local)return`<audio controls src="${esc(c._local)}"></audio>`;
     return`<div class="mload" style="height:44px" data-media="${esc(m.id)}">🎤 Yükleniyor… ${c.dur?fmtDur(c.dur):""}</div>`;
@@ -451,6 +451,7 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("active",p.id==="pane-"+tabNow));
   if(tabNow==="calls")renderCalls();
+  if(tabNow==="games")renderGamesTab();
   $("#fab").innerHTML=tabNow==="chats"||tabNow==="calls"?'<svg viewBox="0 0 24 24"><path d="M15 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.7 0-8 1.3-8 4v2h16v-2c0-2.7-5.3-4-8-4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75zM20.7 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75z"/></svg>';
 });
 $("#btnSearch").onclick=()=>{const sb=$("#searchbar");sb.classList.toggle("show");if(sb.classList.contains("show"))$("#searchInput").focus();else{query_="";$("#searchInput").value="";renderChats()}};
@@ -472,7 +473,7 @@ $("#msgs").addEventListener("click",e=>{const img=e.target.closest("img.media");
 const overlay=$("#overlay"),menu=$("#menu"),modal=$("#modal");
 let modalCb=null,profileLocked=false;
 function closeAll(){overlay.classList.remove("show");menu.classList.remove("show");modal.classList.remove("show");overlay.style.background=""}
-overlay.onclick=()=>{if(modal.dataset.locked==="1"||profileLocked)return;closeAll();closeProfile();closeGroupModal();closeInfo();closeContacts()};
+overlay.onclick=()=>{if(modal.dataset.locked==="1"||profileLocked)return;closeAll();closeProfile();closeGroupModal();closeInfo();closeContacts();closeE();$("#gpick").classList.remove("show")};
 function openModal({title,text="",placeholder="",value="",ok="Tamam",cancel=true,cancelText="İptal",input=true,locked=false,numeric=false},cb){
   closeAll();overlay.classList.add("show");modal.classList.add("show");modal.dataset.locked=locked?"1":"";
   $("#mTitle").textContent=title;$("#mText").innerHTML=text;$("#mText").style.display=text?"":"none";
@@ -504,7 +505,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="dark"){dark=!dark;document.body.classList.toggle("dark",dark);try{localStorage.setItem("tr-dark",dark?"1":"0")}catch(e){}}
   if(a==="logout")openModal({title:"Çıkış yap",text:"Hesabından çıkmak istiyor musun?",input:false,ok:"Çıkış yap"},logout);
 };
-$("#fab").onclick=()=>{if(tabNow==="status")askStatus();else askAdd()};
+$("#fab").onclick=()=>{if(tabNow==="status")askStatus();else if(tabNow==="games")openStore();else askAdd()};
 document.querySelector(".content").addEventListener("click",e=>{const r=e.target.closest("[data-callback]");if(r)startCall(r.dataset.callback,r.dataset.video==="1")});
 
 /* ---------- profil / ID ---------- */
@@ -707,6 +708,7 @@ onAuthStateChanged(auth,async u=>{
   updateIdLabel();renderAll();
   syncPhone().catch(()=>{});
   setupPush(false).catch(()=>{});
+  initWallet();
 
   watchUser(me);
   unsubs.push(onSnapshot(contactsRef(),s=>{const x=s.exists()?s.data():null;contacts=Array.isArray(x?.list)?x.list.filter(v=>typeof v==="string"):[];contacts.forEach(watchUser);renderAll()},()=>{}));
@@ -906,6 +908,99 @@ $("#acallBtn").onclick=()=>cur&&startCall(cur,false);
 $("#vcallBtn").onclick=()=>cur&&startCall(cur,true);
 window.addEventListener("beforeunload",()=>{if(call)endCall(call.phase==="dialing"?"missed":"ended")});
 
+/* ---------- jeton, seviye, sıralama, mağaza, yönetim ---------- */
+// Bakiye sadece sunucuda değişir; burada sadece gösterilir. Jeton paraya çevrilemez, başkasına gönderilemez.
+let wallet=null,catalog=null,isAdminUser=false;
+const fmtCoin=n=>(n||0).toLocaleString("tr-TR");
+function levelFromXp(xp){let lvl=1,need=200,acc=0;while(xp>=acc+need&&lvl<50){acc+=need;lvl++;need=Math.round(need*1.35)}return{level:lvl,cur:xp-acc,next:need}}
+function trDay(ms=Date.now()){const d=new Date(ms+3*3600*1000);return{day:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}`,month:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}`}}
+async function initWallet(){
+  try{const r=await callApi("/api/wallet",{action:"me"});catalog=r.wallet.catalog;applyWallet(r.wallet);if(r.welcomed)setTimeout(()=>openInfoModal("🎁 Hoş geldin!",`<div style="text-align:center;font-size:15px;line-height:1.5"><div style="font-size:44px">🎉</div>Sana <b>${fmtCoin(100000)}</b> <span class="coin"></span> jeton hediye ettik.<br>Oyun sekmesinden harcayabilirsin.</div>`),1500)}catch(e){}
+  unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin})},()=>{}));
+  callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);renderGamesTab()}).catch(()=>{});
+}
+function applyWallet(w){wallet=w;renderGamesTab();if(game)renderGame()}
+function renderGamesTab(){
+  const el=$("#pane-games");if(!el||!ready)return;
+  if(!wallet){el.innerHTML='<div class="empty">Yükleniyor…</div>';return}
+  const pct=Math.min(100,Math.round(100*(wallet.levelCur||0)/(wallet.levelNext||1)));
+  el.innerHTML=`<div class="wcard"><div style="font-size:13px;opacity:.85">Jeton bakiyen</div><div class="bal"><span class="coin"></span>${fmtCoin(wallet.balance)}</div>
+    <div class="lv"><b>Seviye ${wallet.level}</b><div class="bar"><i style="width:${pct}%"></i></div><span>${fmtCoin(wallet.levelCur)}/${fmtCoin(wallet.levelNext)} XP</span></div>
+    <div class="st">${wallet.wins||0} galibiyet · ${wallet.games||0} oyun · Kazandıkça seviye atlarsın; yüksek seviyede rakipler zorlaşır, büyük masalar açılır.</div></div>
+  <div class="gbtns">
+    <button data-g="play"><span>🀄</span>Okey oyna</button>
+    <button data-g="store"><span>🪙</span>Jeton al</button>
+    <button data-g="rank"><span>🏆</span>Sıralama</button>
+    <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
+    ${isAdminUser?'<button data-g="admin" style="grid-column:span 2"><span>🛠️</span>Yönetim paneli</button>':""}
+  </div>
+  <div class="empty" style="padding:6px 20px 30px;font-size:12.5px">Jetonlar sadece oyun içinde kullanılır; paraya çevrilemez ve başkasına gönderilemez.</div>`;
+}
+document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
+  if(g==="play"){openInfoModal("Okey oyna","Okey bir sohbetin içinde oynanır. Bir kişi ya da grup sohbeti aç, üstteki 🎮 düğmesine dokun.");}
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin()});
+function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
+function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
+$("#eClose").onclick=closeE;
+function openStore(){
+  const pk=(catalog?.packages||[]).map(p=>`<div class="pk"><span class="coin" style="font-size:28px"></span><div><b>${fmtCoin(p.coins)}</b><div class="isub">jeton</div></div><button class="pr" data-buy="${p.id}">${p.price} TL</button></div>`).join("");
+  openInfoModal("Jeton al",pk+`<p class="isub" style="margin-top:8px">Ödeme, TR Play Store'da yayınlandığında Google Play üzerinden açılacak. Şimdilik jeton yükleme için yöneticiyle iletişime geç.</p>`);
+  $("#eBody").onclick=e=>{if(e.target.closest("[data-buy]"))toast("Ödeme henüz açık değil. Play Store yayınından sonra aktif olacak.",3500)};
+}
+const SW_COLORS={yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
+function openSkins(){
+  const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=(wallet.owned?.[kind]||[]).includes(it.id),eq=wallet.skin?.[kind]===it.id;
+    return`<div class="pk"><span class="sw" style="background:${SW_COLORS[it.id]||"#888"}"></span><div><b style="font-size:15px">${esc(it.name)}</b><div class="isub">${it.price?fmtCoin(it.price)+" jeton":"Ücretsiz"}</div></div><button class="pr ${eq?"eq":own?"own":""}" data-skin="${kind}:${it.id}" ${eq?"disabled":""}>${eq?"Kullanılıyor":own?"Kullan":"Satın al"}</button></div>`}).join("");
+  openInfoModal("Masa ve ıstaka",sec("table","Masa deseni")+sec("rack","Istaka"));
+  $("#eBody").onclick=async e=>{const b=e.target.closest("[data-skin]");if(!b)return;const [kind,id]=b.dataset.skin.split(":");const own=(wallet.owned?.[kind]||[]).includes(id);
+    const it=catalog.skins[kind].find(x=>x.id===id);
+    if(!own&&(wallet.balance||0)<it.price){toast("Yeterli jetonun yok");return}
+    b.disabled=true;try{const r=await callApi("/api/wallet",{action:own?"equip":"buySkin",kind,id});applyWallet({...r.wallet});catalog=r.wallet.catalog;openSkins();toast(own?"Değiştirildi":"Satın alındı 🎉")}catch(err){toast("İşlem yapılamadı");b.disabled=false}};
+}
+let lbUnsub=null;
+function openRanking(kind){
+  const {day,month}=trDay();const col=kind==="day"?`lb_day/${day}/u`:`lb_month/${month}/u`;
+  const prizes=kind==="day"?(catalog?.daily||[100000,50000,20000]):(catalog?.monthly||[1000000,500000,200000]);
+  openInfoModal("Sıralama",`<div class="lbtabs"><button data-lb="day" class="${kind==="day"?"on":""}">Günün birincileri</button><button data-lb="month" class="${kind==="month"?"on":""}">Ayın birincileri</button></div><div class="isub" style="margin-bottom:6px">Ödüller: 🥇 ${fmtCoin(prizes[0])} · 🥈 ${fmtCoin(prizes[1])} · 🥉 ${fmtCoin(prizes[2])} jeton. ${kind==="day"?"Her gece 00:01'de":"Her ayın son gecesi 00:01'de"} hesaplara yüklenir.</div><div id="lbList"><div class="empty">Yükleniyor…</div></div>`);
+  $("#eBody").onclick=e=>{const b=e.target.closest("[data-lb]");if(b)openRanking(b.dataset.lb)};
+  if(lbUnsub)lbUnsub();
+  lbUnsub=onSnapshot(query(collection(fs,...col.split("/")),orderBy("points","desc"),limit(100)),s=>{
+    const rows=s.docs.map(d=>({uid:d.id,...d.data()})).filter(x=>(x.points||0)>0);
+    rows.forEach(r=>watchUser(r.uid));
+    const medal=i=>i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1;
+    const el=$("#lbList");if(!el)return;
+    el.innerHTML=rows.length?rows.map((r,i)=>`<div class="lbrow ${r.uid===me?"me":""}"><span class="rk">${medal(i)}</span>${avHTML(r.uid)}<span class="nm">${esc(r.uid===me?"Sen":realName(r.uid))}</span><span class="isub">${r.wins||0} galibiyet</span><span class="pt">${fmtCoin(r.points)} p</span></div>`).join(""):`<div class="empty">${kind==="day"?"Bugün":"Bu ay"} henüz kimse puan almadı. İlk sen ol!</div>`;
+  },()=>{const el=$("#lbList");if(el)el.innerHTML='<div class="empty">Sıralama yüklenemedi</div>'});
+}
+$("#eClose").addEventListener("click",()=>{if(lbUnsub){lbUnsub();lbUnsub=null}});
+function openAdmin(){
+  openInfoModal("Yönetim paneli",`<input id="adCode" inputmode="numeric" placeholder="Kullanıcının TR ID'si (örn. 482 913)"><div class="row2"><button id="adFind" style="background:var(--brand)">Bul</button></div><div id="adOut" style="margin-top:10px"></div>`);
+  $("#adFind").onclick=adminLookup;$("#adCode").onkeydown=e=>{if(e.key==="Enter")adminLookup()};setTimeout(()=>$("#adCode").focus(),60);
+}
+async function adminLookup(){
+  const code=$("#adCode").value.replace(/\D/g,"");if(code.length!==6){toast("6 haneli ID yaz");return}
+  $("#adOut").innerHTML='<div class="isub">Aranıyor…</div>';
+  let r;try{r=await callApi("/api/admin",{action:"lookup",code})}catch(e){$("#adOut").innerHTML=`<div class="isub">${e.status===404?"Bu ID ile kullanıcı yok":"Bulunamadı"}</div>`;return}
+  const w=r.wallet;
+  $("#adOut").innerHTML=`<div class="pk" style="display:block"><b>${esc(r.user.name||"İsimsiz")}</b> · TR ID ${fmtCode(r.user.code)}<div style="margin-top:6px;font-size:20px;font-weight:800"><span class="coin"></span> ${w?fmtCoin(w.balance):"Cüzdan yok"}</div>${w?`<div class="isub">Seviye ${w.level} · ${w.wins} galibiyet · ${w.games} oyun</div>`:""}</div>
+    <input id="adAmt" inputmode="numeric" placeholder="Miktar (örn. 100000)"><input id="adWhy" maxlength="80" placeholder="Açıklama (isteğe bağlı)">
+    <div class="row2"><button id="adAdd">+ Yükle</button><button id="adSub" class="neg">− Düş</button></div><div id="adConfirm" style="margin-top:8px"></div>
+    <div class="fl" style="margin-top:12px">Son hareketler</div>${(r.history||[]).map(h=>`<div class="hist"><span>${esc(h.reason)}</span><span class="isub">${new Date(h.at).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span><span class="d" style="color:${h.delta>0?"#0E7C3A":"#E53935"}">${h.delta>0?"+":""}${fmtCoin(h.delta)}</span></div>`).join("")||'<div class="isub">Hareket yok</div>'}`;
+  const go=async sign=>{const a=Math.abs(parseInt($("#adAmt").value.replace(/\D/g,""),10));if(!a){toast("Miktar yaz");return}
+    const why=$("#adWhy")?.value||"";
+    $("#adConfirm").innerHTML=`<div class="pk" style="display:block;border-color:${sign>0?"#0E7C3A":"#E53935"}">${esc(r.user.name||"Kullanıcı")} (${fmtCode(r.user.code)}) hesabına <b>${sign>0?"+":"−"}${fmtCoin(a)}</b> jeton ${sign>0?"yüklensin":"düşülsün"} mi?<div class="row2" style="margin-top:8px"><button id="adNo" style="background:#777">Vazgeç</button><button id="adYes" class="${sign>0?"":"neg"}">Onayla</button></div></div>`;
+    $("#adNo").onclick=()=>{$("#adConfirm").innerHTML=""};
+    $("#adYes").onclick=async()=>{$("#adYes").disabled=true;try{const x=await callApi("/api/admin",{action:"adjust",code,amount:sign*a,reason:why});toast("Yeni bakiye: "+fmtCoin(x.balance));adminLookup()}catch(e){toast("İşlem yapılamadı");$("#adYes").disabled=false}}};
+  $("#adAdd").onclick=()=>go(1);$("#adSub").onclick=()=>go(-1);
+}
+// Masa ücreti seçimi
+function pickStake(cb){
+  const lvl=wallet?.level||1,bal=wallet?.balance||0;
+  const btns=(catalog?.stakes||[{v:0,lvl:1}]).map(s=>{const locked=lvl<s.lvl,poor=s.v>bal;return`<button data-stake="${s.v}" ${locked||poor?"disabled":""}>${s.v?fmtCoin(s.v):"Ücretsiz"}<small>${locked?"Seviye "+s.lvl+" gerekir":poor?"Bakiye yetmez":s.v?"Kazanan potu alır":"Jetonsuz oyun"}</small></button>`}).join("");
+  openInfoModal("Masa ücreti",`<p class="isub" style="margin-bottom:10px">Oturan her oyuncudan alınır. Kazanan potun hepsini alır. Bilgisayar kazanırsa ya da berabere biterse herkese iade edilir.</p><div class="stk">${btns}</div>`);
+  $("#eBody").onclick=e=>{const b=e.target.closest("[data-stake]");if(b&&!b.disabled){closeE();cb(+b.dataset.stake)}};
+}
+
 /* ---------- oyunlar: Okey ---------- */
 // Masa durumu games/{id}, kendi taşlarım games/{id}/hands/{me}. Bütün hamleler /api/game üzerinden sunucuda doğrulanır.
 const T_COLORS=["kırmızı","sarı","mavi","siyah"];
@@ -927,12 +1022,14 @@ $("#gameBtn").onclick=()=>{if(!cur)return;closeAll();overlay.classList.add("show
 $("#gpickClose").onclick=()=>{$("#gpick").classList.remove("show");overlay.classList.remove("show")};
 $("#gpick").addEventListener("click",async e=>{
   const it=e.target.closest("[data-newgame]");if(!it||!cur)return;
-  const conv=cur;$("#gpick").classList.remove("show");overlay.classList.remove("show");
-  toast("Masa kuruluyor…",2500);
-  const r=await gameApi({action:"create",type:it.dataset.newgame,conv});
-  if(!r||!r.id){toast("Masa kurulamadı, tekrar dene");return}
-  await sendContent(conv,{t:"game",gid:r.id,kind:"okey"});
-  openGame(r.id);
+  const conv=cur,type=it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
+  pickStake(async stake=>{
+    toast("Masa kuruluyor…",2500);
+    const r=await gameApi({action:"create",type,conv,stake});
+    if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
+    await sendContent(conv,{t:"game",gid:r.id,kind:"okey",stake});
+    openGame(r.id);
+  });
 });
 $("#msgs").addEventListener("click",e=>{const c=e.target.closest("[data-game]");if(c)openGame(c.dataset.game)});
 
@@ -973,6 +1070,7 @@ function mySeatIdx(d){return(d.seats||[]).findIndex(s=>s&&!s.bot&&s.uid===me)}
 function renderGame(){
   if(!game||!game.data)return;
   const d=game.data,my=mySeatIdx(d);
+  const gs=$("#gamescr");gs.className="gamescr show felt-"+(wallet?.skin?.table||"yesil")+" rack-"+(wallet?.skin?.rack||"ceviz");
   $("#gTitleTxt").textContent="Okey";
   $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
@@ -996,7 +1094,7 @@ function renderGame(){
   html+=`<div class="center"><div><div class="pile ${canDraw?"take":""}" id="gPile">${d.pileCount}</div><div class="lbl">${canDraw?"Çek":"Deste"}</div></div><div><div>${tileHTML(d.indicator,null,{sm:true})}</div><div class="lbl">Gösterge</div></div><div><div>${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><div class="lbl">Okey</div></div></div>`;
   if(d.status==="over"){
     const w=d.winner;
-    html+=`<div class="overbox"><b style="font-size:18px">${w==null?"El berabere bitti":(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
+    html+=`<div class="overbox"><b style="font-size:18px">${w==null?"El berabere bitti":(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Masa ücretleri iade edildi</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>`):""}${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
   $("#gTable").innerHTML=html;
   // mesaj
@@ -1025,7 +1123,7 @@ function renderLobby(d,my){
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
   const host=d.host===me,free=d.seats.some(s=>!s);
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">🀄</div><b style="font-size:20px">Okey masası</b><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">🀄</div><b style="font-size:20px">Okey masası</b><div style="opacity:.9">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)} · kazanan potu alır`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>gameMove({action:"join"});
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
 }
@@ -1034,6 +1132,7 @@ async function gameMove(body){
   const r=await gameApi({...body,id});
   if(game&&game.id===id){game.busy=false;
     if(r&&r.error==="nowin")toast("El bitmiyor. Taşlar seri ya da çift oluşturmalı.",3000);
+    else if(r&&r.error==="balance")toast(r.who&&r.who.includes(me)?"Bakiyen masa ücretine yetmiyor":"Masadaki birinin bakiyesi yetmiyor",3500);
     else if(r&&r.error&&r.error!=="busy")toast("Hamle yapılamadı ("+r.error+")");
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}

@@ -5,6 +5,7 @@
 //   gsecret/{id}          deste ve bilgisayar oyuncuların elleri (istemcilere kapalı)
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as O from "../lib/okey.mjs";
+import * as E from "../lib/economy.mjs";
 
 const BOT_NAMES = ["Bot Ayşe", "Bot Mehmet", "Bot Zeynep", "Bot Ali"];
 const IDLE_MS = 45 * 1000; // sırası gelen oyuncu bu kadar oynamazsa onun yerine otomatik oynanır
@@ -39,9 +40,14 @@ export default async (req) => {
       if (!type) return json(400, { error: "type" });
       const members = await convMembers(db, uid, b.conv);
       if (!members) return json(403, { error: "conv" });
+      const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
+      const ws = await db.doc(`wallets/${uid}`).get();
+      const lvl = E.levelFromXp(ws.exists ? ws.data().xp || 0 : 0).level;
+      if (!E.stakeAllowed(stake, lvl)) return json(403, { error: "stake" });
+      if (stake && (!ws.exists || (ws.data().balance || 0) < stake)) return json(402, { error: "balance" });
       const ref = db.collection("games").doc();
       await ref.set({
-        type, conv: b.conv, members, host: uid, status: "lobby",
+        type, conv: b.conv, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl),
         seats: [{ uid, bot: false }, null, null, null],
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0, 0, 0], v: 1,
       });
@@ -83,13 +89,28 @@ export default async (req) => {
         if (g.host !== uid) return { status: 403, body: { error: "host" } };
         if (act === "start" && g.status !== "lobby") return { status: 409, body: { error: "started" } };
         if (act === "again" && g.status !== "over") return { status: 409, body: { error: "notover" } };
+        // Masa ücreti: oturan her oyuncudan alınır
+        const humansNow = g.seats.filter((s) => s && !s.bot).map((s) => s.uid);
+        const wsnaps = await Promise.all(humansNow.map((u) => tx.get(db.doc(`wallets/${u}`))));
+        const wallets = {};
+        humansNow.forEach((u, i) => { wallets[u] = wsnaps[i].exists ? wsnaps[i].data() : null; });
+        const stake = g.stake || 0;
+        if (stake) {
+          const poor = humansNow.filter((u) => !wallets[u] || (wallets[u].balance || 0) < stake);
+          if (poor.length) return { status: 402, body: { error: "balance", who: poor } };
+        }
         let bi = 0;
         g.seats = g.seats.map((s) => s || { uid: null, bot: true, name: BOT_NAMES[bi++ % 4] });
+        g.paid = [];
+        g.pot = 0;
+        for (const u of humansNow) {
+          if (stake) { E.credit(tx, db, u, wallets[u], -stake, "Okey masa ücreti"); g.pot += stake; g.paid.push(u); }
+        }
         const dealer = act === "start" ? Math.floor(Math.random() * 4) : next(g.dealer ?? 0);
         const d = O.deal(dealer);
         const secret = { pile: d.pile, bots: {} };
         const st = {
-          ...g, status: "play", dealer, turn: dealer, phase: "discard", indicator: d.indicator,
+          ...g, status: "play", dealer, turn: dealer, phase: "discard", indicator: d.indicator, settled: false,
           discards: { 0: [], 1: [], 2: [], 3: [] }, pileCount: d.pile.length,
           handCounts: d.hands.map((h) => h.length), winner: null, winKind: null, winHand: null,
           round: (g.round || 0) + 1, lastMoveAt: Date.now(), updatedAt: Date.now(), log: "Oyun başladı",
@@ -97,6 +118,8 @@ export default async (req) => {
         const hands = {};
         g.seats.forEach((s, i) => { if (s.bot) secret.bots[i] = d.hands[i]; else hands[s.uid] = d.hands[i]; });
         runBots(st, secret, hands);
+        settle(tx, db, st, wallets);
+        for (const u of humansNow) if (wallets[u]) tx.set(db.doc(`wallets/${u}`), wallets[u]);
         writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
         return { status: 200, body: { ok: true } };
       }
@@ -108,7 +131,12 @@ export default async (req) => {
       const handSnaps = await Promise.all(humanUids.map((u) => tx.get(db.doc(`games/${id}/hands/${u}`))));
       const hands = {};
       humanUids.forEach((u, i) => { hands[u] = handSnaps[i].data()?.tiles || []; });
+      const walletUids = [...new Set([...humanUids, ...(g.paid || [])])];
+      const wSnaps = await Promise.all(walletUids.map((u) => tx.get(db.doc(`wallets/${u}`))));
+      const wallets = {};
+      walletUids.forEach((u, i) => { wallets[u] = wSnaps[i].exists ? wSnaps[i].data() : null; });
       const st = { ...g };
+      const saveW = () => { settle(tx, db, st, wallets); for (const [u, w] of Object.entries(wallets)) if (w) tx.set(db.doc(`wallets/${u}`), w); };
 
       // Masadan kalk (oyun sırasında): yerine bilgisayar geçer
       if (act === "leave") {
@@ -119,7 +147,7 @@ export default async (req) => {
         st.seats[mySeat] = { uid: null, bot: true, name: BOT_NAMES.find((n) => !used.includes(n)) || "Bot" };
         st.log = "Bir oyuncu masadan kalktı, yerine bilgisayar geçti";
         runBots(st, secret, hands);
-        writeAll(tx, gref, sref, id, st, secret, hands, g.seats, uid);
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats, uid);
         return { status: 200, body: { ok: true } };
       }
 
@@ -129,7 +157,7 @@ export default async (req) => {
         if (cur.bot || Date.now() - (st.lastMoveAt || 0) < IDLE_MS) return { status: 200, body: { ok: true, idle: false } };
         autoMove(st, secret, hands, st.turn);
         runBots(st, secret, hands);
-        writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
         return { status: 200, body: { ok: true, idle: true } };
       }
 
@@ -147,13 +175,13 @@ export default async (req) => {
           hand.push(pd.pop());
           st.log = "Soldan aldı";
         } else {
-          if (!secret.pile.length) { endDraw(st); writeAll(tx, gref, sref, id, st, secret, hands, g.seats); return { status: 200, body: { ok: true } }; }
+          if (!secret.pile.length) { endDraw(st); saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats); return { status: 200, body: { ok: true } }; }
           hand.push(secret.pile.pop());
           st.log = "Ortadan çekti";
         }
         st.phase = "discard";
         st.lastMoveAt = Date.now();
-        writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
         return { status: 200, body: { ok: true } };
       }
 
@@ -169,7 +197,7 @@ export default async (req) => {
           hand.splice(idx, 1);
           st.discards[mySeat].push(t);
           finish(st, mySeat, kind, rest, O.valueOf(t, okey) === "W");
-          writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+          saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
           return { status: 200, body: { ok: true, win: kind } };
         }
         hand.splice(idx, 1);
@@ -179,7 +207,7 @@ export default async (req) => {
         st.lastMoveAt = Date.now();
         st.log = "Taş attı";
         runBots(st, secret, hands);
-        writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
         return { status: 200, body: { ok: true } };
       }
 
@@ -211,6 +239,36 @@ function finish(st, seat, kind, rest, withOkey) {
   st.log = `${kind === "cift" ? "Çiftten" : "Seriden"} bitti${withOkey ? ", okey atarak" : ""}`;
 }
 
+// El bitince jetonları dağıt, seviye ve sıralama güncelle (bir kez)
+function settle(tx, db, st, wallets) {
+  if (st.status !== "over" || st.settled) return;
+  st.settled = true;
+  const w = st.winner;
+  const winnerUid = w != null && !st.seats[w].bot ? st.seats[w].uid : null;
+  const pot = st.pot || 0;
+  if (pot) {
+    if (winnerUid && wallets[winnerUid]) {
+      E.credit(tx, db, winnerUid, wallets[winnerUid], pot, "Okey kazanç");
+      st.payout = { uid: winnerUid, amount: pot };
+    } else {
+      // Bilgisayar kazandı ya da berabere: masada kalan oyuncuların ücreti iade
+      const seated = new Set(st.seats.filter((s) => !s.bot).map((s) => s.uid));
+      for (const u of st.paid || []) if (seated.has(u) && wallets[u]) E.credit(tx, db, u, wallets[u], st.stake, "Okey iade");
+      st.payout = { refund: true, amount: st.stake };
+    }
+  }
+  for (const s of st.seats) {
+    if (s.bot || !wallets[s.uid]) continue;
+    const won = s.uid === winnerUid;
+    const wl = wallets[s.uid];
+    wl.games = (wl.games || 0) + 1;
+    if (won) wl.wins = (wl.wins || 0) + 1;
+    wl.xp = (wl.xp || 0) + (won ? E.XP_WIN : E.XP_PLAY);
+    E.addStats(tx, db, s.uid, won ? st.points || 2 : 0, won);
+  }
+  st.pot = 0;
+}
+
 function endDraw(st) {
   st.status = "over";
   st.winner = null;
@@ -225,7 +283,7 @@ function autoMove(st, secret, hands, seat) {
   if (st.phase === "draw") {
     const pd = st.discards[prev(seat)];
     const top = pd.length ? pd[pd.length - 1] : null;
-    const ch = O.botChooseDraw(hand, top, okey);
+    const ch = O.botChooseDraw(hand, top, okey, st.seats[seat].bot ? st.botSkill ?? 2 : 2);
     if (ch === "left" && top != null) hand.push(pd.pop());
     else {
       if (!secret.pile.length) { endDraw(st); return; }
@@ -240,7 +298,7 @@ function autoMove(st, secret, hands, seat) {
     finish(st, seat, fin.kind, hand.slice(), O.valueOf(fin.tile, okey) === "W");
     return;
   }
-  const t = O.botChooseDiscard(hand, okey);
+  const t = O.botChooseDiscard(hand, okey, Math.random, st.seats[seat].bot ? st.botSkill ?? 2 : 2);
   hand.splice(hand.indexOf(t), 1);
   st.discards[seat].push(t);
   st.turn = next(seat);

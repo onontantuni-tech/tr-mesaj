@@ -133,6 +133,23 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Jeton: herkes sadece kendi cüzdanını görür; bakiye sadece sunucuda değişir
+    match /wallets/{u} {
+      allow read: if isMe(u);
+      allow write: if false;
+    }
+    match /ledger/{x} { allow read, write: if false; }
+    match /rewards/{x} { allow read, write: if false; }
+    // Sıralama: giriş yapan herkes görür, sadece sunucu yazar
+    match /lb_day/{d}/u/{u} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /lb_month/{m}/u/{u} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Durumlar
     match /statuses/{uid} {
       allow read: if signedIn();

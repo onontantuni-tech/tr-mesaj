@@ -184,17 +184,21 @@ function usefulness(t, hand, okey) {
   return s;
 }
 
-export function botChooseDraw(hand, leftTop, okey) {
+// skill: 0 kolay, 1 orta, 2 zor
+export function botChooseDraw(hand, leftTop, okey, skill = 2) {
   if (leftTop == null) return "pile";
   if (findFinish([...hand, leftTop], okey)) return "left";
   if (valueOf(leftTop, okey) === "W") return "left";
-  return usefulness(leftTop, [...hand, leftTop], okey) >= 6 ? "left" : "pile";
+  if (skill === 0) return Math.random() < 0.25 ? "left" : "pile";
+  return usefulness(leftTop, [...hand, leftTop], okey) >= (skill === 1 ? 8 : 6) ? "left" : "pile";
 }
 
-export function botChooseDiscard(hand15, okey, rnd = Math.random) {
+export function botChooseDiscard(hand15, okey, rnd = Math.random, skill = 2) {
+  const noise = skill === 0 ? 7 : skill === 1 ? 2.5 : 0.5;
   let best = null, bestScore = Infinity;
   for (const t of hand15) {
-    const sc = usefulness(t, hand15, okey) + rnd() * 0.5;
+    if (skill === 0 && valueOf(t, okey) === "W") continue;
+    const sc = usefulness(t, hand15, okey) + rnd() * noise;
     if (sc < bestScore) { bestScore = sc; best = t; }
   }
   return best;
