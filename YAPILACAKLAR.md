@@ -219,6 +219,29 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 155. Hesap askıya alma ve yasaklama (öncelikli)
 156. Olağan dışı jeton hareketi alarmı
 
+## Onaylanan ek özellikler — 8. liste (6 Kasım 2026; 169 istenmedi)
+157. Günlük meydan okuma
+158. Koleksiyon albümü
+159. Usta-çırak
+160. Okey taş desenleri (fildişi, mermer, sedef)
+161. Bilardo top setleri (klasik, neon, altın)
+162. Elden bitme ödülü
+163. Grup etkinliği (katılım + hatırlatma)
+164. Mesaj hatırlatıcı
+165. Grupta ortak liste
+166. Sesli mesajı göndermeden dinleme
+167. Sesli mesajda gürültü azaltma
+168. Gizli sohbette ekran görüntüsü engeli (Android)
+170. Gizlilik ayarları (fotoğraf/durum/son görülme: herkes/arkadaşlar/kimse)
+171. Otomatik hata raporlama
+172. Gece otomatik veritabanı yedeği
+173. "Yeni sürüm var" bildirimi
+174. Sunucu durumu sayfası
+175. Play Store mağaza sayfası hazırlığı
+176. Uygun anda puan isteme
+
+İstenmeyen: 169 Telefon numarası değiştirme.
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
 2. Zorunlular: 18, 32, 55, 56, 57, 155
