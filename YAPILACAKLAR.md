@@ -30,16 +30,16 @@ Son güncelleme: 6 Kasım 2026
 - Her gün ilk girişte o günün hediyesi verilir (Türkiye saatiyle gün).
 - 30 günlük takvim; 30. günden sonra 1. güne döner ve hediyeler aynen devam eder.
 - Önerilen takvim (onaya sunulacak): 1–6. günler 5.000 → 20.000 arası artarak, 7. gün 50.000, 14. gün 75.000, 21. gün 100.000, 30. gün 250.000 + kısa süreli VIP denemesi (isteğe bağlı).
-- Açık soru: bir gün girilmezse seri sıfırlansın mı, yoksa kaldığı yerden mi devam etsin? (Varsayım: kaldığı yerden devam.)
+- KARAR: bir gün girilmezse seri baştan (1. gün) başlar.
 - Teknik: /api/wallet "daily" eylemi, wallet.loginDay ve wallet.streak; 30 kutulu takvim ekranı.
 
 ### 3. Arkadaşını çağır (davet)
 - Yeni kullanıcı kayıtta davet edenin TR ID'sini yazar (veya davet bağlantısıyla gelir: /?ref=482913).
 - Davet edene 100.000 jeton hediye. (Davet edilen zaten 100.000 hoş geldin hediyesi alıyor.)
-- Kötüye kullanıma karşı: her yeni hesap sadece bir kez davetli sayılır; telefon numarası doğrulanmış ve profili tamamlanmış olmalı; kendini davet edemez; ödül, davet edilen ilk oyununu bitirince verilebilir (öneri).
+- Kötüye kullanıma karşı: her yeni hesap sadece bir kez davetli sayılır; telefon numarası doğrulanmış ve profili tamamlanmış olmalı; kendini davet edemez; ödül, davet edilen ilk oyununu bitirince verilir (öneri; kullanıcı itiraz etmedi).
 - Davet eden ile davet edilen otomatik arkadaş olur.
 
-## Fikir havuzu (kullanıcıya önerildi, onay bekliyor)
+## Onaylanan ek özellikler ("hepsi olsun" — 6 Kasım 2026)
 - Günlük çark (her gün bir ücretsiz çevirme)
 - Görevler: "bugün 3 el oyna", "1 kez kazan" → jeton ve XP
 - Hediye gönderme: sohbette arkadaşa sanal hediye (çay, gül, taç) — jetonla alınır, jeton transferi değil
