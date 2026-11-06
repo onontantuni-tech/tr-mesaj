@@ -13,6 +13,7 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return json(400, { error: "body" }); }
   if (body?.call) return notifyCall(uid, String(body.call));
+  if (body?.friend) return notifyFriend(uid, String(body.friend));
   const id = String(body?.id || "");
   if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
   if (recent.has(id)) return json(200, { ok: true, dup: true });
@@ -91,6 +92,34 @@ async function notifyCall(uid, id) {
     },
     webpush: { headers: { Urgency: "high", TTL: "45" } },
     android: { priority: "high", ttl: 45000 },
+  });
+  return json(200, { ok: true, sent: res.successCount });
+}
+
+// Arkadaşlık isteği / kabul bildirimi
+async function notifyFriend(uid, id) {
+  if (!/^[A-Za-z0-9_]{20,90}$/.test(id)) return json(400, { error: "id" });
+  const key = "f" + id + uid;
+  if (recent.has(key)) return json(200, { ok: true, dup: true });
+  recent.set(key, Date.now());
+  const { db, messaging } = admin();
+  const snap = await db.doc(`friends/${id}`).get();
+  if (!snap.exists) return json(404, { error: "friend" });
+  const f = snap.data();
+  let target, body;
+  if (f.status === "pending" && f.from === uid) { target = f.to; body = "Sana arkadaşlık isteği gönderdi"; }
+  else if (f.status === "accepted" && f.to === uid && !f.auto) { target = f.from; body = "Arkadaşlık isteğini kabul etti. Artık yazışabilirsiniz."; }
+  else return json(403, { error: "state" });
+  const ps = await db.doc(`private/${target}/data/push`).get();
+  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  if (!tokens.length) return json(200, { ok: true, sent: 0 });
+  const sender = await db.doc(`users/${uid}`).get();
+  const name = (sender.exists && sender.data().nick) || "Biri";
+  const res = await messaging.sendEachForMulticast({
+    tokens,
+    data: { title: name, body, conv: uid, url: `${SITE}/?c=${encodeURIComponent(uid)}` },
+    webpush: { headers: { Urgency: "high", TTL: "86400" } },
+    android: { priority: "high" },
   });
   return json(200, { ok: true, sent: res.successCount });
 }

@@ -41,6 +41,7 @@ let msgKey={};       // msg id -> içeriği çözen CryptoKey
 let reads={};        // "okuyan_conv" -> zaman
 let statuses={};
 let contacts=[];
+let friends={};      // karşı uid -> {id,status,from,to,at}
 let pending=[];
 let cur=null,tabNow="chats",query_="";
 let ready=false;
@@ -251,10 +252,14 @@ function renderChats(){
   let list=chatEntries();
   const q=query_;
   if(q)list=list.filter(e=>e.title.toLocaleLowerCase("tr").includes(q)||(!isGroupConv(e.c)&&(users[e.c]?.code||"").includes(q.replace(/\s/g,"")))||convMsgs(e.c).some(m=>(contentOf(m)?.text||"").toLocaleLowerCase("tr").includes(q)));
-  const html=list.map(e=>{
+  const reqs=Object.keys(friends).filter(incomingReq);
+  const reqSet=new Set(reqs);
+  list=list.filter(e=>!reqSet.has(e.c));
+  const reqHtml=reqs.length&&!q?`<div class="section">Arkadaşlık istekleri (${reqs.length})</div>`+reqs.map(u=>`<div class="row" data-open="${esc(u)}">${avHTML(u)}<div class="meta"><div class="l1"><span class="name">${esc(realName(u))}</span></div><div class="l2"><span class="prev">${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):"İstek gönderdi"}</span></div></div><div class="frbtns"><button class="ok" data-frok="${esc(u)}">Kabul</button><button class="no" data-frno="${esc(u)}">Reddet</button></div></div>`).join("")+(list.length?`<div class="section">Sohbetler</div>`:""):"";
+  const html=reqHtml+list.map(e=>{
     const l=e.last,g=isGroupConv(e.c);let prev;
     if(l){const who=l.from===me?tick(l)+" ":(g?esc(realName(l.from).split(" ")[0])+": ":"");prev=`<span class="prev">${who}${esc(previewText(contentOf(l)))}</span>`}
-    else prev=`<span class="prev">${g?"Grup oluşturuldu":"Mesaj göndermek için dokun"}</span>`;
+    else prev=`<span class="prev">${g?"Grup oluşturuldu":(isFriend(e.c)?"Mesaj göndermek için dokun":esc(friendNote(e.c)))}</span>`;
     return`<div class="row" data-open="${esc(e.c)}"${e.c===cur?' style="background:var(--bg)"':''}>${avHTML(e.c)}
       <div class="meta"><div class="l1"><span class="name">${esc(e.title)}</span><span class="time ${e.unread?"unread":""}">${e.at?when(e.at):""}</span></div>
       <div class="l2">${prev}${e.unread?`<span class="badge">${e.unread>99?"99+":e.unread}</span>`:""}</div></div></div>`}).join("");
@@ -285,7 +290,8 @@ function renderChatHeader(){
   if(!cur)return;
   $("#cAvWrap").innerHTML=avHTML(cur);
   $("#cName").textContent=convTitle(cur);
-  $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)?"none":"";
+  $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)||!isFriend(cur)?"none":"";
+  $("#gameBtn").style.display=isGroupConv(cur)||isFriend(cur)?"":"none";
   if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın"}
   else{const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):""}
 }
@@ -320,7 +326,8 @@ function renderMsgs(){
   hydrateMedia();
   if(atBottom||list.length!==lastRenderedCount)box.scrollTop=box.scrollHeight;
   lastRenderedCount=list.length;
-  const canSend=!g||!!grp;
+  const okFriend=renderFriendBar();
+  const canSend=g?!!grp:okFriend;
   $("#composer").style.display=canSend?"":"none";
 }
 function renderAll(){renderChats();renderStatus();if(tabNow==="calls")renderCalls();if(cur){renderChatHeader();renderMsgs()}}
@@ -356,10 +363,76 @@ async function addById(input){
   watchUser(uid);
   if(!users[uid]){try{const u=await getDoc(doc(fs,"users",uid));if(u.exists())users[uid]=cleanUser(u.data())}catch(e){}}
   await saveContact(uid);openChat(uid);
+  if(!isFriend(uid))await sendRequest(uid);
 }
 
+/* ---------- arkadaşlık ---------- */
+// friends/{küçükUid_büyükUid}. İstek kabul edilmeden mesaj, arama ve oyun yok (kurallar da zorunlu kılar).
+const pairId=(a,b)=>a<b?a+"_"+b:b+"_"+a;
+const isFriend=u=>friends[u]?.status==="accepted";
+const incomingReq=u=>friends[u]?.status==="pending"&&friends[u].to===me;
+async function sendRequest(uid){
+  const f=friends[uid];
+  if(f?.status==="accepted")return;
+  if(incomingReq(uid)){await answerRequest(uid,true);return}
+  if(f?.status==="pending"){toast("İstek zaten gönderildi, kabul etmesini bekle");return}
+  const id=pairId(me,uid),data={members:me<uid?[me,uid]:[uid,me],from:me,to:uid,status:"pending",at:Date.now()};
+  friends[uid]={id,...data};renderAll();
+  try{await setDoc(doc(fs,"friends",id),data);callApi("/api/notify",{friend:id}).catch(()=>{});toast("Arkadaşlık isteği gönderildi")}
+  catch(e){if(f)friends[uid]=f;else delete friends[uid];renderAll();
+    toast(f&&f.from===me?"Kabul edilmeyen isteği 24 saat sonra tekrar gönderebilirsin":"İstek gönderilemedi",3000)}
+}
+async function answerRequest(uid,ok){
+  const f=friends[uid];if(!f||!incomingReq(uid))return;
+  const data={members:f.members,from:f.from,to:f.to,status:ok?"accepted":"declined",at:Date.now()};
+  friends[uid]={...f,...data};renderAll();
+  try{await setDoc(doc(fs,"friends",f.id),data);
+    if(ok){saveContact(uid);callApi("/api/notify",{friend:f.id}).catch(()=>{});toast("Artık arkadaşsınız 🎉")}else toast("İstek reddedildi")}
+  catch(e){friends[uid]=f;renderAll();toast("İşlem yapılamadı")}
+}
+async function removeFriend(uid){
+  const f=friends[uid];if(!f)return;
+  delete friends[uid];renderAll();
+  try{await deleteDoc(doc(fs,"friends",f.id))}catch(e){friends[uid]=f;renderAll();toast("İşlem yapılamadı")}
+}
+function friendNote(u){
+  const f=friends[u];
+  if(!f)return"Arkadaş değilsiniz";
+  if(f.status==="pending")return f.from===me?"İstek gönderildi · bekleniyor":"Sana arkadaşlık isteği gönderdi";
+  if(f.status==="declined")return f.from===me?"İsteğin kabul edilmedi":"İsteği reddettin";
+  return"";
+}
+function renderFriendBar(){
+  const bar=$("#frbar");
+  if(!cur||isGroupConv(cur)||isFriend(cur)){bar.classList.remove("show");bar.innerHTML="";return true}
+  const f=friends[cur],n=esc(realName(cur));
+  let h;
+  if(incomingReq(cur))h=`<div><b>${n}</b> sana arkadaşlık isteği gönderdi.</div><div class="acts"><button class="ok" data-frok="${esc(cur)}">Kabul et</button><button class="no" data-frno="${esc(cur)}">Reddet</button></div>`;
+  else if(f?.status==="pending")h=`<div>İstek gönderildi. <b>${n}</b> kabul edince mesajlaşabilirsiniz.</div><div class="acts"><button class="no" data-frdel="${esc(cur)}">İsteği geri al</button></div>`;
+  else if(f?.status==="declined"&&f.from===me)h=`<div><b>${n}</b> isteğini kabul etmedi.</div><div class="acts"><button class="ok" data-frreq="${esc(cur)}">Tekrar istek gönder</button></div>`;
+  else h=`<div>Mesajlaşmak için önce arkadaş olmalısınız.</div><div class="acts"><button class="ok" data-frreq="${esc(cur)}">Arkadaşlık isteği gönder</button></div>`;
+  bar.innerHTML=h;bar.classList.add("show");
+  return false;
+}
+function friendButtons(e){
+  const b=e.target.closest("[data-frok],[data-frno],[data-frreq],[data-frdel]");if(!b)return false;
+  e.preventDefault();e.stopPropagation();
+  if(b.dataset.frok)answerRequest(b.dataset.frok,true);
+  else if(b.dataset.frno)answerRequest(b.dataset.frno,false);
+  else if(b.dataset.frreq)sendRequest(b.dataset.frreq);
+  else if(b.dataset.frdel)removeFriend(b.dataset.frdel);
+  return true;
+}
+$("#frbar").addEventListener("click",friendButtons);
+function openFriends(){
+  const list=Object.keys(friends).filter(isFriend).sort((a,b)=>realName(a).localeCompare(realName(b),"tr"));
+  openModal({title:"Arkadaşlarım ("+list.length+")",input:false,ok:"Arkadaş ekle",cancelText:"Kapat",
+    text:list.length?`<div class="flist">${list.map(u=>`<div class="gitem" data-fopen="${esc(u)}">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}</b><span>${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):""}</span></div></div>`).join("")}</div>`:"Henüz arkadaşın yok. TR ID ile istek gönderebilirsin."},askAdd);
+}
+$("#mText").addEventListener("click",e=>{const r=e.target.closest("[data-fopen]");if(r){closeAll();openChat(r.dataset.fopen)}});
+
 /* ---------- gruplar ---------- */
-function peopleList(){return[...new Set([...contacts,...raw.filter(m=>!m.gid).map(convOfMsg)])].filter(u=>u&&u!==me)}
+function peopleList(){return[...new Set([...contacts,...raw.filter(m=>!m.gid).map(convOfMsg),...Object.keys(friends)])].filter(u=>u&&u!==me&&isFriend(u))}
 function memberRow(uid,{check,checked,tag,remove}={}){
   return`<label class="gitem" data-uid="${esc(uid)}">${avHTML(uid)}<div class="gn"><b>${esc(uid===me?(users[me]?.nick||"Sen")+" (sen)":realName(uid))}</b><span>${users[uid]?.code?"TR ID "+esc(fmtCode(users[uid].code)):""}</span></div>${tag?`<span class="tag">${esc(tag)}</span>`:""}${check?`<input type="checkbox" value="${esc(uid)}"${checked?" checked":""}>`:""}${remove?`<button type="button" class="ibtn" data-remove="${esc(uid)}" aria-label="Çıkar" style="color:#E53935;width:34px;height:34px">✕</button>`:""}</label>`;
 }
@@ -372,7 +445,7 @@ function openGroupModal(mode,gid){
   $("#gTitle").textContent=mode==="create"?"Yeni grup":"Üye ekle";
   $("#gName").style.display=mode==="create"?"":"none";$("#gName").value="";
   $("#gListLabel").textContent=candidates.length?"Üyeleri seç":"";
-  $("#gList").innerHTML=candidates.length?candidates.map(u=>memberRow(u,{check:true})).join(""):`<div class="empty" style="padding:20px">${mode==="create"?"Önce ID ile birkaç kişi ekle, sonra grup kurabilirsin.":"Eklenecek başka kişin yok."}</div>`;
+  $("#gList").innerHTML=candidates.length?candidates.map(u=>memberRow(u,{check:true})).join(""):`<div class="empty" style="padding:20px">${mode==="create"?"Grup kurmak için önce arkadaş eklemelisin.":"Eklenecek başka kişin yok."}</div>`;
   $("#gErr").textContent="";$("#gOk").textContent=mode==="create"?"Oluştur":"Ekle";$("#gOk").disabled=false;
   overlay.classList.add("show");$("#gmodal").classList.add("show");
   if(mode==="create")setTimeout(()=>$("#gName").focus(),60);
@@ -424,7 +497,9 @@ function openInfo(){
     $("#iLabel").textContent="";
     const common=Object.entries(groups).filter(([,g])=>g.members.includes(cur));
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
-    $("#iActs").innerHTML=`<button class="pri" id="iClose">Kapat</button>`;
+    const f=friends[cur];
+    $("#iActs").innerHTML=(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button class="pri" id="iClose">Kapat</button>`;
+    if(isFriend(cur)){const peer=cur;$("#iUnf").onclick=()=>{closeInfo();openModal({title:"Arkadaşlıktan çıkar",text:`${esc(realName(peer))} arkadaşlıktan çıkarılsın mı? Tekrar yazışmak için yeni istek gerekir.`,input:false,ok:"Çıkar"},()=>removeFriend(peer))}}
     $("#iList").onclick=e=>{const r=e.target.closest("[data-g]");if(r){closeInfo();openChat("g:"+r.dataset.g)}};
   }
   $("#iClose").onclick=closeInfo;
@@ -456,7 +531,7 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
 });
 $("#btnSearch").onclick=()=>{const sb=$("#searchbar");sb.classList.toggle("show");if(sb.classList.contains("show"))$("#searchInput").focus();else{query_="";$("#searchInput").value="";renderChats()}};
 $("#searchInput").oninput=e=>{query_=e.target.value.toLocaleLowerCase("tr").trim();if(tabNow!=="chats")document.querySelector('[data-tab="chats"]').click();renderChats()};
-document.querySelector(".content").onclick=e=>{const r=e.target.closest(".row");if(!r)return;
+document.querySelector(".content").onclick=e=>{if(friendButtons(e))return;const r=e.target.closest(".row");if(!r)return;
   if(r.dataset.open)openChat(r.dataset.open);
   else if(r.dataset.story)openStory(r.dataset.story);
   else if(r.dataset.act==="mystatus")askStatus();
@@ -490,13 +565,14 @@ $("#btnMenu").onclick=()=>{menu.classList.add("show");overlay.classList.add("sho
 function showMyId(prefix=""){
   const c=users[me]?.code;
   openModal({title:"Benim TR ID'm",input:false,ok:"Kopyala",cancelText:"Kapat",
-    text:`${prefix}<div class="idbox">${esc(fmtCode(c)||"…")}</div>Bu numarayı arkadaşına ver. O da “ID ile kişi ekle”den seni ekleyip yazabilir.`},
+    text:`${prefix}<div class="idbox">${esc(fmtCode(c)||"…")}</div>Bu numarayı arkadaşına ver. O “ID ile arkadaş ekle”den sana istek gönderir, sen kabul edince yazışabilirsiniz.`},
     async()=>{try{await navigator.clipboard.writeText(c);toast("ID kopyalandı")}catch(e){toast("Kopyalanamadı — numarayı elle yaz")}});
 }
-function askAdd(){openModal({title:"ID ile kişi ekle",text:"Arkadaşının 6 haneli TR ID'sini yaz.",placeholder:"örn. 482 913",ok:"Ekle",numeric:true},addById)}
+function askAdd(){openModal({title:"ID ile arkadaş ekle",text:"Arkadaşının 6 haneli TR ID'sini yaz. Ona arkadaşlık isteği gidecek; kabul edince yazışabilirsiniz.",placeholder:"örn. 482 913",ok:"İstek gönder",numeric:true},addById)}
 menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="myid")showMyId();
   if(a==="add")askAdd();
+  if(a==="friends")openFriends();
   if(a==="newgroup")openGroupModal("create");
   if(a==="findcontacts")findContacts();
   if(a==="notif")notifMenu();
@@ -685,7 +761,7 @@ async function logout(){
   try{await new Promise(r=>{const q=indexedDB.deleteDatabase("firebaseLocalStorageDb");q.onsuccess=q.onerror=q.onblocked=()=>r();setTimeout(r,1500)})}catch(e){}
   location.replace("/?cikis="+Date.now());
 }
-function stopAll(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];watched.clear()}
+function stopAll(){unsubs.forEach(u=>{try{u()}catch(e){}});unsubs=[];watched.clear();friends={}}
 
 const watched=new Set();
 function watchUser(uid){
@@ -711,6 +787,12 @@ onAuthStateChanged(auth,async u=>{
   initWallet();
 
   watchUser(me);
+  unsubs.push(onSnapshot(query(collection(fs,"friends"),where("members","array-contains",me)),s=>{
+    const next={};
+    s.docs.forEach(d=>{const x=d.data()||{};if(!Array.isArray(x.members))return;const p=x.members.find(u=>u!==me);if(!p)return;
+      next[p]={id:d.id,members:x.members,from:String(x.from||""),to:String(x.to||""),status:String(x.status||""),at:+x.at||0};watchUser(p)});
+    friends=next;renderAll();
+  },()=>{}));
   unsubs.push(onSnapshot(contactsRef(),s=>{const x=s.exists()?s.data():null;contacts=Array.isArray(x?.list)?x.list.filter(v=>typeof v==="string"):[];contacts.forEach(watchUser);renderAll()},()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"groups"),where("members","array-contains",me)),s=>{
     const next={};s.docs.forEach(d=>{const g=cleanGroup(d.data());if(g&&g.members.includes(me)){next[d.id]=g;g.members.forEach(watchUser)}});
@@ -823,6 +905,7 @@ async function makePC(id,role){
 async function startCall(peer,video){
   if(call){toast("Zaten bir arama var");return}
   if(isGroupConv(peer)){toast("Grup araması henüz yok");return}
+  if(!isFriend(peer)){toast("Aramak için önce arkadaş olmalısınız");return}
   if(!window.RTCPeerConnection||!navigator.mediaDevices?.getUserMedia){toast("Bu cihaz aramayı desteklemiyor");return}
   let stream;
   try{stream=await getMedia(video)}catch(e){toast(video?"Kamera/mikrofon izni verilmedi":"Mikrofon izni verilmedi",3500);return}
@@ -1227,8 +1310,8 @@ $("#cCancel").onclick=closeContacts;
 $("#cAdd").onclick=async()=>{
   const sel=[...document.querySelectorAll("#cList input:checked")].map(i=>i.value);
   closeContacts();
-  for(const u of sel){watchUser(u);await saveContact(u)}
-  if(sel.length)toast(sel.length+" kişi eklendi");
+  for(const u of sel){watchUser(u);await saveContact(u);if(!isFriend(u))await sendRequest(u)}
+  if(sel.length)toast(sel.length+" kişiye arkadaşlık isteği gönderildi",3000);
 };
 async function findContacts(){
   const supported="contacts" in navigator&&"select" in navigator.contacts;

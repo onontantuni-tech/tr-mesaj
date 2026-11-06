@@ -3,6 +3,7 @@
 //   games/{id}            herkese açık masa durumu (sadece masadaki sohbetin üyeleri okur)
 //   games/{id}/hands/{uid} oyuncunun kendi taşları (sadece kendisi okur)
 //   gsecret/{id}          deste ve bilgisayar oyuncuların elleri (istemcilere kapalı)
+import { areFriends } from "../lib/friends.mjs";
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as O from "../lib/okey.mjs";
 import * as E from "../lib/economy.mjs";
@@ -23,6 +24,7 @@ async function convMembers(db, uid, conv) {
     return m.includes(uid) ? m.slice(0, 50) : null;
   }
   if (!/^[A-Za-z0-9]{10,40}$/.test(conv) || conv === uid) return null;
+  if (!(await areFriends(db, uid, conv))) return null;
   return [uid, conv];
 }
 

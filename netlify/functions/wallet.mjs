@@ -1,6 +1,7 @@
 // Cüzdan: bakiye, seviye, desenler. Hoş geldin hediyesi ilk girişte bir kez verilir.
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
+import { migrateFriends } from "../lib/friends.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
@@ -11,6 +12,13 @@ export default async (req) => {
   const { db } = admin();
   const act = String(b?.action || "me");
   const ref = db.doc(`wallets/${uid}`);
+  let migrate = false;
+  if (act === "me") {
+    try {
+      const w0 = await ref.get();
+      if (!w0.exists || !w0.data().fm) { await migrateFriends(db, uid); migrate = true; }
+    } catch {}
+  }
 
   try {
     const res = await db.runTransaction(async (tx) => {
@@ -38,6 +46,7 @@ export default async (req) => {
         w.skin = { ...(w.skin || {}), [kind]: item.id };
       }
 
+      if (migrate) w.fm = 1;
       tx.set(ref, w);
       return { status: 200, body: { wallet: view(w), welcomed } };
     });

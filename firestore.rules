@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isMe(uid) { return signedIn() && request.auth.uid == uid; }
     function nd() { return request.resource.data; }
+    function pair(a, b) { return a < b ? a + '_' + b : b + '_' + a; }
+    function areFriends(a, b) {
+      let f = /databases/$(database)/documents/friends/$(pair(a, b));
+      return exists(f) && get(f).data.status == 'accepted';
+    }
 
     // Herkese açık profil: ad, soyad, TR ID, şifreleme açık anahtarı
     match /users/{uid} {
@@ -62,13 +67,48 @@ service cloud.firestore {
           (nd().to is string
             && nd().to != request.auth.uid
             && nd().members == [request.auth.uid, nd().to]
-            && !('gid' in nd()))
+            && !('gid' in nd())
+            && areFriends(request.auth.uid, nd().to))
           ||
           (nd().gid is string
             && !('to' in nd())
             && get(/databases/$(database)/documents/groups/$(nd().gid)).data.members == nd().members)
         );
       allow delete: if signedIn() && resource.data.from == request.auth.uid;
+    }
+
+    // Arkadaşlık: belge adı "küçükUid_büyükUid". İstek gönderilir, karşı taraf kabul ederse yazışılır.
+    match /friends/{id} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && nd().keys().hasOnly(['members', 'from', 'to', 'status', 'at'])
+        && nd().from == request.auth.uid
+        && nd().to is string && nd().to != request.auth.uid
+        && nd().status == 'pending'
+        && nd().at is number
+        && id == pair(request.auth.uid, nd().to)
+        && nd().members == (request.auth.uid < nd().to ? [request.auth.uid, nd().to] : [nd().to, request.auth.uid])
+        && exists(/databases/$(database)/documents/users/$(nd().to));
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.members
+        && nd().keys().hasOnly(['members', 'from', 'to', 'status', 'at'])
+        && nd().members == resource.data.members
+        && nd().at is number
+        && (
+          // karşı taraf kabul eder ya da reddeder
+          (resource.data.status == 'pending'
+            && resource.data.to == request.auth.uid
+            && nd().from == resource.data.from && nd().to == resource.data.to
+            && nd().status in ['accepted', 'declined'])
+          ||
+          // reddedilen istek tekrar gönderilir (reddedilen kişi 24 saat bekler)
+          (resource.data.status == 'declined'
+            && nd().status == 'pending'
+            && nd().from == request.auth.uid
+            && nd().to in resource.data.members && nd().to != request.auth.uid
+            && (resource.data.from != request.auth.uid || request.time.toMillis() > resource.data.at + 86400000))
+        );
+      allow delete: if signedIn() && request.auth.uid in resource.data.members;
     }
 
     // Şifreli fotoğraf ve ses parçaları
@@ -106,7 +146,8 @@ service cloud.firestore {
         && nd().from == request.auth.uid
         && nd().to is string && nd().to != request.auth.uid
         && nd().members == [request.auth.uid, nd().to]
-        && nd().state == 'ringing';
+        && nd().state == 'ringing'
+        && areFriends(request.auth.uid, nd().to);
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
         && nd().from == resource.data.from
