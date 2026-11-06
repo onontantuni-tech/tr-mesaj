@@ -85,6 +85,38 @@ Son güncelleme: 6 Kasım 2026
 31. Reklam izle jeton kazan
 32. Kötü söz filtresi ve şikâyet takibi (açık masalar için gerekli — öncelikli)
 
+## Onaylanan ek özellikler — 3. liste (6 Kasım 2026; 58 ve 61 sonraya bırakıldı)
+33. Hızlı Okey (kısa süreli eller)
+34. Batak çeşitleri (Koz, İhaleli, Gömmeli)
+35. Eşli ve katlamalı 101
+36. Kuru (Sevgiliye) Pişti
+37. Tombala (özel günlerde toplu, büyük ödüllü)
+38. Bilardo 9 top ve 3 bant
+39. Antrenman masası (jetonsuz, bilgisayara karşı)
+40. Resimli oyun öğreticileri
+41. Ana sayfada "Günün ödülü" kutusu ve geri sayım
+42. Seri bonusu (3 el üst üste kazanana ek jeton)
+43. Profil sayfası (kapak, hakkımda, en sevdiği oyun, rozetler)
+44. Profil fotoğrafı yükleme
+45. Takip etme
+46. Ayrıntılı bildirim ayarları
+47. Grup anketleri
+48. Grup yönetici ayarları (sadece yöneticiler yazsın, davet bağlantısı)
+49. Sohbet içinde mesaj arama
+50. Sesli mesajı yazıya çevirme
+51. Fotoğrafa çizim/yazı ekleme
+52. Tek seferlik görüntülenen fotoğraf
+53. Sohbet kilidi (parmak izi / PIN)
+54. Uygulama kilidi
+55. Kullanım şartları ve gizlilik politikası (Play Store için zorunlu)
+56. Hesap silme (Play Store için zorunlu)
+57. 18 yaş onayı (jetonlu oyunlar)
+59. Destek / iletişim formu
+60. Dil seçenekleri: İngilizce, Almanca, Arapça
+62. Hızlı açılış ve düşük internet modu
+
+Sonraya bırakılanlar: 58 Sorumlu oyun (harcama limiti, süre hatırlatıcı), 61 iPhone / App Store sürümü.
+
 ## Notlar
 - Hileli dağıtım (para yükleyenin kazanma oranını düşürme) yapılmayacak — reddedildi.
 - Vercel Hobby ticari kullanıma izin vermiyor; satışa başlayınca Pro gerekir.
