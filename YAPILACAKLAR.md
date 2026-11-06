@@ -199,9 +199,29 @@ Sonraya bırakılan: 87 Bayi / yetkili satıcı sistemi (yasal danışma gerekeb
 
 İstenmeyenler: 119 Masa müziği/ortam sesi, 120 Kahve falı.
 
+## Onaylanan ek özellikler — 7. liste ("hepsi", 6 Kasım 2026)
+139. Okey'de göstergeyi gösterme bonusu
+140. Bilardoda falso (alt/üst/yan vuruş)
+141. Masa davet kodu (4 haneli)
+142. Çay molası (herkes onaylarsa 2 dk durur)
+143. Kaybedene teselli XP'si
+144. Arkadaş aktivitesi ("Ayşe Okey oynuyor, katıl")
+145. Grup sesli sohbet odası
+146. Arkadaşlık yıldönümü kartı
+147. Kişiye özel bildirim sesi
+148. Albüm olarak fotoğraf gönderme (10'a kadar)
+149. Orijinal kalitede fotoğraf
+150. Görüntülü aramada arka plan bulanıklaştırma ve filtreler
+151. Arama sırasında küçük pencere
+152. Cevapsız arama için hazır mesaj
+153. Kasa raporu (günlük/haftalık/aylık, Excel)
+154. Yönetici iç notları
+155. Hesap askıya alma ve yasaklama (öncelikli)
+156. Olağan dışı jeton hareketi alarmı
+
 ## Önerilen öncelik sırası
 1. Vercel ve Play Store'a çıkış
-2. Zorunlular: 18, 32, 55, 56, 57
+2. Zorunlular: 18, 32, 55, 56, 57, 155
 3. Açık oyunlar, sadakat, davet
 4. Diğerleri
 
