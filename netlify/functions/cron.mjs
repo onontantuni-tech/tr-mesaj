@@ -29,6 +29,31 @@ async function payTop(db, kind, period, prizes) {
   return { kind, period, paid };
 }
 
+// Yarım kalmış oyunlar: 2 saattir hamle yoksa masa ücretleri sahiplerine iade edilir
+async function refundStale(db) {
+  const q = await db.collection("games").where("status", "==", "play").limit(300).get();
+  const stale = q.docs.filter((d) => Date.now() - (d.data().lastMoveAt || d.data().updatedAt || 0) > 2 * 3600e3);
+  let n = 0;
+  for (const d of stale) {
+    await db.runTransaction(async (tx) => {
+      const gs = await tx.get(d.ref);
+      const g = gs.data();
+      if (!g || g.status !== "play") return;
+      const paid = g.paid || [];
+      const ws = await Promise.all(paid.map((u) => tx.get(db.doc(`wallets/${u}`))));
+      paid.forEach((u, i) => {
+        if (!ws[i].exists || !g.stake) return;
+        const w = ws[i].data();
+        E.credit(tx, db, u, w, g.stake, g.type === "pool" ? "Yarım kalan bilardo: masa ücreti iadesi" : "Yarım kalan okey: masa ücreti iadesi");
+        tx.set(db.doc(`wallets/${u}`), w);
+      });
+      tx.update(d.ref, { status: "over", aborted: true, settled: true, pot: 0, winner: null, log: "Oyun yarım kaldı, masa ücretleri iade edildi", updatedAt: Date.now() });
+      n++;
+    });
+  }
+  return { kind: "refund", games: n };
+}
+
 export default async (req) => {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization") || "";
@@ -39,6 +64,7 @@ export default async (req) => {
   const today = E.trDate();
   const out = [await payTop(db, "day", y.day, E.DAILY_PRIZES)];
   if (today.dom === 1) out.push(await payTop(db, "month", y.month, E.MONTHLY_PRIZES));
+  out.push(await refundStale(db));
   return json(200, { ok: true, out });
 };
 

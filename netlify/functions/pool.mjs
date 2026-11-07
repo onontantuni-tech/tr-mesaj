@@ -33,11 +33,12 @@ export default async (req) => {
   let b;
   try { b = await req.json(); } catch { return json(400, { error: "body" }); }
   const { db } = admin();
-  const act = String(b?.action || "");
+  let act = String(b?.action || "");
 
   try {
     if (act === "create") {
-      const members = await convMembers(db, uid, b.conv);
+      const pub = b.public === true;
+      const members = pub ? [uid] : await convMembers(db, uid, b.conv);
       if (!members) return json(403, { error: "conv" });
       const stake = Math.max(0, Math.floor(Number(b.stake) || 0));
       const ws = await db.doc(`wallets/${uid}`).get();
@@ -48,7 +49,7 @@ export default async (req) => {
       if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
-        type: "pool", conv: b.conv, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl),
+        type: "pool", conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl),
         seats: [{ uid, bot: false }, null], at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0], seq: 0, v: 1,
       });
       return json(200, { id: ref.id });
@@ -63,7 +64,8 @@ export default async (req) => {
       if (!gs.exists) return { status: 404, body: { error: "game" } };
       const g = gs.data();
       if (g.type !== "pool") return { status: 400, body: { error: "type" } };
-      if (!g.members.includes(uid)) return { status: 403, body: { error: "member" } };
+      if (!g.members.includes(uid) && !(g.public && act === "join")) return { status: 403, body: { error: "member" } };
+      let auto = false; // açık masa dolunca ya da süre bitince kendiliğinden başlar
       const mySeat = g.seats.findIndex((s) => s && !s.bot && s.uid === uid);
 
       if (act === "join") {
@@ -72,20 +74,31 @@ export default async (req) => {
         if (g.stake) {
           const mw = await tx.get(db.doc(`wallets/${uid}`));
           if (!(mw.exists && mw.data().adult)) return { status: 403, body: { error: "age" } };
+          if ((mw.data().balance || 0) < g.stake) return { status: 402, body: { error: "balance" } };
         }
         const free = g.seats.findIndex((s) => !s);
         if (free < 0) return { status: 409, body: { error: "full" } };
         g.seats[free] = { uid, bot: false };
-        tx.update(gref, { seats: g.seats, updatedAt: Date.now() });
-        return { status: 200, body: { ok: true } };
+        if (!g.members.includes(uid)) g.members = [...g.members, uid];
+        if (g.public && g.seats.every((s) => s)) { act = "start"; auto = true; }
+        else {
+          tx.update(gref, { seats: g.seats, members: g.members, updatedAt: Date.now() });
+          return { status: 200, body: { ok: true } };
+        }
       }
       if (act === "leave" && g.status === "lobby") {
         if (mySeat < 0) return { status: 200, body: { ok: true } };
         g.seats[mySeat] = null;
         const upd = { seats: g.seats, updatedAt: Date.now() };
-        if (g.host === uid) { const h = g.seats.find((s) => s && !s.bot); upd.host = h ? h.uid : uid; if (!h) upd.status = "closed"; }
+        if (g.public) upd.members = g.members.filter((x) => x !== uid);
+        if (g.host === uid || g.public) { const h = g.seats.find((s) => s && !s.bot); upd.host = h ? h.uid : uid; if (!h) upd.status = "closed"; }
         tx.update(gref, upd);
         return { status: 200, body: { ok: true } };
+      }
+      // Açık masa: 20 saniye içinde dolmazsa boş yerlere bilgisayar oturur
+      if (act === "poke" && g.status === "lobby") {
+        if (!g.public || mySeat < 0 || Date.now() - (g.at || 0) < 20000) return { status: 200, body: { ok: true, idle: false } };
+        act = "start"; auto = true;
       }
 
       const humans = [...new Set([...g.seats.filter((s) => s && !s.bot).map((s) => s.uid), ...(g.paid || [])])];
@@ -101,7 +114,7 @@ export default async (req) => {
       };
 
       if (act === "start" || act === "again") {
-        if (g.host !== uid) return { status: 403, body: { error: "host" } };
+        if (g.host !== uid && !auto) return { status: 403, body: { error: "host" } };
         if (act === "start" && g.status !== "lobby") return { status: 409, body: { error: "started" } };
         if (act === "again" && g.status !== "over") return { status: 409, body: { error: "notover" } };
         const seated = g.seats.filter((s) => s && !s.bot).map((s) => s.uid);

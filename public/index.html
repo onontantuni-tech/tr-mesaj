@@ -75,6 +75,20 @@ input{font:inherit;color:inherit}
 .rep{border:1px solid rgba(0,0,0,.12);border-radius:12px;padding:10px;margin:8px 0;font-size:13.5px}
 .rep .rm{font-size:12px;background:var(--bg);border-radius:8px;padding:6px 8px;margin-top:6px;max-height:160px;overflow:auto;white-space:pre-wrap}
 .rep .row2 button{padding:8px 4px;font-size:12.5px}
+.playnow{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 14px 10px}
+.playnow button{border:0;border-radius:16px;padding:16px 10px;color:#fff;font:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;background:linear-gradient(135deg,#0f6b3a,#0b4a28);box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.playnow button:last-child{background:linear-gradient(135deg,#1d3d7a,#122a57)}
+.playnow span{font-size:34px}.playnow b{font-size:17px}.playnow small{font-size:11.5px;opacity:.85}
+.gbtns button.hot{position:relative}
+.gbtns .dot{position:absolute;top:8px;right:10px;width:10px;height:10px;border-radius:50%;background:#E53935;box-shadow:0 0 0 2px #fff}
+.cal{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.cal .cd{border-radius:10px;background:var(--bg);padding:6px 2px;text-align:center;display:flex;flex-direction:column;gap:1px;border:2px solid transparent}
+.cal .cd small{font-size:10px;opacity:.75}.cal .cd b{font-size:13px}
+.cal .cd.big{background:#fff4d6;color:#7a5200}
+.cal .cd.got{background:#d8f3e2;color:#0E7C3A}
+.cal .cd.now{border-color:var(--brand);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{transform:scale(1.06)}}
+.pubrow{gap:10px}
 .frbtns{display:flex;gap:6px;flex-shrink:0}
 .frbtns button,.frbar button{border:0;border-radius:18px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .frbtns .ok,.frbar .ok{background:var(--brand);color:#fff}
@@ -487,6 +501,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <label class="fl">Ad</label><input id="pFirst" maxlength="30" autocomplete="given-name">
     <label class="fl">Soyad</label><input id="pLast" maxlength="30" autocomplete="family-name">
     <label class="fl">Telefon numarası <span class="priv">🔒 Kimse göremez</span></label><input id="pPhone" type="tel" inputmode="tel" placeholder="05xx xxx xx xx" maxlength="17" autocomplete="tel">
+    <div id="pRefRow"><label class="fl">Davet eden arkadaşının TR ID'si <span class="priv">isteğe bağlı</span></label><input id="pRef" inputmode="numeric" maxlength="7" placeholder="örn. 482 913"></div>
     <label class="terms" id="pTermsRow"><input type="checkbox" id="pTerms"> <span><a href="/kosullar.html" target="_blank">Kullanım koşullarını</a> ve <a href="/gizlilik.html" target="_blank">gizlilik politikasını</a> okudum, kabul ediyorum.</span></label>
     <div class="perr" id="pErr"></div>
     <div class="acts"><button id="pCancel">İptal</button><button class="pri" id="pOk">Kaydet</button></div>

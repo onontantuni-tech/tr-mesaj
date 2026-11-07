@@ -20,15 +20,80 @@ export default async (req) => {
     } catch {}
   }
 
+  // Jeton hareketlerim (son 60)
+  if (act === "ledger") {
+    const q = await db.collection("ledger").where("uid", "==", uid).limit(300).get();
+    const rows = q.docs.map((d) => d.data()).sort((a, b) => b.at - a.at).slice(0, 60).map((r) => ({ at: r.at, delta: r.delta, reason: r.reason, after: r.after }));
+    return json(200, { rows });
+  }
+  // Davet eden kişinin TR ID'si (sadece yeni hesaplar, bir kez)
+  let inviter = null;
+  if (act === "ref") {
+    const code = String(b.code || "").replace(/\D/g, "");
+    if (!/^\d{6}$/.test(code)) return json(400, { error: "code" });
+    const cs = await db.doc(`codes/${code}`).get();
+    if (!cs.exists) return json(404, { error: "notfound" });
+    inviter = cs.data().uid;
+    if (inviter === uid) return json(400, { error: "self" });
+  }
+
   try {
     const res = await db.runTransaction(async (tx) => {
       const s = await tx.get(ref);
       let w = s.exists ? s.data() : null;
+      // davet ödülü: davet edilen ilk oyununu bitirdiyse davet edene ver (okumalar yazmalardan önce)
+      let invRef = null, invW = null;
+      if (w && w.refBy && !w.refPaid && (w.games || 0) >= 1) {
+        invRef = db.doc(`wallets/${w.refBy}`);
+        const is = await tx.get(invRef);
+        invW = is.exists ? is.data() : null;
+      }
       let welcomed = false;
       if (!w) {
         w = E.newWallet();
         tx.set(db.collection("ledger").doc(), { uid, delta: E.WELCOME_BONUS, reason: "Hoş geldin hediyesi", by: "system", at: Date.now(), after: w.balance });
         welcomed = true;
+      }
+
+      if (invRef) {
+        w.refPaid = true;
+        if (invW) {
+          E.credit(tx, db, w.refBy, invW, E.REFERRAL_BONUS, "Arkadaşını çağır hediyesi");
+          invW.refCount = (invW.refCount || 0) + 1;
+          const { month } = E.trDate();
+          invW.refMonth = invW.refMonthKey === month ? (invW.refMonth || 0) + 1 : 1;
+          invW.refMonthKey = month;
+          tx.set(invRef, invW);
+        }
+      }
+
+      if (act === "ref") {
+        if (w.refBy) return { status: 409, body: { error: "set" } };
+        if (s.exists && Date.now() - (w.createdAt || 0) > 7 * 86400000) return { status: 409, body: { error: "old" } };
+        if ((w.games || 0) > 0) return { status: 409, body: { error: "old" } };
+        w.refBy = inviter;
+        w.refPaid = false;
+        // davet eden ile davet edilen arkadaş olur
+        const a = uid < inviter ? uid : inviter, z = uid < inviter ? inviter : uid;
+        tx.set(db.doc(`friends/${a}_${z}`), { members: [a, z], from: inviter, to: uid, status: "accepted", at: Date.now() });
+      }
+
+      // Günlük giriş hediyesi
+      let daily = null;
+      if (act === "daily") {
+        const today = E.trDate().day, yesterday = E.trDate(Date.now() - 86400000).day;
+        if (w.lastDaily === today) return { status: 409, body: { error: "claimed", wallet: view(w) } };
+        const streak = w.lastDaily === yesterday ? ((w.streak || 0) % 30) + 1 : 1;
+        const amount = E.LOGIN_CALENDAR[streak - 1];
+        E.credit(tx, db, uid, w, amount, `Günlük giriş hediyesi (${streak}. gün)`);
+        w.streak = streak;
+        w.lastDaily = today;
+        daily = { day: streak, amount, vip: 0 };
+        if (streak === 30) {
+          w.vipUntil = Math.max(Date.now(), w.vipUntil || 0) + E.LOGIN_VIP_DAYS * 86400000;
+          tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil });
+          daily.vip = E.LOGIN_VIP_DAYS;
+        }
       }
 
       // 18 yaş beyanı: doğum yılı. Jetonlu masalar ve satın almalar sadece 18 yaş üstüne açık.
@@ -77,6 +142,7 @@ export default async (req) => {
       }
 
       if (migrate) w.fm = 1;
+      if (!w.createdAt) w.createdAt = Date.now();
       // VIP bittiyse VIP desenlerinden standart desene dön
       if (!E.isVip(w) && w.skin) {
         for (const k of ["table", "rack"]) {
@@ -85,7 +151,7 @@ export default async (req) => {
         }
       }
       tx.set(ref, w);
-      return { status: 200, body: { wallet: view(w), welcomed } };
+      return { status: 200, body: { wallet: view(w), welcomed, daily } };
     });
     return json(res.status, res.body);
   } catch (e) {
@@ -106,7 +172,9 @@ function view(w) {
   return {
     balance: w.balance || 0, xp: w.xp || 0, level: lv.level, levelCur: lv.cur, levelNext: lv.next,
     wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0, adult: !!w.adult, ageSet: !!w.birthYear,
-    catalog: { vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
+    streak: w.streak || 0, lastDaily: w.lastDaily || "", today: E.trDate().day, yesterday: E.trDate(Date.now() - 86400000).day,
+    refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
+    catalog: { login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
   };
 }
 

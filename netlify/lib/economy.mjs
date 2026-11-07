@@ -71,6 +71,18 @@ export function trDate(ms = Date.now()) {
   return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate() };
 }
 
+// Sadakat: her gün ilk girişte o günün hediyesi. 30 günlük takvim, bir gün kaçırılırsa 1. güne döner.
+// 30. gün ayrıca 3 günlük VIP hediye edilir. Sonra takvim baştan başlar.
+export const LOGIN_CALENDAR = [
+  2000, 3000, 4000, 5000, 6000, 8000, 25000,
+  3000, 4000, 5000, 6000, 8000, 10000, 40000,
+  4000, 5000, 6000, 8000, 10000, 12000, 50000,
+  5000, 6000, 8000, 10000, 12000, 15000, 20000, 25000, 100000,
+];
+export const LOGIN_VIP_DAYS = 3;
+// Arkadaşını çağır: davet edilen ilk oyununu bitirince davet edene verilir
+export const REFERRAL_BONUS = 100000;
+
 // VIP: 30 gün. Jetonla alınır (Play Store'da parayla da satılabilir).
 export const VIP = { price: 250000, days: 30 };
 export const isVip = (w, now = Date.now()) => (w?.vipUntil || 0) > now;
