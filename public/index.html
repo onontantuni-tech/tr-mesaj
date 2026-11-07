@@ -118,6 +118,12 @@ input{font:inherit;color:inherit}
 .gal{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
 .gal .gi{aspect-ratio:1;background:var(--bg);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .gal img{width:100%;height:100%;object-fit:cover}
+.gtimer{position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.15);z-index:20}
+.gtimer i{display:block;height:100%;background:#ffd970;transition:width 1s linear}
+.gtimer.low i{background:#ff5252}
+.wheelbox{position:relative;display:flex;justify-content:center;margin:6px 0 12px}
+.wptr{position:absolute;top:-6px;left:50%;transform:translateX(-50%);font-size:26px;color:#111;z-index:2;text-shadow:0 1px 2px #fff}
+.tbar{height:6px;background:var(--bg);border-radius:4px;margin:6px 0 2px;overflow:hidden}.tbar i{display:block;height:100%;background:#0E7C3A}
 .frbtns{display:flex;gap:6px;flex-shrink:0}
 .frbtns button,.frbar button{border:0;border-radius:18px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .frbtns .ok,.frbar .ok{background:var(--brand);color:#fff}
@@ -476,6 +482,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="findcontacts">Rehberden bul</button>
       <button data-act="starred">Yıldızlı mesajlar</button>
       <button data-act="privacy2">Gizlilik ayarları</button>
+      <button data-act="sound">Oyun sesleri aç/kapat</button>
       <button data-act="notif">Bildirimler</button>
       <button data-act="profile">Profilim</button>
       <button data-act="readall">Tümünü okundu say</button>
@@ -586,6 +593,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   </div>
 
   <div class="gamescr" id="gamescr">
+    <div class="gtimer" id="gTimer" style="display:none"><i></i></div>
     <div class="g-top">
       <button class="ibtn" id="gBack" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
       <div class="g-title"><b id="gTitleTxt">Okey</b><span id="gSub"></span></div>

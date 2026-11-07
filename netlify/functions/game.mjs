@@ -70,6 +70,7 @@ export default async (req) => {
       const gs = await tx.get(gref);
       if (!gs.exists) return { status: 404, body: { error: "game" } };
       const g = gs.data();
+      g.gid = id;
       if (!g.members.includes(uid) && !(g.public && act === "join")) return { status: 403, body: { error: "member" } };
       let auto = false; // açık masa dolunca ya da süre bitince kendiliğinden başlar
       const mySeat = g.seats.findIndex((s) => s && !s.bot && s.uid === uid);
@@ -291,14 +292,12 @@ function settle(tx, db, st, wallets) {
       st.payout = { refund: true, amount: st.stake };
     }
   }
+  const humansAll = st.seats.filter((x) => !x.bot).map((x) => x.uid);
   for (const s of st.seats) {
     if (s.bot || !wallets[s.uid]) continue;
-    const won = s.uid === winnerUid;
-    const wl = wallets[s.uid];
-    wl.games = (wl.games || 0) + 1;
-    if (won) wl.wins = (wl.wins || 0) + 1;
-    wl.xp = (wl.xp || 0) + (won ? E.XP_WIN : E.XP_PLAY);
-    E.addStats(tx, db, s.uid, won ? st.points || 2 : 0, won);
+    const won = s.uid === winnerUid, draw = w == null;
+    const delta = draw ? 0 : won ? (st.payout?.amount || 0) - (st.stake || 0) : -(st.stake || 0);
+    E.afterGame(tx, db, s.uid, wallets[s.uid], { won, draw, type: "okey", stake: st.stake, delta, opp: humansAll.filter((u) => u !== s.uid), gid: st.gid || "g", round: st.round || 1, points: st.points });
   }
   st.pot = 0;
 }

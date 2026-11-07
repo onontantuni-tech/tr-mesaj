@@ -78,6 +78,46 @@ export default async (req) => {
         tx.set(db.doc(`friends/${a}_${z}`), { members: [a, z], from: inviter, to: uid, status: "accepted", at: Date.now() });
       }
 
+      // Saatlik sandık: 4 saatte bir (VIP iki kat)
+      let gift = null;
+      if (act === "chest") {
+        const wait = E.CHEST.every - (Date.now() - (w.chestAt || 0));
+        if (wait > 0) return { status: 409, body: { error: "wait", wait, wallet: view(w) } };
+        const amount = E.CHEST.amount * (E.isVip(w) ? 2 : 1);
+        E.credit(tx, db, uid, w, amount, "Saatlik sandık");
+        w.chestAt = Date.now();
+        gift = { amount };
+      }
+      // Jetonu biten oyuncuya günde bir destek
+      if (act === "rescue") {
+        const today = E.trDate().day;
+        if ((w.balance || 0) >= E.RESCUE.below || w.rescueDay === today) return { status: 409, body: { error: "no", wallet: view(w) } };
+        E.credit(tx, db, uid, w, E.RESCUE.amount, "Jeton desteği");
+        w.rescueDay = today;
+        gift = { amount: E.RESCUE.amount };
+      }
+      // Günlük çark: sonuç sunucuda belirlenir
+      if (act === "spin") {
+        const today = E.trDate().day;
+        if (w.spinDay === today) return { status: 409, body: { error: "spun", wallet: view(w) } };
+        const tot = E.WHEEL.reduce((a, x) => a + x.w, 0);
+        let r = Math.random() * tot, idx = 0;
+        for (; idx < E.WHEEL.length - 1; idx++) { r -= E.WHEEL[idx].w; if (r < 0) break; }
+        E.credit(tx, db, uid, w, E.WHEEL[idx].amount, "Günlük çark");
+        w.spinDay = today;
+        gift = { amount: E.WHEEL[idx].amount, idx };
+      }
+      // Günlük görev ödülü
+      if (act === "task") {
+        const t = E.todayTasks(w), task = E.TASKS.find((x) => x.id === b.id);
+        if (!task) return { status: 400, body: { error: "task" } };
+        if (!task.need(t) || (t.claimed || []).includes(task.id)) return { status: 409, body: { error: "no", wallet: view(w) } };
+        E.credit(tx, db, uid, w, task.prize, `Görev: ${task.text}`);
+        t.claimed = [...(t.claimed || []), task.id];
+        w.td = t;
+        gift = { amount: task.prize };
+      }
+
       // Günlük giriş hediyesi
       let daily = null;
       if (act === "daily") {
@@ -151,7 +191,7 @@ export default async (req) => {
         }
       }
       tx.set(ref, w);
-      return { status: 200, body: { wallet: view(w), welcomed, daily } };
+      return { status: 200, body: { wallet: view(w), welcomed, daily, gift } };
     });
     return json(res.status, res.body);
   } catch (e) {
@@ -173,8 +213,10 @@ function view(w) {
     balance: w.balance || 0, xp: w.xp || 0, level: lv.level, levelCur: lv.cur, levelNext: lv.next,
     wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0, adult: !!w.adult, ageSet: !!w.birthYear,
     streak: w.streak || 0, lastDaily: w.lastDaily || "", today: E.trDate().day, yesterday: E.trDate(Date.now() - 86400000).day,
+    chestAt: w.chestAt || 0, chestEvery: E.CHEST.every, rescueDay: w.rescueDay || "", spinDay: w.spinDay || "", winStreak: w.winStreak || 0,
+    tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
   };
 }
 

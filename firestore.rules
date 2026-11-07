@@ -263,6 +263,11 @@ service cloud.firestore {
     match /house/{x} { allow read, write: if false; }
     match /house_ledger/{x} { allow read, write: if false; }
     // Sıralama: giriş yapan herkes görür, sadece sunucu yazar
+    // Oyun geçmişi: sadece sahibi okur, sunucu yazar
+    match /gh/{u}/g/{x} {
+      allow read: if isMe(u);
+      allow write: if false;
+    }
     match /lb_day/{d}/u/{u} {
       allow read: if signedIn();
       allow write: if false;

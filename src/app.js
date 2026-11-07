@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import * as P from "../netlify/lib/pool.mjs";
 import { hasBad, clean as cleanText } from "../netlify/lib/filter.mjs";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
@@ -803,6 +803,8 @@ function openInfo(){
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
     if(isFriend(cur)){const peer=cur;$("#iUnf").onclick=()=>{closeInfo();openModal({title:"Arkadaşlıktan çıkar",text:`${esc(realName(peer))} arkadaşlıktan çıkarılsın mı? Tekrar yazışmak için yeni istek gerekir.`,input:false,ok:"Çıkar"},()=>removeFriend(peer))}}
     $("#iList").onclick=e=>{const r=e.target.closest("[data-g]");if(r){closeInfo();openChat("g:"+r.dataset.g)}};
+    {const peer=cur;loadHistory().then(rows=>{const vs=rows.filter(r=>(r.opp||[]).includes(peer)&&!r.draw);if(!vs.length||cur!==peer)return;const w=vs.filter(r=>r.won).length;
+      $("#iSub").textContent+=` · Aranızdaki skor ${w}-${vs.length-w}`}).catch(()=>{})}
   }
   $("#iClose").onclick=closeInfo;
   overlay.classList.add("show");$("#imodal").classList.add("show");
@@ -883,6 +885,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="views")openViews();
   if(a==="delacct")askDeleteAccount();
   if(a==="starred")openStarred();
+  if(a==="sound"){const m=localStorage.getItem("tr-mute")==="1";localStorage.setItem("tr-mute",m?"0":"1");toast(m?"🔊 Sesler açıldı":"🔇 Sesler kapatıldı");if(m)sfx("coin")}
   if(a==="privacy2")openPrivacy();
   if(a==="terms")window.open("/kosullar.html","_blank");
   if(a==="privacy")window.open("/gizlilik.html","_blank");
@@ -1339,6 +1342,60 @@ async function initWallet(){
 function applyWallet(w){wallet=w;if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
 function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ceviz");if(id.startsWith("vip_")&&!isVipU(me))return kind==="table"?"yesil":"ceviz";return id}
 
+/* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
+const chestLeft=()=>wallet?(wallet.chestAt||0)+(wallet.chestEvery||4*3600e3)-Date.now():1;
+const fmtWait=ms=>{const m=Math.ceil(ms/60000);return m>=60?Math.floor(m/60)+" sa "+(m%60)+" dk":m+" dk"};
+setInterval(()=>{const l=document.querySelector(".chestlbl");if(l&&wallet){const x=chestLeft();l.textContent=x<=0?"Sandık hazır!":"Sandık · "+fmtWait(x)}},30000);
+async function claimGift(kind){
+  if(kind==="chest"&&chestLeft()>0){toast("Sandık "+fmtWait(chestLeft())+" sonra açılır");return}
+  try{const r=await callApi("/api/wallet",{action:kind});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`${kind==="chest"?"🧰":"🆘"} +${fmtCoin(r.gift.amount)} jeton`,3000)}
+  catch(e){toast(kind==="chest"?"Sandık henüz hazır değil":"Destek bugün alınmış ya da bakiyen yeterli")}
+}
+function openSpin(){
+  const segs=catalog?.wheel||[1000,2000,3000,5000,10000,25000,50000,100000],n=segs.length,can=wallet.spinDay!==wallet.today;
+  const cols=["#E30A17","#F2C200","#1E4FD8","#127A3A","#F07A12","#5B2A86","#0E7C8A","#111"];
+  const sl=segs.map((v,i)=>{const a0=i/n*2*Math.PI-Math.PI/2,a1=(i+1)/n*2*Math.PI-Math.PI/2,am=(a0+a1)/2;
+    return`<path d="M100 100 L${100+95*Math.cos(a0)} ${100+95*Math.sin(a0)} A95 95 0 0 1 ${100+95*Math.cos(a1)} ${100+95*Math.sin(a1)} Z" fill="${cols[i%cols.length]}"/><text x="${100+62*Math.cos(am)}" y="${100+62*Math.sin(am)}" fill="#fff" font-size="12" font-weight="800" text-anchor="middle" dominant-baseline="middle" transform="rotate(${am*180/Math.PI+90} ${100+62*Math.cos(am)} ${100+62*Math.sin(am)})">${fmtK(v)}</text>`}).join("");
+  openInfoModal("🎡 Günlük çark",`<div class="wheelbox"><div class="wptr">▼</div><svg id="wheel" viewBox="0 0 200 200" width="260" height="260"><circle cx="100" cy="100" r="98" fill="#fff"/>${sl}<circle cx="100" cy="100" r="14" fill="#fff" stroke="#ddd"/></svg></div>
+    <div class="row2"><button id="spinGo" ${can?"":"disabled"} style="background:${can?"var(--brand)":"#999"}">${can?"Çevir!":"Yarın tekrar çevirebilirsin"}</button></div>`);
+  if(can)$("#spinGo").onclick=async()=>{$("#spinGo").disabled=true;
+    let r;try{r=await callApi("/api/wallet",{action:"spin"})}catch(e){toast("Bugün zaten çevirdin");closeE();return}
+    const per=360/n,target=360*6-(r.gift.idx*per+per/2);
+    const w=$("#wheel");w.style.transition="transform 4s cubic-bezier(.17,.67,.2,1)";w.style.transform=`rotate(${target}deg)`;sfx("spin");
+    setTimeout(()=>{applyWallet({...wallet,...r.wallet});sfx("win");$("#spinGo").textContent=`🎉 ${fmtCoin(r.gift.amount)} jeton kazandın!`},4100);
+  };
+}
+function openTasks(){
+  const ts=wallet.tasks||[];
+  openInfoModal("✅ Günlük görevler",`<p class="isub">Görevler her gece yenilenir.</p>`+ts.map(t=>`<div class="pk"><div style="flex:1"><b style="font-size:15px">${esc(t.text)}</b><div class="tbar"><i style="width:${Math.min(100,100*t.prog[0]/t.prog[1])}%"></i></div><div class="isub">${Math.min(t.prog[0],t.prog[1])}/${t.prog[1]} · ödül ${fmtCoin(t.prize)} jeton</div></div><button class="pr ${t.claimed?"eq":t.done?"":"own"}" data-task="${t.id}" ${t.claimed||!t.done?"disabled":""}>${t.claimed?"Alındı":t.done?"Al":"Devam"}</button></div>`).join("")+`<p class="isub" style="margin-top:10px">🔥 Jetonlu masalarda üst üste 3 galibiyete ek ${fmtCoin(5000)} jeton! Şu anki serin: ${wallet.winStreak||0}</p>`);
+  $("#eBody").onclick=async e=>{const b=e.target.closest("[data-task]");if(!b||b.disabled)return;b.disabled=true;
+    try{const r=await callApi("/api/wallet",{action:"task",id:b.dataset.task});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`+${fmtCoin(r.gift.amount)} jeton`);openTasks()}catch(err){toast("Alınamadı");b.disabled=false}};
+}
+async function loadHistory(){const s=await getDocs(query(collection(fs,"gh",me,"g"),orderBy("at","desc"),limit(100)));return s.docs.map(d=>d.data())}
+async function openHistory(){
+  openInfoModal("🕘 Oyun geçmişim",'<div class="isub">Yükleniyor…</div>');
+  let rows=[];try{rows=await loadHistory()}catch(e){$("#eBody").innerHTML='<div class="isub">Yüklenemedi</div>';return}
+  rows.forEach(r=>(r.opp||[]).forEach(watchUser));
+  const w=rows.filter(r=>r.won).length,net=rows.reduce((a,r)=>a+(r.delta||0),0);
+  $("#eBody").innerHTML=`<div class="pk" style="display:block"><b>Son ${rows.length} oyun</b><div class="isub">${w} galibiyet · ${rows.length-w-rows.filter(r=>r.draw).length} mağlubiyet · net ${net>=0?"+":""}${fmtCoin(net)} jeton</div></div>`+
+    (rows.map(r=>`<div class="hist"><span>${r.type==="pool"?"🎱":"🀄"} ${r.draw?"Berabere":r.won?"<b style='color:#0E7C3A'>Kazandın</b>":"Kaybettin"}${(r.opp||[]).length?" · "+r.opp.map(u=>esc(realName(u))).join(", "):" · bilgisayara karşı"}</span><span class="isub">${new Date(r.at).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span><span class="d" style="color:${r.delta>0?"#0E7C3A":r.delta<0?"#E53935":"inherit"}">${r.delta>0?"+":""}${fmtCoin(r.delta||0)}</span></div>`).join("")||'<div class="empty">Henüz oyun oynamadın</div>');
+}
+
+/* ---------- ses ve titreşim ---------- */
+let actx=null;
+function sfx(kind){
+  if(localStorage.getItem("tr-mute")==="1")return;
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime;
+    const tone=(f,d,type="sine",v=.12,at=0)=>{const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,t+at);g.gain.exponentialRampToValueAtTime(.001,t+at+d);o.connect(g);g.connect(actx.destination);o.start(t+at);o.stop(t+at+d)};
+    if(kind==="tile")tone(520,.06,"square",.05);
+    else if(kind==="turn"){tone(660,.12);tone(880,.16,"sine",.12,.12);try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
+    else if(kind==="ball")tone(1200,.04,"triangle",.1);
+    else if(kind==="coin"){tone(988,.08,"square",.06);tone(1319,.25,"square",.06,.08)}
+    else if(kind==="win"){[523,659,784,1047].forEach((f,i)=>tone(f,.2,"triangle",.12,i*.12));try{navigator.vibrate&&navigator.vibrate([80,60,120])}catch(e){}}
+    else if(kind==="spin")for(let i=0;i<24;i++)tone(900,.02,"square",.03,i*.15*(1+i/30));
+  }catch(e){}
+}
+
 /* ---------- günlük giriş hediyesi ---------- */
 function dailyAvailable(){return !!wallet&&wallet.today&&wallet.lastDaily!==wallet.today}
 function openDaily(){
@@ -1464,12 +1521,17 @@ function renderGamesTab(){
     <button data-g="pub-pool"><span>🎱</span><b>Bilardo</b><small>Açık masalar · hemen otur</small></button>
   </div>
   <div class="gbtns">
+    ${(wallet.balance||0)<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today?`<button data-g="rescue" class="hot" style="grid-column:span 2;background:#fff4d6"><span>🆘</span>Jetonun bitti mi? ${fmtCoin(catalog?.rescue?.amount||10000)} jeton desteği al<i class="dot"></i></button>`:""}
     <button data-g="daily" class="${dailyAvailable()?"hot":""}"><span>🎁</span>Günlük hediye${dailyAvailable()?'<i class="dot"></i>':""}</button>
+    <button data-g="spin" class="${wallet.spinDay!==wallet.today?"hot":""}"><span>🎡</span>Günlük çark${wallet.spinDay!==wallet.today?'<i class="dot"></i>':""}</button>
+    <button data-g="chest" class="${chestLeft()<=0?"hot":""}"><span>🧰</span><span class="chestlbl" style="font-size:inherit">${chestLeft()<=0?"Sandık hazır!":"Sandık · "+fmtWait(chestLeft())}</span>${chestLeft()<=0?'<i class="dot"></i>':""}</button>
+    <button data-g="tasks" class="${(wallet.tasks||[]).some(t=>t.done&&!t.claimed)?"hot":""}"><span>✅</span>Görevler ${(wallet.tasks||[]).filter(t=>t.claimed).length}/${(wallet.tasks||[]).length}${(wallet.tasks||[]).some(t=>t.done&&!t.claimed)?'<i class="dot"></i>':""}</button>
     <button data-g="invite"><span>👥</span>Arkadaşını çağır</button>
     <button data-g="store"><span>🪙</span>Jeton al</button>
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
     <button data-g="ledger"><span>📜</span>Jeton hareketlerim</button>
+    <button data-g="history"><span>🕘</span>Oyun geçmişim</button>
     <button data-g="play"><span>💬</span>Arkadaşınla oyna</button>
     <button data-g="vip" class="vipbtn" style="grid-column:span 2"><span>👑</span>${isVipU(me)?"VIP üyesin · "+new Date(vipU[me]).toLocaleDateString("tr-TR")+" tarihine kadar":"VIP ol"}</button>
     ${isAdminUser?'<button data-g="admin" style="grid-column:span 2"><span>🛠️</span>Yönetim paneli</button>':""}
@@ -1479,7 +1541,7 @@ function renderGamesTab(){
 document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");
-  if(g==="daily")openDaily();if(g==="invite")openInvite();if(g==="ledger")openLedger();
+  if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
   if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
 function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
@@ -1617,7 +1679,11 @@ function openGame(id){
   game.unsubs.push(onSnapshot(doc(fs,"games",id),s=>{
     if(!game||game.id!==id)return;
     if(!s.exists()){$("#gTable").innerHTML='<div class="lobby">Bu masaya erişimin yok ya da masa kapandı.</div>';return}
-    game.data=s.data();(game.data.seats||[]).forEach(x=>x&&x.uid&&watchUser(x.uid));
+    const prevD=game.data;game.data=s.data();(game.data.seats||[]).forEach(x=>x&&x.uid&&watchUser(x.uid));
+    {const d=game.data,my=mySeatIdx(d);
+      if(prevD&&d.status==="play"&&d.turn===my&&(prevD.turn!==my||prevD.status!=="play"))setTimeout(()=>sfx("turn"),d.type==="pool"?1500:0);
+      if(prevD&&prevD.status==="play"&&d.status==="over"&&d.winner===my)setTimeout(()=>sfx("win"),d.type==="pool"?2500:300);
+      else if(prevD&&d.type!=="pool"&&JSON.stringify(prevD.discards)!==JSON.stringify(d.discards))sfx("tile")}
     renderGame();
   },()=>{$("#gTable").innerHTML='<div class="lobby">Masa açılamadı.</div>'}));
   game.unsubs.push(onSnapshot(doc(fs,"games",id,"hands",me),s=>{
@@ -1631,6 +1697,7 @@ function openGame(id){
     renderGame();
   },()=>{}));
   game.poke=setInterval(()=>{const d=game&&game.data;if(!d)return;
+    {const tb=$("#gTimer");if(d.status==="play"&&!(d.seats[d.turn]||{}).bot){const lim=d.type==="pool"?60000:45000,left=Math.max(0,lim-(Date.now()-(d.lastMoveAt||0)));tb.style.display="";tb.firstElementChild.style.width=(100*left/lim)+"%";tb.classList.toggle("low",left<10000)}else tb.style.display="none"}
     if(d.status==="lobby"&&d.public){const left=Math.ceil((20000-(Date.now()-(d.at||0)))/1000);const el=$("#pubCount");if(el)el.textContent=left>0?`${left} sn içinde dolmazsa bilgisayar oturur`:"Başlıyor…";
       if(left<=0&&mySeatIdx(d)>=0&&!game.poking){game.poking=true;gameApi({action:"poke",id}).finally(()=>{if(game)game.poking=false})}return}
     if(d.status!=="play")return;const s=d.seats[d.turn];if(s&&!s.bot&&s.uid!==me&&Date.now()-(d.lastMoveAt||0)>(d.type==="pool"?62000:47000)&&Date.now()-(game.lastPoke||0)>9000){game.lastPoke=Date.now();gameApi({action:"poke",id})}},1000);
@@ -1871,7 +1938,7 @@ function poolInput(){
   function aimAt(p){const c=curCue();if(!c)return;const ax=p.x-c.x,ay=p.y-c.y;if(Math.hypot(ax,ay)<4)return;game.aim={x:ax,y:ay};drawPool()}
 }
 $("#pPow").addEventListener("input",()=>{$("#pPowV").textContent=$("#pPow").value+"%";drawPool()});
-$("#pShoot").onclick=async()=>{
+$("#pShoot").onclick=async()=>{sfx("ball");
   if(!game||!game.data||!game.aim||game.anim)return;
   const body={action:"shoot",dx:game.aim.x,dy:game.aim.y,power:(+$("#pPow").value||60)/100};
   if(game.place){body.cx=game.place.x;body.cy=game.place.y}

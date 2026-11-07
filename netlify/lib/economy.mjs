@@ -80,6 +80,13 @@ export const LOGIN_CALENDAR = [
   5000, 6000, 8000, 10000, 12000, 15000, 20000, 25000, 100000,
 ];
 export const LOGIN_VIP_DAYS = 3;
+// Saatlik sandık, jeton desteği, günlük çark
+export const CHEST = { every: 4 * 3600 * 1000, amount: 2000 };
+export const RESCUE = { below: 1000, amount: 10000 };
+export const WHEEL = [
+  { amount: 1000, w: 30 }, { amount: 2000, w: 25 }, { amount: 3000, w: 18 }, { amount: 5000, w: 12 },
+  { amount: 10000, w: 8 }, { amount: 25000, w: 4 }, { amount: 50000, w: 2 }, { amount: 100000, w: 1 },
+];
 // Arkadaşını çağır: davet edilen ilk oyununu bitirince davet edene verilir
 export const REFERRAL_BONUS = 100000;
 
@@ -103,4 +110,35 @@ export function addStats(tx, db, uid, points, won) {
   const inc = { points: FieldValue.increment(points), wins: FieldValue.increment(won ? 1 : 0), games: FieldValue.increment(1), uid };
   tx.set(db.doc(`lb_day/${day}/u/${uid}`), inc, { merge: true });
   tx.set(db.doc(`lb_month/${month}/u/${uid}`), inc, { merge: true });
+}
+
+// ---- Oyun sonrası: istatistik, seri bonusu, günlük görev sayaçları, oyun geçmişi ----
+export const STREAK_BONUS = { every: 3, amount: 5000 };
+export const TASKS = [
+  { id: "play3", text: "3 oyun oyna", need: (t) => t.played >= 3, goal: (t) => [t.played, 3], prize: 3000 },
+  { id: "win1", text: "1 oyun kazan", need: (t) => t.won >= 1, goal: (t) => [t.won, 1], prize: 5000 },
+  { id: "okey1", text: "1 el Okey oyna", need: (t) => t.okey >= 1, goal: (t) => [t.okey, 1], prize: 2000 },
+  { id: "pool1", text: "1 Bilardo oyna", need: (t) => t.pool >= 1, goal: (t) => [t.pool, 1], prize: 2000 },
+  { id: "win3", text: "3 oyun kazan", need: (t) => t.won >= 3, goal: (t) => [t.won, 3], prize: 15000 },
+];
+export function todayTasks(w) {
+  const day = trDate().day;
+  return w.td && w.td.day === day ? w.td : { day, played: 0, won: 0, okey: 0, pool: 0, claimed: [] };
+}
+export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp, gid, round, points }) {
+  wl.games = (wl.games || 0) + 1;
+  if (won) wl.wins = (wl.wins || 0) + 1;
+  wl.xp = (wl.xp || 0) + (won ? XP_WIN : XP_PLAY);
+  addStats(tx, db, uid, won ? points || 2 : 0, won);
+  // galibiyet serisi (sadece jetonlu masalarda; ücretsiz masada bilgisayarı yenip jeton toplanmasın)
+  if (won && stake > 0) {
+    wl.winStreak = (wl.winStreak || 0) + 1;
+    if (wl.winStreak % STREAK_BONUS.every === 0) credit(tx, db, uid, wl, STREAK_BONUS.amount, `Seri bonusu (${wl.winStreak} galibiyet üst üste)`);
+  } else if (!draw && !won) wl.winStreak = 0;
+  // günlük görevler
+  const t = todayTasks(wl);
+  t.played++; if (won) t.won++; if (type === "pool") t.pool++; else t.okey++;
+  wl.td = t;
+  // oyun geçmişi
+  tx.set(db.doc(`gh/${uid}/g/${gid}_${round}`), { at: Date.now(), type, stake: stake || 0, won: !!won, draw: !!draw, delta: delta || 0, opp: (opp || []).slice(0, 3) });
 }
