@@ -1706,8 +1706,8 @@ function openGame(id){
 }
 function closeGame(silent){
   if(!game)return;
-  {const d=game.data;if(d&&d.public&&d.status==="lobby"&&mySeatIdx(d)>=0)gameApi({action:"leave",id:game.id},d.type)}game.unsubs.forEach(u=>{try{u()}catch(e){}});clearInterval(game.poke);if(game.raf)cancelAnimationFrame(game.raf);game=null;$("#gamescr").classList.remove("pool");
-  $("#gamescr").classList.remove("show");
+  {const d=game.data;if(d&&d.public&&d.status==="lobby"&&mySeatIdx(d)>=0)gameApi({action:"leave",id:game.id},d.type)}game.unsubs.forEach(u=>{try{u()}catch(e){}});clearInterval(game.poke);if(game.raf)cancelAnimationFrame(game.raf);game=null;$("#gamescr").classList.remove("pool","okeyg");
+  $("#gamescr").classList.remove("show");$("#rotHint").classList.remove("show");leaveLandscape();
 }
 $("#gBack").onclick=()=>{try{if(history.state&&history.state.game){history.back();return}}catch(e){}closeGame()};
 window.addEventListener("popstate",()=>{if(game&&!(history.state&&history.state.game))closeGame()});
@@ -1719,6 +1719,8 @@ function renderGame(){
   const d=game.data,my=mySeatIdx(d);
   const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack");
   if(d.type==="pool"){gs.classList.add("pool");return renderPool(d,my)}
+  gs.classList.add("okeyg");
+  if(d.status==="play"||d.status==="over")askLandscape();
   $("#gTitleTxt").textContent="Okey";
   $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
@@ -1792,6 +1794,21 @@ async function gameMove(body){
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}
 }
+/* Okey yatay ekranda oynanır: telefon dikse yan çevirme önerisi; tam ekran + yatay kilit denenir */
+let landDismissed=false;
+function askLandscape(){
+  const portrait=window.innerHeight>window.innerWidth&&window.innerWidth<700;
+  $("#rotHint").classList.toggle("show",portrait&&!landDismissed);
+}
+async function goLandscape(){
+  try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen({navigationUI:"hide"})}catch(e){}
+  try{if(screen.orientation&&screen.orientation.lock)await screen.orientation.lock("landscape")}catch(e){}
+  setTimeout(()=>{askLandscape();if(game&&game.data)renderGame()},400);
+}
+function leaveLandscape(){try{screen.orientation&&screen.orientation.unlock&&screen.orientation.unlock()}catch(e){}try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}}
+$("#rotGo").onclick=goLandscape;
+$("#rotSkip").onclick=()=>{landDismissed=true;askLandscape()};
+window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type!=="pool"){askLandscape()}});
 /* ıstaka: dokun = seç, sürükle = yerini değiştir / at / bitir, çift dokun = at */
 const SLOTS=26;
 function syncSlots(tiles){

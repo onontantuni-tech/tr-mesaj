@@ -527,6 +527,48 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .gamescr.pool .p-ctrl button{width:46px;height:46px;border-radius:50%;padding:0;font-size:22px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25)}
 .gamescr.pool .pbar .pp{background:rgba(255,255,255,.08);backdrop-filter:blur(6px)}
 @media (min-width:700px){.ppower{top:90px;bottom:90px}}
+
+/* ===== Okey: yatay ekran düzeni ===== */
+.rothint{display:none;position:absolute;inset:0;z-index:60;background:rgba(5,30,15,.92);align-items:center;justify-content:center;text-align:center;padding:24px}
+.rothint.show{display:flex}
+.rotbox{display:flex;flex-direction:column;gap:10px;align-items:center;max-width:300px}
+.rotph{font-size:58px;animation:rotph 1.8s ease-in-out infinite}
+@keyframes rotph{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+.rotbox b{font-size:19px}.rotbox span{font-size:14px;opacity:.85}
+.rotbox button{border:0;border-radius:24px;padding:13px 26px;font:inherit;font-weight:800;font-size:16px;background:linear-gradient(#ffd54f,#e0a800);color:#2b1d00;margin-top:6px}
+.rotbox button.sk{background:none;color:#fff;opacity:.75;font-weight:600;font-size:14px;margin-top:0;padding:6px}
+@media (orientation:landscape) and (max-height:560px){
+  .gamescr.show.okeyg{display:grid;grid-template-columns:1fr 92px;grid-template-rows:auto minmax(0,1fr) auto;column-gap:4px;position:fixed;inset:0}
+  .gamescr.okeyg .g-top{grid-column:1/3;grid-row:1;padding:calc(2px + env(safe-area-inset-top)) 8px 2px;background:rgba(0,0,0,.3)}
+  .gamescr.okeyg .g-top .ibtn{width:34px;height:34px}
+  .gamescr.okeyg .g-title b{font-size:14px}.gamescr.okeyg .g-title span{font-size:11px}
+  .gamescr.okeyg .g-table{grid-column:1/3;grid-row:2;margin:4px 6px 0}
+  .gamescr.okeyg .g-msg{grid-column:1/3;grid-row:1;align-self:center;justify-self:center;z-index:3;min-height:0;padding:3px 12px;font-size:12.5px;pointer-events:none;max-width:56%;background:rgba(0,0,0,.35);border-radius:12px}
+  .gamescr.okeyg .g-rack{grid-column:1;grid-row:3;padding:0 0 calc(4px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left))}
+  .gamescr.okeyg .g-actions{grid-column:2;grid-row:3;flex-direction:column;justify-content:flex-end;gap:5px;padding:0 calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) 0}
+  .gamescr.okeyg .g-actions button{flex:0 0 auto;padding:9px 2px;font-size:13px}
+  .gamescr.okeyg .tier{grid-template-columns:repeat(13,1fr);gap:3px;padding:2px 4px 8px}
+  .gamescr.okeyg .tier+.tier{margin-top:2px}
+  .gamescr.okeyg .slot{aspect-ratio:3/4}
+  .gamescr.okeyg .rackwood{padding:4px 8px 2px}
+  /* masa: oyuncular kenarlarda, ortası geniş */
+  .gamescr.okeyg .o-top{top:6px}
+  .gamescr.okeyg .o-left{left:10px;top:8px;transform:none;flex-direction:row;align-items:center}
+  .gamescr.okeyg .o-right{right:10px;top:8px;transform:none;flex-direction:row-reverse;align-items:center}
+  .gamescr.okeyg .oseat .oav .av{width:38px;height:38px}
+  .gamescr.okeyg .od-top{top:8px;left:calc(50% + 120px);transform:none}
+  .gamescr.okeyg .od-left{left:14px;bottom:8px;top:auto}
+  .gamescr.okeyg .od-right{right:14px;top:58px}
+  .gamescr.okeyg .od-me{right:14px;bottom:8px}
+  .gamescr.okeyg .ocenter{top:62%}
+  .gamescr.okeyg .o-top .ohand{display:none}
+  .gamescr.okeyg .tile.sm{width:36px;height:48px;font-size:20px;padding-top:5px}
+  .gamescr.okeyg .odisc .stk,.gamescr.okeyg .tback{width:36px;height:48px}
+  .gamescr.okeyg .dstack{width:40px;height:53px}.gamescr.okeyg .odeck b{top:15px}
+  .gamescr.okeyg .odisc>span,.gamescr.okeyg .odeck>span,.gamescr.okeyg .oind>span{font-size:9.5px}
+  .gamescr.okeyg .ofinish{width:54px;height:54px}
+  .gamescr.okeyg .overbox{max-height:90%;overflow:auto}
+}
 </style>
 </head>
 <body>
@@ -698,6 +740,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="pl"><b>Nişan:</b> masada parmağını kaydır · <b>Vuruş:</b> sağdaki ıstakayı aşağı çek, bırak <span id="pPowV">0%</span></div>
       <button id="pRotR" aria-label="Nişanı sağa çevir">⟳</button>
     </div>
+    <div class="rothint" id="rotHint"><div class="rotbox"><div class="rotph">📱</div><b>Okey yatay ekranda daha güzel</b><span>Telefonunu yan çevir; ıstaka ve taşlar büyür.</span><button id="rotGo">Yatay ekrana geç</button><button id="rotSkip" class="sk">Dikey devam et</button></div></div>
     <div class="ppower" id="pPower" aria-label="Vuruş gücü: aşağı çek ve bırak"><div class="pfill"></div><div class="pcue"></div></div>
   </div>
 
