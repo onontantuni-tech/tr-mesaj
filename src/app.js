@@ -623,7 +623,7 @@ function renderBan(){
   el.classList.add("show");
   $("#banOut").onclick=()=>signOut(auth);
 }
-const SUPPORT_MAIL="telekomnetharun@gmail.com";
+const SUPPORT_MAIL="farukplaystore10@gmail.com";
 
 /* ---------- hesap silme ---------- */
 function askDeleteAccount(){
