@@ -89,6 +89,35 @@ input{font:inherit;color:inherit}
 .cal .cd.now{border-color:var(--brand);animation:pulse 1.2s infinite}
 @keyframes pulse{50%{transform:scale(1.06)}}
 .pubrow{gap:10px}
+.msheet{position:fixed;left:50%;bottom:0;transform:translate(-50%,110%);width:min(440px,100%);background:var(--panel,#fff);color:var(--text,#111);border-radius:18px 18px 0 0;padding:10px 8px calc(12px + env(safe-area-inset-bottom));z-index:1300;transition:transform .2s;box-shadow:0 -6px 30px rgba(0,0,0,.2);max-height:80vh;overflow:auto}
+.msheet.show{transform:translate(-50%,0)}
+.msheet>button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;font-size:15.5px;padding:12px 14px;border-radius:10px;color:inherit;cursor:pointer}
+.msheet>button:hover{background:var(--bg)}.msheet>button.danger{color:#E53935}
+.rxrow{display:flex;justify-content:space-around;padding:4px 4px 10px;border-bottom:1px solid rgba(0,0,0,.08);margin-bottom:4px}
+.rxrow button{font-size:28px;border:0;background:none;border-radius:50%;width:48px;height:48px;cursor:pointer;transition:transform .1s}
+.rxrow button.on{background:var(--bg);transform:scale(1.12)}
+.b .rq,.replybar .rq{border-left:4px solid var(--brand);background:rgba(0,0,0,.06);border-radius:6px;padding:4px 8px;margin:0 0 4px;font-size:13px;display:flex;flex-direction:column;cursor:pointer;max-width:100%}
+.rq span{opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b .fw{font-size:12px;font-style:italic;opacity:.7;margin-bottom:2px}
+.b.hasrx{margin-bottom:16px}
+.b .rxs{position:absolute;bottom:-14px;right:8px;background:var(--panel,#fff);border-radius:12px;padding:1px 6px;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.2);white-space:nowrap}
+.b{position:relative}
+.b.flash{animation:flash 1.3s}
+@keyframes flash{30%{box-shadow:0 0 0 4px rgba(227,10,23,.45)}}
+.replybar{display:none;align-items:center;gap:8px;padding:6px 10px 0;background:var(--bg)}
+.replybar.show{display:flex}.replybar .rq{flex:1;min-width:0;margin:0}
+.replybar button{border:0;background:none;font-size:18px;cursor:pointer;color:inherit}
+.pinbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;background:var(--panel,#fff);border-radius:10px;padding:8px 10px;margin:0 0 8px;font-size:13.5px;box-shadow:0 1px 4px rgba(0,0,0,.12);cursor:pointer}
+.pinbar span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pinbar button{border:0;background:none;cursor:pointer;color:inherit}
+.csearch{display:none;padding:6px 10px;background:var(--panel,#fff)}.csearch.show{display:block}
+.csearch input{width:100%;box-sizing:border-box;border:0;border-radius:18px;padding:9px 14px;background:var(--bg);font:inherit;color:inherit}
+.chips{display:flex;gap:6px;padding:8px 12px 4px;overflow-x:auto;scrollbar-width:none}
+.chips button{border:0;border-radius:16px;padding:6px 13px;font:inherit;font-size:13.5px;background:var(--bg);color:inherit;white-space:nowrap;cursor:pointer}
+.chips button.on{background:#fde4e6;color:var(--brand);font-weight:700}
+.sub.typing{color:#9ff59f!important;font-style:italic}
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.gal .gi{aspect-ratio:1;background:var(--bg);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gal img{width:100%;height:100%;object-fit:cover}
 .frbtns{display:flex;gap:6px;flex-shrink:0}
 .frbtns button,.frbar button{border:0;border-radius:18px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .frbtns .ok,.frbar .ok{background:var(--brand);color:#fff}
@@ -445,6 +474,8 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="views">Profilimi kimler gördü</button>
       <button data-act="newgroup">Yeni grup</button>
       <button data-act="findcontacts">Rehberden bul</button>
+      <button data-act="starred">Yıldızlı mesajlar</button>
+      <button data-act="privacy2">Gizlilik ayarları</button>
       <button data-act="notif">Bildirimler</button>
       <button data-act="profile">Profilim</button>
       <button data-act="readall">Tümünü okundu say</button>
@@ -462,13 +493,16 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button class="ibtn" id="back" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
       <div id="cAvWrap"></div>
       <div class="chat-title" id="chatTitle"><div class="name" id="cName"></div><div class="sub" id="cSub"></div></div>
+      <button class="ibtn" id="cSearchBtn" aria-label="Sohbette ara"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
       <button class="ibtn" id="gameBtn" aria-label="Oyun"><svg viewBox="0 0 24 24"><path d="M21 6H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg></button>
       <button class="ibtn" id="vcallBtn" aria-label="Görüntülü ara"><svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg></button>
       <button class="ibtn" id="acallBtn" aria-label="Sesli ara"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg></button>
     </div>
+    <div class="csearch" id="csearch"><input id="csInput" placeholder="Bu sohbette ara" autocomplete="off"></div>
     <div class="msgs" id="msgs"></div>
     <div class="emojis" id="emojis"></div>
     <div class="frbar" id="frbar"></div>
+    <div class="replybar" id="replybar"></div>
     <form class="composer" id="composer">
       <div class="inputwrap">
         <button type="button" class="ibtn" id="emojiBtn" aria-label="Emoji"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-3.5-9A1.5 1.5 0 1 0 8.5 8a1.5 1.5 0 0 0 0 3zm7 0A1.5 1.5 0 1 0 15.5 8a1.5 1.5 0 0 0 0 3zM12 17.5c2.3 0 4.3-1.5 5.1-3.5H6.9c.8 2 2.8 3.5 5.1 3.5z"/></svg></button>
@@ -613,6 +647,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <p class="lg-note">Devam ederek profil oluşturursun. Telefon numaran kimseye gösterilmez.<br><a href="/kosullar.html" target="_blank">Kullanım koşulları</a> · <a href="/gizlilik.html" target="_blank">Gizlilik politikası</a></p>
     </div>
   </div>
+  <div class="msheet" id="msheet"></div>
   <div class="banscr" id="banscr"></div>
   <div class="splash show" id="splash"><div class="lg-logo"><svg viewBox="0 0 1200 800" width="74" height="49" style="border-radius:7px;display:block"><rect width="1200" height="800" fill="#E30A17"/><circle cx="425" cy="400" r="200" fill="#fff"/><circle cx="475" cy="400" r="160" fill="#E30A17"/><polygon fill="#fff" points="583.334,400 764.235,458.779 652.431,304.894 652.431,495.106 764.235,341.221"/></svg></div><div style="margin-top:14px;color:#fff;opacity:.9">Bağlanıyor…</div></div>
 

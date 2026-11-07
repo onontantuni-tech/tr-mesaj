@@ -69,6 +69,7 @@ service cloud.firestore {
         && request.auth.uid in nd().members
         && nd().ct is string && nd().ct.size() < 20000
         && nd().iv is string && nd().iv.size() < 40
+        && (!('men' in nd()) || (nd().men is list && nd().men.size() <= 50))
         && (
           (nd().to is string
             && nd().to != request.auth.uid
@@ -80,7 +81,31 @@ service cloud.firestore {
             && !('to' in nd())
             && get(/databases/$(database)/documents/groups/$(nd().gid)).data.members == nd().members)
         );
+      // düzenleme (gönderen, 15 dakika içinde, sadece şifreli içerik) ya da tepki (herkes sadece kendi tepkisini)
+      allow update: if signedIn() && request.auth.uid in resource.data.members && (
+        (resource.data.from == request.auth.uid
+          && request.time.toMillis() < resource.data.at + 900000
+          && nd().diff(resource.data).affectedKeys().hasOnly(['ct', 'iv', 'ed'])
+          && nd().ct is string && nd().ct.size() < 20000
+          && nd().iv is string && nd().iv.size() < 40
+          && nd().ed is number)
+        ||
+        (nd().diff(resource.data).affectedKeys().hasOnly(['rx'])
+          && nd().rx is map && nd().rx.size() <= 60
+          && nd().rx.diff(resource.data.get('rx', {})).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in nd().rx) || nd().rx[request.auth.uid] in ['❤️', '😂', '👍', '😮', '😢', '🙏']))
+      );
       allow delete: if signedIn() && resource.data.from == request.auth.uid;
+    }
+
+    // Çevrimiçi / yazıyor / son görülme. vis: herkes, arkadaşlar ya da kimse
+    match /presence/{u} {
+      allow read: if signedIn() && (request.auth.uid == u || resource.data.vis == 'all'
+        || (resource.data.vis == 'friends' && areFriends(request.auth.uid, u)));
+      allow write: if isMe(u)
+        && nd().keys().hasOnly(['at', 'vis', 'ty', 'tyAt'])
+        && nd().vis in ['all', 'friends', 'none']
+        && nd().at is number;
     }
 
     // Arkadaşlık: belge adı "küçükUid_büyükUid". İstek gönderilir, karşı taraf kabul ederse yazışılır.

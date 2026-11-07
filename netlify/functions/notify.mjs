@@ -45,14 +45,18 @@ export default async (req) => {
   const stale = [];
   await Promise.all(
     recipients.map(async (r) => {
-      const ps = await db.doc(`private/${r}/data/push`).get();
-      const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
-      if (!tokens.length) return;
       // Alıcı açısından sohbet kimliği: grupta "g:gid", birebirde gönderenin uid'si
       const conv = m.gid ? "g:" + m.gid : uid;
+      const mentioned = Array.isArray(m.men) && m.men.includes(r);
+      const [ps, pr] = await Promise.all([db.doc(`private/${r}/data/push`).get(), db.doc(`private/${r}/data/prefs`).get()]);
+      // sessize alınmış sohbet (grupta adı geçtiyse yine bildirilir)
+      const mu = pr.exists && pr.data().mute ? +pr.data().mute[conv] || 0 : 0;
+      if (mu > Date.now() && !mentioned) return;
+      const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+      if (!tokens.length) return;
       const res = await messaging.sendEachForMulticast({
         tokens,
-        data: { title, body: text, conv, url: `${SITE}/?c=${encodeURIComponent(conv)}` },
+        data: { title, body: mentioned ? `${senderName} senden bahsetti` : text, conv, url: `${SITE}/?c=${encodeURIComponent(conv)}` },
         webpush: { headers: { Urgency: "high", TTL: "86400" } },
         android: { priority: "high" },
       });

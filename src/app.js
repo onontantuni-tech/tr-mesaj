@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, addDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import * as P from "../netlify/lib/pool.mjs";
 import { hasBad, clean as cleanText } from "../netlify/lib/filter.mjs";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
@@ -45,7 +45,12 @@ let statuses={};
 let contacts=[];
 let friends={};
 let vipU={};
-let blocked={};       // engellediğim kişiler
+let blocked={};
+let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all"};
+const readsHidden={},ctSeen={};
+let chatFilter="all",msgQuery="",replyTo=null;
+let hidMsgs=new Set();try{hidMsgs=new Set(JSON.parse(localStorage.getItem("tr-hid")||"[]"))}catch(e){}
+const RX=["❤️","😂","👍","😮","😢","🙏"];       // engellediğim kişiler
 let myBan=null;       // {until, reason} askıya alındıysam         // uid -> VIP bitiş zamanı (badges/{uid})      // karşı uid -> {id,status,from,to,at}
 let pending=[];
 let cur=null,tabNow="chats",query_="";
@@ -93,7 +98,7 @@ async function aesEnc(key,data,aad){const iv=crypto.getRandomValues(new Uint8Arr
 async function aesDec(key,iv,ct,aad){return new Uint8Array(await crypto.subtle.decrypt(aad?{name:"AES-GCM",iv,additionalData:aad}:{name:"AES-GCM",iv},key,ct))}
 const aadOf=(from,to,at)=>enc(from+"|"+to+"|"+at);
 // içerik: eski mesajlar düz metin, yenileri "\u0001"+JSON
-const packContent=c=>c.t==="text"?c.text:"\u0001"+JSON.stringify(c);
+const packContent=c=>c.t==="text"&&!c.r&&!c.fwd?c.text:"\u0001"+JSON.stringify(c);
 function unpackContent(s){if(s.charCodeAt(0)===1){try{const o=JSON.parse(s.slice(1));if(o&&typeof o.t==="string")return o}catch(e){}return{t:"text",text:"[desteklenmeyen mesaj]"}}return{t:"text",text:s}}
 
 async function decryptMsg(m){
@@ -144,13 +149,14 @@ async function prepareSend(conv,at){
   const key=await keyFor(conv);if(!key)throw{code:"nokey"};
   return{key,aad:aadOf(me,conv,at),base:{from:me,to:conv,members:[me,conv],at,v:2}};
 }
-async function sendContent(conv,content,{blob,mime,meta}={}){
+async function sendContent(conv,content,{blob,mime,meta,men}={}){
   const at=Date.now();
   const ref=doc(collection(fs,"msgs"));
   const pv={id:ref.id,from:me,at,conv,content:{...content,_local:blob?URL.createObjectURL(blob):null},pending:true};
   pending.push(pv);renderMsgs();renderChats();
   try{
     const {key,aad,base}=await prepareSend(conv,at);
+    if(men&&men.length&&base.gid)base.men=men.slice(0,50);
     let c=content;
     if(blob){
       const bytes=new Uint8Array(await blob.arrayBuffer());
@@ -234,7 +240,7 @@ function dayLabel(t){const w=when(t);return w.includes(":")?"Bugün":w}
 const fmtDur=s=>Math.floor(s/60)+":"+String(Math.floor(s%60)).padStart(2,"0");
 function tick(m){
   if(m.pending)return'<svg class="tk" viewBox="0 0 16 11"><path d="M8 1v5l3 2"/></svg>';
-  const read=!m.gid&&(reads[m.to+"_"+me]||0)>=m.at;
+  const read=!m.gid&&!prefs.noRead&&!readsHidden[m.to+"_"+me]&&(reads[m.to+"_"+me]||0)>=m.at;
   return`<svg class="tk ${read?"read":""}" viewBox="0 0 16 11"><path d="M1 6l3 3 6-7"/><path d="M6 9l1 0 6-7"/></svg>`;
 }
 const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
@@ -262,16 +268,27 @@ function renderChats(){
   const reqs=Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u));
   const reqSet=new Set(reqs);
   list=list.filter(e=>!reqSet.has(e.c));
+  const arch=new Set(prefs.arch),archN=list.filter(e=>arch.has(e.c)).length;
+  if(!q){
+    if(chatFilter==="arch")list=list.filter(e=>arch.has(e.c));else list=list.filter(e=>!arch.has(e.c));
+    if(chatFilter==="unread")list=list.filter(e=>e.unread);
+    if(chatFilter==="groups")list=list.filter(e=>isGroupConv(e.c));
+    if(chatFilter==="fav")list=list.filter(e=>prefs.fav.includes(e.c));
+    list.sort((a,b)=>(prefs.pin.includes(b.c)-prefs.pin.includes(a.c))||(b.at-a.at));
+  }
+  const drafts=(()=>{try{return JSON.parse(localStorage.getItem("tr-drafts")||"{}")}catch(e){return{}}})();
+  const chips=`<div class="chips">${[["all","Tümü"],["unread","Okunmamış"],["groups","Gruplar"],["fav","Favoriler"]].map(([k,t])=>`<button data-cf="${k}" class="${chatFilter===k?"on":""}">${t}</button>`).join("")}${archN||chatFilter==="arch"?`<button data-cf="arch" class="${chatFilter==="arch"?"on":""}">Arşiv (${archN})</button>`:""}</div>`;
   const reqHtml=reqs.length&&!q?`<div class="section">Arkadaşlık istekleri (${reqs.length})</div>`+reqs.map(u=>`<div class="row" data-open="${esc(u)}">${avHTML(u)}<div class="meta"><div class="l1"><span class="name">${esc(realName(u))}</span></div><div class="l2"><span class="prev">${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):"İstek gönderdi"}</span></div></div><div class="frbtns"><button class="ok" data-frok="${esc(u)}">Kabul</button><button class="no" data-frno="${esc(u)}">Reddet</button></div></div>`).join("")+(list.length?`<div class="section">Sohbetler</div>`:""):"";
   const html=reqHtml+list.map(e=>{
     const l=e.last,g=isGroupConv(e.c);let prev;
-    if(l){const who=l.from===me?tick(l)+" ":(g?esc(realName(l.from).split(" ")[0])+": ":"");prev=`<span class="prev">${who}${esc(previewText(contentOf(l)))}</span>`}
+    if(drafts[e.c]&&e.c!==cur)prev=`<span class="prev"><b style="color:#E53935">Taslak:</b> ${esc(drafts[e.c].slice(0,60))}</span>`;
+    else if(l){const who=l.from===me?tick(l)+" ":(g?esc(realName(l.from).split(" ")[0])+": ":"");prev=`<span class="prev">${who}${esc(previewText(contentOf(l)))}</span>`}
     else prev=`<span class="prev">${g?"Grup oluşturuldu":(isBlocked(e.c)?"Engellendi":isFriend(e.c)?"Mesaj göndermek için dokun":esc(friendNote(e.c)))}</span>`;
     return`<div class="row" data-open="${esc(e.c)}"${e.c===cur?' style="background:var(--bg)"':''}>${avHTML(e.c)}
-      <div class="meta"><div class="l1"><span class="name">${esc(e.title)}${g?"":vipMark(e.c)}</span><span class="time ${e.unread?"unread":""}">${e.at?when(e.at):""}</span></div>
+      <div class="meta"><div class="l1"><span class="name">${esc(e.title)}${g?"":vipMark(e.c)}</span><span class="time ${e.unread?"unread":""}">${(prefs.mute[e.c]||0)>Date.now()?"🔕 ":""}${prefs.pin.includes(e.c)?"📌 ":""}${e.at?when(e.at):""}</span></div>
       <div class="l2">${prev}${e.unread?`<span class="badge">${e.unread>99?"99+":e.unread}</span>`:""}</div></div></div>`}).join("");
-  $("#pane-chats").innerHTML=html||(q?`<div class="empty">Sonuç bulunamadı</div>`:
-    `<div class="empty">Henüz sohbetin yok.<br><br>Senin TR ID'n:<div class="idbox" style="margin:12px auto;max-width:220px">${esc(fmtCode(users[me]?.code)||"…")}</div>Arkadaşının ID'sini eklemek için <b>+</b> düğmesine dokun.</div>`);
+  $("#pane-chats").innerHTML=(q?"":chips)+(html||(q?`<div class="empty">Sonuç bulunamadı</div>`:chatFilter!=="all"?`<div class="empty">Bu filtrede sohbet yok</div>`:
+    `<div class="empty">Henüz sohbetin yok.<br><br>Senin TR ID'n:<div class="idbox" style="margin:12px auto;max-width:220px">${esc(fmtCode(users[me]?.code)||"…")}</div>Arkadaşının ID'sini eklemek için <b>+</b> düğmesine dokun.</div>`));
 }
 
 /* ---------- render: status ---------- */
@@ -300,7 +317,7 @@ function renderChatHeader(){
   $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)||!isFriend(cur)?"none":"";
   $("#gameBtn").style.display=isGroupConv(cur)||isFriend(cur)?"":"none";
   if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın"}
-  else{const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):""}
+  else{const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):"";renderPresence()}
 }
 function bubbleBody(m,c){
   if(!c)return(m.id in plain)?'<i style="opacity:.7">🔒 Bu mesaj çözülemedi</i>':'<i style="opacity:.6">🔒 …</i>';
@@ -319,7 +336,8 @@ function bubbleBody(m,c){
 function renderMsgs(){
   if(!cur)return;
   const box=$("#msgs"),atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<120;
-  const list=convMsgs(cur),g=isGroupConv(cur);
+  let list=convMsgs(cur).filter(m=>!hidMsgs.has(m.id));const g=isGroupConv(cur);
+  if(msgQuery)list=list.filter(m=>(contentOf(m)?.text||"").toLocaleLowerCase("tr").includes(msgQuery));
   const grp=g?groups[gidOf(cur)]:null;
   let html=`<div class="lock">🔒 Mesajlar uçtan uca şifreli. ${g?"Bu sohbeti sadece grup üyeleri okuyabilir.":"Bu sohbeti sadece sen ve "+esc(realName(cur))+" okuyabilir."}</div>`,lastDay="",prevFrom=null;
   if(!g&&!validPub(users[cur]?.pub))html+=`<div class="day"><span>Bu kişinin şifreleme anahtarı henüz hazır değil.</span></div>`;
@@ -327,8 +345,16 @@ function renderMsgs(){
   list.forEach(m=>{const d=dayLabel(m.at);if(d!==lastDay){html+=`<div class="day"><span>${d}</span></div>`;lastDay=d;prevFrom=null}
     const mine=m.from===me,c=contentOf(m);
     const who=g&&!mine&&prevFrom!==m.from?`<span class="who" style="color:${colorOf(m.from)}">${esc(realName(m.from))}</span>`:"";
-    html+=`<div class="b ${mine?"out":"in"} ${m.pending?"pending":""}">${who}${bubbleBody(m,c)}<span class="s">${hm(m.at)}${mine?tick(m):""}</span></div><div class="clear"></div>`;
+    const extra=c&&c.fwd?'<div class="fw">↪ İletildi</div>':"";
+    const rq=c&&c.r?`<div class="rq" data-jump="${esc(c.r.id)}"><b style="color:${colorOf(c.r.from)}">${esc(c.r.from===me?"Sen":realName(c.r.from))}</b><span>${esc(String(c.r.p||"").slice(0,120))}</span></div>`:"";
+    const rx=m.rx?Object.values(m.rx).filter(x=>RX.includes(x)):[];
+    const rxh=rx.length?`<div class="rxs">${[...new Set(rx)].map(x=>x+(rx.filter(y=>y===x).length>1?rx.filter(y=>y===x).length:"")).join(" ")}</div>`:"";
+    const star=prefs.star.includes(m.id)?"⭐ ":"";
+    html+=`<div class="b ${mine?"out":"in"} ${m.pending?"pending":""} ${rx.length?"hasrx":""}" data-mid="${esc(m.id)}">${who}${extra}${rq}${bubbleBody(m,c)}<span class="s">${star}${m.ed?"düzenlendi · ":""}${hm(m.at)}${mine?tick(m):""}</span>${rxh}</div><div class="clear"></div>`;
     prevFrom=m.from});
+  const pm=prefs.pinMsg[cur]&&raw.find(m=>m.id===prefs.pinMsg[cur]);
+  if(pm)html=`<div class="pinbar" data-jump="${esc(pm.id)}">📌 <span>${esc(previewText(contentOf(pm)).slice(0,90))}</span><button data-unpin="1" aria-label="Sabitlemeyi kaldır">✕</button></div>`+html;
+  if(msgQuery&&!list.length)html+=`<div class="day"><span>“${esc(msgQuery)}” bulunamadı</span></div>`;
   box.innerHTML=html;
   hydrateMedia();
   if(atBottom||list.length!==lastRenderedCount)box.scrollTop=box.scrollHeight;
@@ -349,7 +375,7 @@ async function markRead(c){
   if((reads[id]||0)>=latest)return;
   reads[id]=latest;
   if(readBusy[id])return;readBusy[id]=true;
-  try{await setDoc(doc(fs,"reads",id),{members:[me,c],at:latest})}catch(e){}
+  try{await setDoc(doc(fs,"reads",id),prefs.noRead?{members:[me,c],at:latest,h:true}:{members:[me,c],at:latest})}catch(e){}
   readBusy[id]=false;
 }
 
@@ -371,6 +397,174 @@ async function addById(input){
   if(!users[uid]){try{const u=await getDoc(doc(fs,"users",uid));if(u.exists())users[uid]=cleanUser(u.data())}catch(e){}}
   await saveContact(uid);openChat(uid);
   if(!isFriend(uid))await sendRequest(uid);
+}
+
+/* ---------- mesaj işlemleri: yanıtla, ilet, düzenle, sil, tepki, yıldız, sabitle ---------- */
+async function savePrefs(patch){prefs={...prefs,...patch};renderAll();try{await setDoc(doc(fs,"private",me,"data","prefs"),patch,{merge:true})}catch(e){toast("Kaydedilemedi")}}
+function saveDraft(){if(!cur)return;try{const d=JSON.parse(localStorage.getItem("tr-drafts")||"{}");const v=$("#msgInput").value.trim();if(v)d[cur]=v.slice(0,500);else delete d[cur];localStorage.setItem("tr-drafts",JSON.stringify(d))}catch(e){}}
+function renderReplyBar(){const b=$("#replybar");if(!replyTo){b.classList.remove("show");b.innerHTML="";return}
+  b.innerHTML=`<div class="rq"><b style="color:${colorOf(replyTo.from)}">${esc(replyTo.from===me?"Sen":realName(replyTo.from))}</b><span>${esc(replyTo.p)}</span></div><button type="button" id="replyX" aria-label="Yanıtı iptal et">✕</button>`;
+  b.classList.add("show");$("#replyX").onclick=()=>{replyTo=null;renderReplyBar()}}
+const msgById=id=>raw.find(m=>m.id===id)||pending.find(m=>m.id===id);
+function jumpTo(id){const el=document.querySelector(`.b[data-mid="${CSS.escape(id)}"]`);if(!el){toast("Mesaj bulunamadı");return}el.scrollIntoView({block:"center",behavior:"smooth"});el.classList.add("flash");setTimeout(()=>el.classList.remove("flash"),1400)}
+let sheetFor=null;
+function openMsgSheet(id){
+  const m=msgById(id);if(!m||m.pending)return;const c=contentOf(m);if(!c)return;
+  sheetFor=id;const mine=m.from===me,isText=c.t==="text",canEdit=mine&&isText&&Date.now()-m.at<15*60e3;
+  const myRx=m.rx&&m.rx[me];
+  $("#msheet").innerHTML=`<div class="rxrow">${RX.map(x=>`<button data-rx="${x}" class="${myRx===x?"on":""}">${x}</button>`).join("")}</div>
+    <button data-ma="reply">↩️ Yanıtla</button><button data-ma="fwd">↪️ İlet</button>${isText?'<button data-ma="copy">📋 Kopyala</button>':""}
+    ${canEdit?'<button data-ma="edit">✏️ Düzenle</button>':""}<button data-ma="star">${prefs.star.includes(id)?"☆ Yıldızı kaldır":"⭐ Yıldızla"}</button>
+    <button data-ma="pin">${prefs.pinMsg[cur]===id?"📌 Sabitlemeyi kaldır":"📌 Sabitle"}</button>
+    <button data-ma="delme">🗑️ Benden sil</button>${mine?'<button data-ma="delall" class="danger">🗑️ Herkesten sil</button>':""}
+    ${!mine?'<button data-ma="report" class="danger">🚩 Şikâyet et</button>':""}`;
+  overlay.classList.add("show");$("#msheet").classList.add("show");
+}
+function closeSheet(){$("#msheet").classList.remove("show");overlay.classList.remove("show");sheetFor=null}
+async function react(id,emoji){
+  const m=msgById(id);if(!m)return;const rx={...(m.rx||{})};
+  if(rx[me]===emoji)delete rx[me];else rx[me]=emoji;
+  m.rx=rx;renderMsgs();
+  try{await updateDoc(doc(fs,"msgs",id),{rx})}catch(e){toast("Tepki gönderilemedi")}
+}
+$("#msheet").addEventListener("click",async e=>{
+  const id=sheetFor;if(!id)return;const m=msgById(id),c=contentOf(m);
+  const r=e.target.closest("[data-rx]");if(r){closeSheet();react(id,r.dataset.rx);return}
+  const b=e.target.closest("[data-ma]");if(!b)return;const a=b.dataset.ma;closeSheet();
+  if(a==="reply"){replyTo={id,from:m.from,p:previewText(c).slice(0,120)};renderReplyBar();$("#msgInput").focus()}
+  if(a==="copy"){try{await navigator.clipboard.writeText(c.text||"");toast("Kopyalandı")}catch(err){toast("Kopyalanamadı")}}
+  if(a==="star"){const st=prefs.star.includes(id)?prefs.star.filter(x=>x!==id):[...prefs.star,id].slice(-300);savePrefs({star:st})}
+  if(a==="pin"){const pm={...prefs.pinMsg};if(pm[cur]===id)delete pm[cur];else pm[cur]=id;savePrefs({pinMsg:pm})}
+  if(a==="delme"){hidMsgs.add(id);try{localStorage.setItem("tr-hid",JSON.stringify([...hidMsgs].slice(-2000)))}catch(err){}renderMsgs();toast("Senden silindi")}
+  if(a==="delall")openModal({title:"Herkesten sil",text:"Bu mesaj herkes için silinsin mi?",input:false,ok:"Sil"},async()=>{
+    try{if(c.bid)for(let i=0;i<(c.n||0);i++)await deleteDoc(doc(fs,"blobs",c.bid+"_"+i)).catch(()=>{});await deleteDoc(doc(fs,"msgs",id));toast("Silindi")}catch(err){toast("Silinemedi")}});
+  if(a==="edit")openModal({title:"Mesajı düzenle",value:c.text,ok:"Kaydet"},async v=>{
+    v=v.trim().slice(0,2000);if(!v||v===c.text)return;
+    if(Date.now()-m.at>=15*60e3){toast("Mesajlar 15 dakika içinde düzenlenebilir");return}
+    const key=msgKey[id];if(!key){toast("Düzenlenemedi");return}
+    const nc={...c,text:v},aad=aadOf(m.from,m.gid?"g:"+m.gid:m.to,m.at);
+    const {iv,ct}=await aesEnc(key,enc(packContent(nc)),aad);
+    plain[id]=nc;renderMsgs();
+    try{await setDoc(doc(fs,"msgs",id),{ct:b64(ct),iv:b64(iv),ed:Date.now()},{merge:true})}catch(err){plain[id]=c;renderMsgs();toast("Düzenlenemedi")}});
+  if(a==="fwd")openForward(id);
+  if(a==="report")openReport(m.from,cur);
+});
+// uzun basma, sağ tık, çift dokunma
+{let lp=null,lpx=0,lpy=0,lastTap=0,lastId="";
+  const box=$("#msgs");
+  box.addEventListener("contextmenu",e=>{const b=e.target.closest(".b[data-mid]");if(!b)return;e.preventDefault();openMsgSheet(b.dataset.mid)});
+  box.addEventListener("touchstart",e=>{const b=e.target.closest(".b[data-mid]");if(!b)return;lpx=e.touches[0].clientX;lpy=e.touches[0].clientY;
+    lp=setTimeout(()=>{lp=null;try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}openMsgSheet(b.dataset.mid)},480)},{passive:true});
+  box.addEventListener("touchmove",e=>{if(lp&&(Math.abs(e.touches[0].clientX-lpx)>8||Math.abs(e.touches[0].clientY-lpy)>8)){clearTimeout(lp);lp=null}},{passive:true});
+  box.addEventListener("touchend",()=>{if(lp){clearTimeout(lp);lp=null}});
+  box.addEventListener("click",e=>{
+    const un=e.target.closest("[data-unpin]");if(un){const pm={...prefs.pinMsg};delete pm[cur];savePrefs({pinMsg:pm});return}
+    const j=e.target.closest("[data-jump]");if(j){jumpTo(j.dataset.jump);return}
+    const b=e.target.closest(".b[data-mid]");if(!b||e.target.closest("audio,img,.gamecard"))return;
+    const now=Date.now();if(lastId===b.dataset.mid&&now-lastTap<320){lastTap=0;react(b.dataset.mid,"❤️");return}lastTap=now;lastId=b.dataset.mid});
+}
+function openForward(id){
+  const m=msgById(id),c=contentOf(m);if(!c)return;
+  const convs=[...Object.keys(friends).filter(isFriend),...Object.keys(groups).map(g=>"g:"+g)].sort((a,b)=>convTitle(a).localeCompare(convTitle(b),"tr"));
+  openInfoModal("İlet",`<div class="flist">${convs.map(cv=>`<label class="gitem"><input type="checkbox" value="${esc(cv)}" style="width:20px;height:20px">${avHTML(cv)}<div class="gn"><b>${esc(convTitle(cv))}</b></div></label>`).join("")||'<div class="isub">İletecek kimse yok</div>'}</div><div class="row2" style="margin-top:8px"><button id="fwdGo" style="background:var(--brand)">Gönder</button></div>`);
+  $("#fwdGo").onclick=async()=>{
+    const tg=[...document.querySelectorAll('#eBody input[type=checkbox]:checked')].map(x=>x.value).slice(0,5);
+    if(!tg.length){toast("En az bir sohbet seç");return}
+    $("#fwdGo").disabled=true;
+    let blob=null;if(c.bid){const url=await loadMedia(id);if(!url){toast("Medya açılamadı");$("#fwdGo").disabled=false;return}blob=await fetch(url).then(r=>r.blob())}
+    for(const t of tg){
+      if(blob)await sendContent(t,{t:c.t,fwd:1,...(c.dur?{dur:c.dur}:{})},{blob,mime:c.mime,meta:c.w?{w:c.w,h:c.h}:null});
+      else await sendContent(t,{t:"text",text:c.text||previewText(c),fwd:1});
+    }
+    closeE();toast(tg.length>1?tg.length+" sohbete iletildi":"İletildi");
+  };
+}
+/* sohbet içinde arama */
+$("#cSearchBtn").onclick=()=>{const b=$("#csearch");b.classList.toggle("show");if(b.classList.contains("show"))$("#csInput").focus();else{msgQuery="";$("#csInput").value="";renderMsgs()}};
+$("#csInput").oninput=e=>{msgQuery=e.target.value.toLocaleLowerCase("tr").trim();renderMsgs()};
+/* yıldızlı mesajlar */
+function openStarred(){
+  const list=prefs.star.map(msgById).filter(Boolean).sort((a,b)=>b.at-a.at);
+  openInfoModal("⭐ Yıldızlı mesajlar",list.length?list.map(m=>`<div class="gitem" data-sjump="${esc(m.id)}" data-sconv="${esc(convOfMsg(m))}">${avHTML(m.from===me?me:m.from)}<div class="gn"><b>${esc(m.from===me?"Sen":realName(m.from))} → ${esc(convTitle(convOfMsg(m)))}</b><span>${esc(previewText(contentOf(m)).slice(0,90))} · ${when(m.at)}</span></div></div>`).join(""):'<div class="empty">Yıldızlı mesajın yok. Bir mesaja uzun basıp ⭐ Yıldızla de.</div>');
+  $("#eBody").onclick=e=>{const g=e.target.closest("[data-sjump]");if(!g)return;closeE();openChat(g.dataset.sconv);setTimeout(()=>jumpTo(g.dataset.sjump),300)};
+}
+/* sohbet satırına uzun basma: sabitle, sessize al, arşivle, favori */
+function openChatSheet(c){
+  const muted=(prefs.mute[c]||0)>Date.now();
+  $("#msheet").innerHTML=`<div class="isub" style="padding:4px 8px 8px">${esc(convTitle(c))}</div>
+    <button data-ca="pin">${prefs.pin.includes(c)?"📌 Sabitlemeyi kaldır":"📌 Sohbeti sabitle"}</button>
+    <button data-ca="fav">${prefs.fav.includes(c)?"☆ Favorilerden çıkar":"⭐ Favorilere ekle"}</button>
+    ${muted?'<button data-ca="unmute">🔔 Sesi aç</button>':'<button data-ca="m8">🔕 8 saat sessize al</button><button data-ca="m168">🔕 1 hafta sessize al</button><button data-ca="minf">🔕 Her zaman sessiz</button>'}
+    <button data-ca="arch">${prefs.arch.includes(c)?"📤 Arşivden çıkar":"🗄️ Arşivle"}</button>
+    <button data-ca="read">✔️ Okundu say</button>`;
+  sheetFor=null;$("#msheet").dataset.conv=c;overlay.classList.add("show");$("#msheet").classList.add("show");
+}
+$("#msheet").addEventListener("click",e=>{
+  const b=e.target.closest("[data-ca]");if(!b)return;const c=$("#msheet").dataset.conv,a=b.dataset.ca;closeSheet();
+  const tog=(k)=>prefs[k].includes(c)?prefs[k].filter(x=>x!==c):[...prefs[k],c].slice(-200);
+  if(a==="pin"){if(!prefs.pin.includes(c)&&prefs.pin.length>=3){toast("En fazla 3 sohbet sabitlenebilir");return}savePrefs({pin:tog("pin")})}
+  if(a==="fav")savePrefs({fav:tog("fav")});
+  if(a==="arch")savePrefs({arch:tog("arch")});
+  if(a==="read")markRead(c);
+  if(a.startsWith("m")||a==="unmute"){const mu={...prefs.mute};if(a==="unmute")delete mu[c];else mu[c]=a==="minf"?8640000000000000:Date.now()+(a==="m8"?8:168)*3600e3;savePrefs({mute:mu});toast(a==="unmute"?"Ses açıldı":"Sessize alındı")}
+});
+{let lp=null;const list=$("#pane-chats");
+  list.addEventListener("contextmenu",e=>{const r=e.target.closest(".row[data-open]");if(!r)return;e.preventDefault();openChatSheet(r.dataset.open)});
+  list.addEventListener("touchstart",e=>{const r=e.target.closest(".row[data-open]");if(!r)return;lp=setTimeout(()=>{lp=null;suppressClick=true;try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}openChatSheet(r.dataset.open)},520)},{passive:true});
+  ["touchmove","touchend"].forEach(t=>list.addEventListener(t,()=>{if(lp){clearTimeout(lp);lp=null}},{passive:true}));
+}
+let suppressClick=false;
+document.addEventListener("click",e=>{if(suppressClick){suppressClick=false;e.stopPropagation();e.preventDefault()}},true);
+
+/* ---------- çevrimiçi, yazıyor, son görülme ---------- */
+let presUnsub=null,presOf=null,presTimer=null,lastBeat=0,lastTyping=0;
+function beat(force){
+  if(!me||document.hidden)return;
+  const now=Date.now();if(!force&&now-lastBeat<55000)return;lastBeat=now;
+  const d=prefs.vis==="none"?{at:0,vis:"none"}:{at:now,vis:prefs.vis};
+  setDoc(doc(fs,"presence",me),d,{merge:true}).catch(()=>{});
+}
+setInterval(()=>beat(false),15000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)beat(true)});
+function typing(){
+  if(!cur||prefs.vis==="none"||isGroupConv(cur))return;const now=Date.now();if(now-lastTyping<3000)return;lastTyping=now;
+  setDoc(doc(fs,"presence",me),{at:now,vis:prefs.vis,ty:cur,tyAt:now},{merge:true}).catch(()=>{});
+}
+function watchPresence(c){
+  if(presUnsub){presUnsub();presUnsub=null}presOf=null;clearInterval(presTimer);
+  if(!c||isGroupConv(c))return;
+  presUnsub=onSnapshot(doc(fs,"presence",c),s=>{presOf=s.exists()?s.data():null;renderPresence()},()=>{presOf=null});
+  presTimer=setInterval(renderPresence,4000);
+}
+function renderPresence(){
+  if(!cur||isGroupConv(cur))return;const p=presOf,now=Date.now();let t="";
+  if(p&&prefs.vis!=="none"){
+    if(p.ty===me&&now-(p.tyAt||0)<6000)t="yazıyor…";
+    else if(p.at&&now-p.at<75000)t="çevrimiçi";
+    else if(p.at)t="son görülme "+(when(p.at).includes(":")?"bugün "+hm(p.at):when(p.at)+" "+hm(p.at));
+  }
+  const code=users[cur]?.code;$("#cSub").textContent=t||(code?"TR ID: "+fmtCode(code):"");$("#cSub").classList.toggle("typing",t==="yazıyor…");
+}
+/* gizlilik ayarları */
+function openPrivacy(){
+  const v=prefs.vis;
+  openInfoModal("🔒 Gizlilik",`<div class="fl">Çevrimiçi ve son görülme bilgimi görebilenler</div>
+    ${[["all","Herkes"],["friends","Sadece arkadaşlarım"],["none","Hiç kimse"]].map(([k,t])=>`<label class="repr"><input type="radio" name="pv" value="${k}" ${v===k?"checked":""}> ${t}</label>`).join("")}
+    <p class="isub">"Hiç kimse" seçersen sen de başkalarının çevrimiçi bilgisini göremezsin.</p>
+    <label class="repr" style="margin-top:8px"><input type="checkbox" id="pvRead" ${prefs.noRead?"":"checked"}> <span>Okundu bilgisi (mavi tik)<br><span class="isub">Kapatırsan sen de başkalarının okuduğunu göremezsin.</span></span></label>
+    <div class="row2" style="margin-top:10px"><button id="pvSave" style="background:var(--brand)">Kaydet</button></div>`);
+  $("#pvSave").onclick=()=>{const vis=document.querySelector('input[name="pv"]:checked')?.value||"all";savePrefs({vis,noRead:!$("#pvRead").checked});closeE();setTimeout(()=>beat(true),100);toast("Kaydedildi")};
+}
+/* medya galerisi ve sohbeti dışa aktarma */
+function openGallery(c){
+  const imgs=convMsgs(c).filter(m=>!m.pending&&contentOf(m)?.t==="img").reverse().slice(0,60);
+  openInfoModal("🖼️ Medya",imgs.length?`<div class="gal">${imgs.map(m=>`<div class="gi" data-media="${esc(m.id)}">…</div>`).join("")}</div>`:'<div class="empty">Bu sohbette fotoğraf yok</div>');
+  document.querySelectorAll("#eBody .gi").forEach(el=>{loadMedia(el.dataset.media).then(u=>{if(!u){el.textContent="🔒";return}el.innerHTML=`<img src="${u}" alt="Fotoğraf">`;el.onclick=()=>{closeE();openViewer(u)}})});
+}
+function exportChat(c){
+  const lines=convMsgs(c).filter(m=>!m.pending).map(m=>`[${new Date(m.at).toLocaleString("tr-TR")}] ${m.from===me?(users[me]?.nick||"Ben"):realName(m.from)}: ${previewText(contentOf(m))}`);
+  const blob=new Blob(["TR sohbet: "+convTitle(c)+"\n\n"+lines.join("\n")],{type:"text/plain;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="TR-sohbet-"+convTitle(c).replace(/[^\p{L}\p{N}]+/gu,"-")+".txt";document.body.appendChild(a);a.click();a.remove();toast("Sohbet indirildi");
 }
 
 /* ---------- engelleme, şikâyet, askı ---------- */
@@ -584,8 +778,9 @@ function openInfo(){
     $("#iAv").innerHTML=avHTML(cur);$("#iName").textContent=g.name;$("#iSub").textContent=g.members.length+" üye";
     $("#iLabel").textContent="Üyeler";
     $("#iList").innerHTML=g.members.map(u=>memberRow(u,{tag:g.admins.includes(u)?"yönetici":"",remove:admin&&u!==me})).join("");
-    $("#iActs").innerHTML=(admin?`<button id="iAdd">Üye ekle</button><button id="iRename">Adını değiştir</button>`:"")+`<button class="danger" id="iRep">Şikâyet et</button><button class="danger" id="iLeave">Gruptan çık</button><button class="pri" id="iClose">Kapat</button>`;
+    $("#iActs").innerHTML=(admin?`<button id="iAdd">Üye ekle</button><button id="iRename">Adını değiştir</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iRep">Şikâyet et</button><button class="danger" id="iLeave">Gruptan çık</button><button class="pri" id="iClose">Kapat</button>`;
     $("#iRep").onclick=()=>{closeInfo();openReport(g.createdBy===me?null:g.createdBy,"g:"+gid)};
+    $("#iMedia").onclick=()=>{closeInfo();openGallery("g:"+gid)};$("#iExport").onclick=()=>{closeInfo();exportChat("g:"+gid)};
     if(admin){$("#iAdd").onclick=()=>{closeInfo();openGroupModal("add",gid)};
       $("#iRename").onclick=()=>{closeInfo();openModal({title:"Grup adı",value:g.name,ok:"Kaydet"},async v=>{if(hasBad(v)){toast("Grup adında uygunsuz kelime var",3000);return}try{await setDoc(doc(fs,"groups",gid),{...g,name:v.slice(0,50)})}catch(e){toast("Değiştirilemedi")}})};}
     $("#iLeave").onclick=()=>{closeInfo();openModal({title:"Gruptan çık",text:`“${esc(g.name)}” grubundan çıkmak istiyor musun?`,input:false,ok:"Çık"},async()=>{
@@ -603,7 +798,8 @@ function openInfo(){
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
     const bl=isBlocked(cur);
-    $("#iActs").innerHTML=(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    $("#iActs").innerHTML=(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    {const pc=cur;$("#iMedia").onclick=()=>{closeInfo();openGallery(pc)};$("#iExport").onclick=()=>{closeInfo();exportChat(pc)}}
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
     if(isFriend(cur)){const peer=cur;$("#iUnf").onclick=()=>{closeInfo();openModal({title:"Arkadaşlıktan çıkar",text:`${esc(realName(peer))} arkadaşlıktan çıkarılsın mı? Tekrar yazışmak için yeni istek gerekir.`,input:false,ok:"Çıkar"},()=>removeFriend(peer))}}
     $("#iList").onclick=e=>{const r=e.target.closest("[data-g]");if(r){closeInfo();openChat("g:"+r.dataset.g)}};
@@ -616,14 +812,17 @@ $("#chatTitle").onclick=openInfo;$("#cAvWrap").onclick=openInfo;
 
 /* ---------- navigation ---------- */
 function openChat(c){
-  cur=c;lastRenderedCount=-1;
+  if(cur&&cur!==c)saveDraft();
+  cur=c;lastRenderedCount=-1;replyTo=null;renderReplyBar();msgQuery="";$("#csearch").classList.remove("show");
+  {let d="";try{d=JSON.parse(localStorage.getItem("tr-drafts")||"{}")[c]||""}catch(e){}$("#msgInput").value=d}
+  watchPresence(c);
   $("#emojis").classList.remove("show");
   renderChatHeader();renderMsgs();
   $("#chat").classList.remove("hidden");$("#placeholder").classList.add("off");
   markRead(c);renderChats();updateSendIcon();
   try{if(!history.state||!history.state.chat)history.pushState({chat:c},"");else history.replaceState({chat:c},"")}catch(e){}
 }
-function closeChat(){if(rec)stopRec(false);$("#chat").classList.add("hidden");$("#placeholder").classList.remove("off");cur=null;renderChats()}
+function closeChat(){saveDraft();watchPresence(null);if(rec)stopRec(false);$("#chat").classList.add("hidden");$("#placeholder").classList.remove("off");cur=null;renderChats()}
 $("#back").onclick=()=>{try{if(history.state&&history.state.chat){history.back();return}}catch(e){}closeChat()};
 window.addEventListener("popstate",()=>{if($("#viewer").classList.contains("show")){closeViewer();return}if(game)return;if(cur)closeChat()});
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if($("#viewer").classList.contains("show")){closeViewer();return}if(cur&&!document.querySelector(".modal.show")&&!$("#story.show"))$("#back").click()});
@@ -637,7 +836,9 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
 });
 $("#btnSearch").onclick=()=>{const sb=$("#searchbar");sb.classList.toggle("show");if(sb.classList.contains("show"))$("#searchInput").focus();else{query_="";$("#searchInput").value="";renderChats()}};
 $("#searchInput").oninput=e=>{query_=e.target.value.toLocaleLowerCase("tr").trim();if(tabNow!=="chats")document.querySelector('[data-tab="chats"]').click();renderChats()};
-document.querySelector(".content").onclick=e=>{if(friendButtons(e))return;const r=e.target.closest(".row");if(!r)return;
+document.querySelector(".content").onclick=e=>{if(friendButtons(e))return;
+  const cf=e.target.closest("[data-cf]");if(cf){chatFilter=cf.dataset.cf;renderChats();return}
+  const r=e.target.closest(".row");if(!r)return;
   if(r.dataset.open)openChat(r.dataset.open);
   else if(r.dataset.story)openStory(r.dataset.story);
   else if(r.dataset.act==="mystatus")askStatus();
@@ -653,7 +854,7 @@ $("#msgs").addEventListener("click",e=>{const img=e.target.closest("img.media");
 /* ---------- modal ---------- */
 const overlay=$("#overlay"),menu=$("#menu"),modal=$("#modal");
 let modalCb=null,profileLocked=false;
-function closeAll(){overlay.classList.remove("show");menu.classList.remove("show");modal.classList.remove("show");overlay.style.background=""}
+function closeAll(){overlay.classList.remove("show");menu.classList.remove("show");modal.classList.remove("show");overlay.style.background="";$("#msheet").classList.remove("show")}
 overlay.onclick=()=>{if(modal.dataset.locked==="1"||profileLocked)return;closeAll();closeProfile();closeGroupModal();closeInfo();closeContacts();closeE();$("#gpick").classList.remove("show")};
 function openModal({title,text="",placeholder="",value="",ok="Tamam",cancel=true,cancelText="İptal",input=true,locked=false,numeric=false},cb){
   closeAll();overlay.classList.add("show");modal.classList.add("show");modal.dataset.locked=locked?"1":"";
@@ -681,6 +882,8 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="friends")openFriends();
   if(a==="views")openViews();
   if(a==="delacct")askDeleteAccount();
+  if(a==="starred")openStarred();
+  if(a==="privacy2")openPrivacy();
   if(a==="terms")window.open("/kosullar.html","_blank");
   if(a==="privacy")window.open("/gizlilik.html","_blank");
   if(a==="support")location.href="mailto:"+SUPPORT_MAIL+"?subject=TR%20destek";
@@ -787,12 +990,16 @@ $("#emojis").innerHTML=EMOJI.map(e=>`<button type="button">${e}</button>`).join(
 $("#emojiBtn").onclick=()=>$("#emojis").classList.toggle("show");
 $("#emojis").onclick=e=>{if(e.target.tagName==="BUTTON"){$("#msgInput").value+=e.target.textContent;updateSendIcon();$("#msgInput").focus()}};
 function updateSendIcon(){const has=!!$("#msgInput").value.trim();$("#icoSend").style.display=has?"":"none";$("#icoMic").style.display=has?"none":"";$("#sendBtn").setAttribute("aria-label",has?"Gönder":"Sesli mesaj kaydet")}
-$("#msgInput").addEventListener("input",updateSendIcon);
+$("#msgInput").addEventListener("input",()=>{updateSendIcon();typing()});
 $("#composer").onsubmit=async e=>{e.preventDefault();
   const v=$("#msgInput").value.trim();if(!cur||!me)return;
   if(!v){startRec();return}
   $("#msgInput").value="";updateSendIcon();$("#emojis").classList.remove("show");
-  const ok=await sendContent(cur,{t:"text",text:v.slice(0,2000)});
+  const content={t:"text",text:v.slice(0,2000)};
+  if(replyTo){content.r=replyTo;replyTo=null;renderReplyBar()}
+  let men=[];if(isGroupConv(cur)){const g=groups[gidOf(cur)];if(g)men=g.members.filter(u=>u!==me&&users[u]&&new RegExp("@"+(users[u].first||"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(\\b|\\s|$)","iu").test(v))}
+  const ok=await sendContent(cur,content,{men});
+  try{const d=JSON.parse(localStorage.getItem("tr-drafts")||"{}");delete d[cur];localStorage.setItem("tr-drafts",JSON.stringify(d))}catch(e){}
   if(!ok&&!$("#msgInput").value){$("#msgInput").value=v;updateSendIcon()}
   $("#msgInput").focus();
 };
@@ -905,6 +1112,9 @@ onAuthStateChanged(auth,async u=>{
   initWallet();
 
   watchUser(me);
+  unsubs.push(onSnapshot(doc(fs,"private",me,"data","prefs"),s=>{const x=s.exists()?s.data():{};
+    prefs={mute:x.mute&&typeof x.mute==="object"?x.mute:{},arch:Array.isArray(x.arch)?x.arch:[],pin:Array.isArray(x.pin)?x.pin:[],fav:Array.isArray(x.fav)?x.fav:[],star:Array.isArray(x.star)?x.star:[],pinMsg:x.pinMsg&&typeof x.pinMsg==="object"?x.pinMsg:{},noRead:!!x.noRead,vis:["all","friends","none"].includes(x.vis)?x.vis:"all"};
+    renderAll();beat(true)},()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"blocks"),where("by","==",me)),s=>{
     const next={};s.docs.forEach(d=>{const t=d.data()?.target;if(typeof t==="string")next[t]=true});blocked=next;renderAll();
   },()=>{}));
@@ -923,9 +1133,9 @@ onAuthStateChanged(auth,async u=>{
     decryptAll();renderAll();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"msgs"),where("members","array-contains",me)),s=>{
-    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||"")}})
+    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null}})
       .filter(m=>m.iv&&m.ct&&m.from&&(m.gid||(m.to&&m.from!==m.to&&(m.from===me||m.to===me))));
-    raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to)});
+    raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to);if(ctSeen[m.id]&&ctSeen[m.id]!==m.ct)delete plain[m.id];ctSeen[m.id]=m.ct});
     pending=pending.filter(p=>!raw.find(m=>m.id===p.id));
     banner("");
     if(cur)markRead(cur);
@@ -941,7 +1151,7 @@ onAuthStateChanged(auth,async u=>{
     renderCalls();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"reads"),where("members","array-contains",me)),s=>{
-    s.docs.forEach(d=>{const x=d.data();if(x&&typeof x.at==="number"){if(d.id.startsWith(me+"_"))reads[d.id]=Math.max(reads[d.id]||0,x.at);else reads[d.id]=x.at}});
+    s.docs.forEach(d=>{const x=d.data();if(x&&typeof x.at==="number"){if(d.id.startsWith(me+"_"))reads[d.id]=Math.max(reads[d.id]||0,x.at);else{reads[d.id]=x.at;readsHidden[d.id]=!!x.h}}});
     renderAll()},()=>{}));
 });
 

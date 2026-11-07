@@ -18,3 +18,4 @@ async function runQ(q){const st=await all();const depth=q.path.split('/').length
  if(q.ob)docs.sort((a,b)=>(q.ob[1]==='desc'?-1:1)*((a.data()[q.ob[0]]||0)-(b.data()[q.ob[0]]||0)));if(q.lim)docs=docs.slice(0,q.lim);return{docs,docChanges:()=>[]}}
 export function onSnapshot(r,cb,err){let last='';let prev={};const run=async()=>{try{let s;if(r.kind==='doc')s=await getDoc(r);else{s=await runQ(r);const cur={};const ch=[];s.docs.forEach(d=>{const k=JSON.stringify(d.data());cur[d.id]=k;if(!(d.id in prev))ch.push({type:'added',doc:d});else if(prev[d.id]!==k)ch.push({type:'modified',doc:d})});prev=cur;s.docChanges=()=>ch}const key=JSON.stringify(r.kind==='doc'?s.data():s.docs.map(d=>[d.id,d.data()]));if(key!==last){last=key;cb(s)}}catch(e){err&&err(e)}};run();const t=setInterval(run,300);return()=>clearInterval(t)}
 export async function addDoc(c,d){const r=doc(c);await setDoc(r,d);return r}
+export async function updateDoc(r,d){await setDoc(r,d,{merge:true})}
