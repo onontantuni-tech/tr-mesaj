@@ -9,6 +9,12 @@ service cloud.firestore {
       let f = /databases/$(database)/documents/friends/$(pair(a, b));
       return exists(f) && get(f).data.status == 'accepted';
     }
+    // Askıya alınmış / yasaklı hesap yazamaz
+    function notBanned() {
+      let b = /databases/$(database)/documents/bans/$(request.auth.uid);
+      return !exists(b) || get(b).data.until < request.time.toMillis();
+    }
+    function blockedBy(a, b) { return exists(/databases/$(database)/documents/blocks/$(a + '_' + b)); }
 
     // Herkese açık profil: ad, soyad, TR ID, şifreleme açık anahtarı
     match /users/{uid} {
@@ -33,7 +39,7 @@ service cloud.firestore {
     // Gruplar: sadece üyeler görür; yöneticiler düzenler; herkes kendini çıkarabilir
     match /groups/{gid} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
-      allow create: if signedIn()
+      allow create: if signedIn() && notBanned()
         && nd().createdBy == request.auth.uid
         && nd().admins == [request.auth.uid]
         && request.auth.uid in nd().members
@@ -58,7 +64,7 @@ service cloud.firestore {
     // Mesajlar: sadece mesajın üyeleri okuyabilir. İçerik şifreli.
     match /msgs/{id} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
-      allow create: if signedIn()
+      allow create: if signedIn() && notBanned()
         && nd().from == request.auth.uid
         && request.auth.uid in nd().members
         && nd().ct is string && nd().ct.size() < 20000
@@ -88,7 +94,9 @@ service cloud.firestore {
         && nd().at is number
         && id == pair(request.auth.uid, nd().to)
         && nd().members == (request.auth.uid < nd().to ? [request.auth.uid, nd().to] : [nd().to, request.auth.uid])
-        && exists(/databases/$(database)/documents/users/$(nd().to));
+        && exists(/databases/$(database)/documents/users/$(nd().to))
+        && !blockedBy(nd().to, request.auth.uid)
+        && notBanned();
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
         && nd().keys().hasOnly(['members', 'from', 'to', 'status', 'at'])
@@ -104,12 +112,45 @@ service cloud.firestore {
           // reddedilen istek tekrar gönderilir (reddedilen kişi 24 saat bekler)
           (resource.data.status == 'declined'
             && nd().status == 'pending'
+            && !blockedBy(nd().to, request.auth.uid)
             && nd().from == request.auth.uid
             && nd().to in resource.data.members && nd().to != request.auth.uid
             && (resource.data.from != request.auth.uid || request.time.toMillis() > resource.data.at + 86400000))
         );
       allow delete: if signedIn() && request.auth.uid in resource.data.members;
     }
+
+    // Engelleme: belge adı "engelleyen_engellenen". Engellenen kişi arkadaşlık isteği gönderemez.
+    match /blocks/{id} {
+      allow read, delete: if signedIn() && resource.data.by == request.auth.uid;
+      allow create: if signedIn()
+        && nd().keys().hasOnly(['by', 'target', 'at'])
+        && nd().by == request.auth.uid
+        && nd().target is string && nd().target != request.auth.uid
+        && id == request.auth.uid + '_' + nd().target;
+    }
+
+    // Şikâyetler: herkes yazabilir, sadece yöneticiler (sunucu üzerinden) okur
+    match /reports/{id} {
+      allow read, update, delete: if false;
+      allow create: if signedIn()
+        && nd().keys().hasOnly(['by', 'target', 'reason', 'note', 'msgs', 'ctx', 'at', 'status'])
+        && nd().by == request.auth.uid
+        && nd().target is string && nd().target != request.auth.uid
+        && nd().reason in ['taciz', 'spam', 'uygunsuz', 'hile', 'diger']
+        && nd().status == 'open'
+        && nd().note is string && nd().note.size() <= 500
+        && nd().msgs is list && nd().msgs.size() <= 20
+        && nd().ctx is string && nd().ctx.size() <= 80
+        && nd().at is number;
+    }
+
+    // Askıya alma / yasak: sadece sunucu yazar, kişi kendi durumunu görür
+    match /bans/{u} {
+      allow read: if isMe(u);
+      allow write: if false;
+    }
+    match /deletions/{x} { allow read, write: if false; }
 
     // VIP rozeti: herkes görür, sadece sunucu yazar
     match /badges/{u} {
@@ -159,7 +200,8 @@ service cloud.firestore {
         && nd().to is string && nd().to != request.auth.uid
         && nd().members == [request.auth.uid, nd().to]
         && nd().state == 'ringing'
-        && areFriends(request.auth.uid, nd().to);
+        && areFriends(request.auth.uid, nd().to)
+        && notBanned();
       allow update: if signedIn()
         && request.auth.uid in resource.data.members
         && nd().from == resource.data.from
@@ -208,7 +250,7 @@ service cloud.firestore {
     // Durumlar
     match /statuses/{uid} {
       allow read: if signedIn();
-      allow write: if isMe(uid)
+      allow write: if isMe(uid) && notBanned()
         && nd().text is string && nd().text.size() <= 300;
     }
   }

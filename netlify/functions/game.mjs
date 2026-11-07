@@ -4,6 +4,7 @@
 //   games/{id}/hands/{uid} oyuncunun kendi taşları (sadece kendisi okur)
 //   gsecret/{id}          deste ve bilgisayar oyuncuların elleri (istemcilere kapalı)
 import { areFriends } from "../lib/friends.mjs";
+import { activeBan } from "../lib/moderation.mjs";
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as O from "../lib/okey.mjs";
 import * as E from "../lib/economy.mjs";
@@ -32,6 +33,7 @@ export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
   const uid = await requireUser(req);
   if (!uid) return json(401, { error: "auth" });
+  if (await activeBan(admin().db, uid)) return json(403, { error: "banned" });
   let b;
   try { b = await req.json(); } catch { return json(400, { error: "body" }); }
   const { db } = admin();
@@ -48,6 +50,7 @@ export default async (req) => {
       const lvl = E.levelFromXp(ws.exists ? ws.data().xp || 0 : 0).level;
       const bal = ws.exists ? ws.data().balance || 0 : 0;
       if (stake && bal < stake) return json(402, { error: "balance" });
+      if (stake && !(ws.exists && ws.data().adult)) return json(403, { error: "age" });
       if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
@@ -73,6 +76,10 @@ export default async (req) => {
       if (act === "join") {
         if (g.status !== "lobby") return { status: 409, body: { error: "started" } };
         if (mySeat >= 0) return { status: 200, body: { ok: true } };
+        if (g.stake) {
+          const mw = await tx.get(db.doc(`wallets/${uid}`));
+          if (!(mw.exists && mw.data().adult)) return { status: 403, body: { error: "age" } };
+        }
         const free = g.seats.findIndex((s) => !s);
         if (free < 0) return { status: 409, body: { error: "full" } };
         g.seats[free] = { uid, bot: false };
@@ -100,7 +107,7 @@ export default async (req) => {
         humansNow.forEach((u, i) => { wallets[u] = wsnaps[i].exists ? wsnaps[i].data() : null; });
         const stake = g.stake || 0;
         if (stake) {
-          const poor = humansNow.filter((u) => !wallets[u] || (wallets[u].balance || 0) < stake);
+          const poor = humansNow.filter((u) => !wallets[u] || (wallets[u].balance || 0) < stake || !wallets[u].adult);
           if (poor.length) return { status: 402, body: { error: "balance", who: poor } };
         }
         let bi = 0;

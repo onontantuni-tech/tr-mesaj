@@ -1,5 +1,6 @@
 // Rehberden bul: istemci seçtiği numaraları gönderir, fonksiyon hangilerinin TR'de olduğunu söyler.
 // Numaralar kaydedilmez. "phones" koleksiyonu istemcilere kapalıdır, sadece bu fonksiyon okur.
+import { activeBan } from "../lib/moderation.mjs";
 import { admin, json, requireUser, normPhone } from "../lib/admin.mjs";
 
 const calls = new Map(); // kullanıcı başına basit hız sınırı
@@ -8,6 +9,7 @@ export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
   const uid = await requireUser(req);
   if (!uid) return json(401, { error: "auth" });
+  if (await activeBan(admin().db, uid)) return json(403, { error: "banned" });
 
   const now = Date.now();
   const c = (calls.get(uid) || []).filter((t) => now - t < 60 * 60 * 1000);

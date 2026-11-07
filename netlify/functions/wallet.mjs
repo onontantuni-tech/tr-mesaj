@@ -31,7 +31,18 @@ export default async (req) => {
         welcomed = true;
       }
 
+      // 18 yaş beyanı: doğum yılı. Jetonlu masalar ve satın almalar sadece 18 yaş üstüne açık.
+      if (act === "age") {
+        const y = Math.floor(Number(b.birthYear));
+        const now = new Date(Date.now() + 3 * 3600e3).getUTCFullYear();
+        if (!(y >= 1900 && y <= now)) return { status: 400, body: { error: "year" } };
+        if (w.birthYear) return { status: 409, body: { error: "set" } };
+        w.birthYear = y;
+        w.adult = now - y > 18 || (now - y === 18 && !!b.hadBirthday);
+      }
+
       if (act === "buyVip") {
+        if (!w.adult) return { status: 403, body: { error: "age" } };
         if ((w.balance || 0) < E.VIP.price) return { status: 402, body: { error: "balance" } };
         E.credit(tx, db, uid, w, -E.VIP.price, `VIP üyelik (${E.VIP.days} gün)`);
         const now = Date.now();
@@ -94,7 +105,7 @@ function view(w) {
   const lv = E.levelFromXp(w.xp || 0);
   return {
     balance: w.balance || 0, xp: w.xp || 0, level: lv.level, levelCur: lv.cur, levelNext: lv.next,
-    wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0,
+    wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0, adult: !!w.adult, ageSet: !!w.birthYear,
     catalog: { vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
   };
 }

@@ -1,6 +1,7 @@
 // Mesaj gönderildikten sonra istemci bu fonksiyonu çağırır.
 // Fonksiyon mesajın gerçekten çağıranın olduğunu doğrular, alıcıların cihazlarına bildirim yollar.
 // Mesaj içeriği uçtan uca şifreli olduğu için bildirimde içerik yer almaz, sadece gönderenin adı.
+import { activeBan } from "../lib/moderation.mjs";
 import { admin, json, requireUser, SITE } from "../lib/admin.mjs";
 
 const recent = new Map(); // basit tekrar koruması (aynı mesaj için bir kez)
@@ -9,6 +10,7 @@ export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
   const uid = await requireUser(req);
   if (!uid) return json(401, { error: "auth" });
+  if (await activeBan(admin().db, uid)) return json(403, { error: "banned" });
 
   let body;
   try { body = await req.json(); } catch { return json(400, { error: "body" }); }
