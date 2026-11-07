@@ -8,7 +8,8 @@ const VAPID_KEY="BNM0muk8JDXqc6KXABvndnLVHQHpYG-EKDet1qC6zkJq21tbM1P3y6sFlms3sSo
 
 const firebaseConfig = {
   apiKey: "AIzaSyCjT6jaye-XKeBVI-GI_E-qpyAa_w9XzCo",
-  authDomain: "trtr-f0f6d.firebaseapp.com",
+  // Kendi alan adımızda giriş: /__/auth Vercel üzerinden Firebase'e yönlendirilir (mobil tarayıcılarda yönlendirmeli giriş kaybolmasın)
+  authDomain: /\.vercel\.app$/.test(location.hostname) ? location.host : "trtr-f0f6d.firebaseapp.com",
   projectId: "trtr-f0f6d",
   storageBucket: "trtr-f0f6d.firebasestorage.app",
   messagingSenderId: "676722970002",
