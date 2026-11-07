@@ -1644,11 +1644,12 @@ const tIsFake=t=>t===104||t===105, tColor=t=>Math.floor(t/26), tNum=t=>Math.floo
 function tOkey(ind){const c=tColor(ind),n=tNum(ind);return{c,n:n===13?1:n+1}}
 function tIsWild(t,ok){return !tIsFake(t)&&tColor(t)===ok.c&&tNum(t)===ok.n}
 function tileHTML(t,ok,{sm=false,sel=false,cls=""}={}){
-  if(t==null)return`<div class="tile empty ${sm?"sm":""}">boş</div>`;
-  if(tIsFake(t))return`<div class="tile fake ${sm?"sm":""} ${sel?"sel":""} ${cls}" data-t="${t}" aria-label="sahte okey">★<span class="dot"></span></div>`;
+  if(t==null)return`<div class="tile empty ${sm?"sm":""}"></div>`;
+  if(tIsFake(t))return`<div class="tile fake ${sm?"sm":""} ${sel?"sel":""} ${cls}" data-t="${t}" aria-label="sahte okey"><b>★</b><i></i></div>`;
   const w=ok&&tIsWild(t,ok);
-  return`<div class="tile c${tColor(t)} ${w?"wild":""} ${sm?"sm":""} ${sel?"sel":""} ${cls}" data-t="${t}" aria-label="${T_COLORS[tColor(t)]} ${tNum(t)}${w?" okey":""}">${tNum(t)}<span class="dot"></span></div>`;
+  return`<div class="tile c${tColor(t)} ${w?"wild":""} ${sm?"sm":""} ${sel?"sel":""} ${cls}" data-t="${t}" aria-label="${T_COLORS[tColor(t)]} ${tNum(t)}${w?" okey":""}"><b>${tNum(t)}</b><i></i></div>`;
 }
+const backHTML=(n=1)=>`<div class="tback">${Array.from({length:Math.min(n,3)},()=>'<span></span>').join("")}</div>`;
 let game=null;            // {id, data, hand, order, sel, unsubs, busy}
 async function gameApi(body,type){
   const t=type||(game&&game.data&&game.data.type);
@@ -1691,9 +1692,9 @@ function openGame(id){
     if(!game||game.id!==id)return;
     const tiles=s.exists()&&Array.isArray(s.data().tiles)?s.data().tiles:[];
     const prevSet=new Set(game.hand);game.hand=tiles;
-    // sıralamayı koru: kalanlar yerinde, yeniler sona
-    const keep=game.order.filter(t=>tiles.includes(t));tiles.forEach(t=>{if(!keep.includes(t))keep.push(t)});
-    game.order=keep;game.newTiles=new Set(tiles.filter(t=>!prevSet.has(t)&&prevSet.size));
+    // ıstaka yuvaları: kalanlar yerinde, yeni gelen taş ilk boş yuvaya (son taşın yanına)
+    if(game.pendingOut!=null&&!tiles.includes(game.pendingOut))game.pendingOut=null;
+    syncSlots(tiles);game.newTiles=new Set(tiles.filter(t=>!prevSet.has(t)&&prevSet.size));
     if(game.sel!=null&&!tiles.includes(game.sel))game.sel=null;
     renderGame();
   },()=>{}));
@@ -1727,22 +1728,28 @@ function renderGame(){
   const pos=i=>["bottom","right","top","left"][(i-me4+4)%4];
   const isMyTurn=d.status==="play"&&d.turn===my;
   const canDraw=isMyTurn&&d.phase==="draw",canDiscard=isMyTurn&&d.phase==="discard";
+  game.canDiscard=canDiscard;
   const leftSeat=(me4+3)%4;
-  let html="";
-  d.seats.forEach((s,i)=>{const p=pos(i);if(p==="bottom")return;
-    html+=`<div class="seat p-${p} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div class="nm">${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""}</div><div class="ct">${(d.handCounts||[])[i]??""} taş · ${(d.scores||[])[i]||0} puan</div></div>`});
-  // atılan taşlar: her oyuncunun son attığı
-  const dpos={left:"d-lo",right:"d-ro",top:"d-top"};
-  d.seats.forEach((s,i)=>{const p=pos(i);const arr=(d.discards||{})[i]||[];const top=arr.length?arr[arr.length-1]:null;
-    if(p==="bottom")html+=`<div class="disc d-right"><div>${tileHTML(top,ok,{sm:true})}</div><div>Senin attığın</div></div>`;
-    else if(i===leftSeat)html+=`<div class="disc d-left ${canDraw&&top!=null?"take":""}" id="gLeftDisc"><div>${tileHTML(top,ok,{sm:true})}</div><div>${canDraw&&top!=null?"Al":"Soldan gelen"}</div></div>`;
-    else html+=`<div class="disc ${dpos[p]}">${tileHTML(top,ok,{sm:true})}</div>`;
+  let html='<div class="otable"><div class="ofelt"></div>';
+  d.seats.forEach((s,i)=>{const p=pos(i);if(p==="bottom")return;const n=(d.handCounts||[])[i]??0;
+    html+=`<div class="oseat o-${p} ${d.status==="play"&&d.turn===i?"turn":""}"><div class="oav">${seatAv(s)}</div><div class="oname"><b>${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""}</b><span>${(d.scores||[])[i]||0} puan</span></div><div class="ohand">${Array.from({length:Math.min(n,15)},()=>"<span></span>").join("")}</div></div>`});
+  // atılan taşlar: her oyuncunun önünde son 3 taş üst üste
+  const pileOf=i=>{const arr=(d.discards||{})[i]||[];return arr.slice(-3)};
+  const stack=(arr)=>arr.length?arr.map((t,k)=>`<div class="st" style="--k:${k}">${tileHTML(t,ok,{sm:true})}</div>`).join(""):'<div class="st">'+tileHTML(null,null,{sm:true})+'</div>';
+  d.seats.forEach((s,i)=>{const p=pos(i);
+    if(p==="bottom")html+=`<div class="odisc od-me ${canDiscard?"drop":""}" id="gDropDiscard"><div class="stk">${stack(pileOf(i))}</div><span>${canDiscard?"Taşı buraya sürükle":"Attığın"}</span></div>`;
+    else if(i===leftSeat)html+=`<div class="odisc od-left ${canDraw&&pileOf(i).length?"take":""}" id="gLeftDisc"><div class="stk">${stack(pileOf(i))}</div><span>${canDraw&&pileOf(i).length?"Dokun, al":"Soldan"}</span></div>`;
+    else html+=`<div class="odisc od-${p}"><div class="stk">${stack(pileOf(i))}</div></div>`;
   });
-  html+=`<div class="center"><div><div class="pile ${canDraw?"take":""}" id="gPile">${d.pileCount}</div><div class="lbl">${canDraw?"Çek":"Deste"}</div></div><div><div>${tileHTML(d.indicator,null,{sm:true})}</div><div class="lbl">Gösterge</div></div><div><div>${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><div class="lbl">Okey</div></div></div>`;
+  html+=`<div class="ocenter"><div class="odeck ${canDraw?"take":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":"Deste"}</span></div>
+    <div class="oind"><div class="indt">${tileHTML(d.indicator,null,{sm:true})}</div><span>Gösterge</span></div>
+    <div class="oind"><div class="indt">${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><span>Okey</span></div>
+    ${canDiscard?`<div class="ofinish" id="gDropFinish">🏁<span>Bitirmek için<br>taşı buraya at</span></div>`:""}</div>`;
   if(d.status==="over"){
     const w=d.winner;
     html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
+  html+='</div>';
   $("#gTable").innerHTML=html;
   // mesaj
   let msg="";
@@ -1753,11 +1760,11 @@ function renderGame(){
     else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
   }
   $("#gMsg").innerHTML=msg;
-  // ıstaka
-  const tiles=game.order.filter(t=>game.hand.includes(t));
-  let rack=tiles.map(t=>tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})).join("");
-  for(let i=tiles.length;i<16;i++)rack+=`<div></div>`;
-  $("#gRack").innerHTML=my>=0?rack:"";
+  // ıstaka: iki kat, 13'er yuva
+  syncSlots(game.hand);
+  const slot=(i)=>{const t=game.slots[i];return`<div class="slot" data-slot="${i}">${t==null?"":tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})}</div>`};
+  const tier=(from)=>`<div class="tier">${Array.from({length:SLOTS/2},(_,k)=>slot(from+k)).join("")}</div>`;
+  $("#gRack").innerHTML=my>=0?`<div class="rackwood">${tier(0)}${tier(SLOTS/2)}</div>`:"";
   $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";$("#pCtrl").style.display="none";
   $("#gDiscard").disabled=!(canDiscard&&game.sel!=null)||game.busy;
   $("#gFinish").disabled=!(canDiscard&&game.sel!=null)||game.busy;
@@ -1778,19 +1785,83 @@ async function gameMove(body){
   if(!game||game.busy)return;const id=game.id;game.busy=true;renderGame();
   const r=await gameApi({...body,id});
   if(game&&game.id===id){game.busy=false;
+    if(r&&r.error&&game.pendingOut!=null){const t=game.pendingOut;game.pendingOut=null;if(game.pendingSlot>=0&&game.slots[game.pendingSlot]==null)game.slots[game.pendingSlot]=t}
     if(r&&r.error==="nowin")toast("El bitmiyor. Taşlar seri ya da çift oluşturmalı.",3000);
     else if(r&&r.error==="balance")toast(r.who&&r.who.includes(me)?"Bakiyen masa ücretine yetmiyor":"Masadaki birinin bakiyesi yetmiyor",3500);
     else if(r&&r.error&&r.error!=="busy")toast("Hamle yapılamadı ("+r.error+")");
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}
 }
-$("#gRack").addEventListener("click",e=>{
-  const el=e.target.closest(".tile");if(!el||!game)return;const t=+el.dataset.t;
-  if(game.sel==null){game.sel=t}
-  else if(game.sel===t){game.sel=null}
-  else{const a=game.order.indexOf(game.sel),b=game.order.indexOf(t);if(a>=0&&b>=0){[game.order[a],game.order[b]]=[game.order[b],game.order[a]]}game.sel=null}
-  game.newTiles=null;renderGame();
+/* ıstaka: dokun = seç, sürükle = yerini değiştir / at / bitir, çift dokun = at */
+const SLOTS=26;
+function syncSlots(tiles){
+  if(!game.slots||game.slots.length!==SLOTS)game.slots=Array(SLOTS).fill(null);
+  if(game.pendingOut!=null)tiles=tiles.filter(t=>t!==game.pendingOut);
+  const set=new Set(tiles);
+  game.slots=game.slots.map(t=>t!=null&&set.has(t)?t:null);
+  const placed=new Set(game.slots.filter(t=>t!=null));
+  for(const t of tiles){if(placed.has(t))continue;
+    let last=-1;game.slots.forEach((x,i)=>{if(x!=null)last=i});
+    let i=game.slots.findIndex((x,k)=>x==null&&k>last);if(i<0)i=game.slots.indexOf(null);
+    if(i<0)break;game.slots[i]=t;placed.add(t)}
+}
+let rackDrag=null,lastTap={t:null,at:0};
+$("#gRack").addEventListener("pointerdown",e=>{
+  const el=e.target.closest(".tile");if(!el||!game||el.closest(".tile.empty"))return;
+  e.preventDefault();const t=+el.dataset.t;const r=el.getBoundingClientRect();
+  rackDrag={t,el,x0:e.clientX,y0:e.clientY,dx:e.clientX-r.left,dy:e.clientY-r.top,w:r.width,h:r.height,moved:false,ghost:null,pid:e.pointerId};
+  try{el.setPointerCapture(e.pointerId)}catch(_){}
 });
+$("#gRack").addEventListener("pointermove",e=>{
+  const g=rackDrag;if(!g)return;
+  if(!g.moved&&Math.hypot(e.clientX-g.x0,e.clientY-g.y0)<7)return;
+  if(!g.moved){g.moved=true;g.ghost=g.el.cloneNode(true);g.ghost.classList.add("ghost");g.ghost.classList.remove("sel","new");
+    Object.assign(g.ghost.style,{width:g.w+"px",height:g.h+"px",fontSize:getComputedStyle(g.el).fontSize,paddingTop:getComputedStyle(g.el).paddingTop});
+    g.ghost.querySelector("i")&&Object.assign(g.ghost.querySelector("i").style,{width:(g.w*.34)+"px",marginTop:(g.w*.09)+"px"});document.body.appendChild(g.ghost);g.el.classList.add("lifting");sfx("tile")}
+  g.ghost.style.transform=`translate(${e.clientX-g.dx}px,${e.clientY-g.dy}px) scale(1.12)`;
+  document.querySelectorAll(".hov").forEach(x=>x.classList.remove("hov"));
+  const tgt=dropTarget(e.clientX,e.clientY);if(tgt)tgt.classList.add("hov");
+});
+function dropTarget(x,y){
+  if(rackDrag&&rackDrag.ghost)rackDrag.ghost.style.display="none";
+  const el=document.elementFromPoint(x,y);
+  if(rackDrag&&rackDrag.ghost)rackDrag.ghost.style.display="";
+  if(!el)return null;
+  return el.closest(".slot")||(game.canDiscard?el.closest("#gDropDiscard,#gDropFinish"):null);
+}
+function endRackDrag(e,cancel){
+  const g=rackDrag;rackDrag=null;if(!g)return;
+  document.querySelectorAll(".hov").forEach(x=>x.classList.remove("hov"));
+  if(g.ghost)g.ghost.remove();g.el.classList.remove("lifting");
+  if(cancel)return;
+  if(!g.moved){
+    const now=Date.now();
+    if(lastTap.t===g.t&&now-lastTap.at<330&&game.canDiscard){lastTap={t:null,at:0};discardTile(g.t);return}
+    lastTap={t:g.t,at:now};
+    game.sel=game.sel===g.t?null:g.t;game.newTiles=null;renderGame();return;
+  }
+  const tgt=dropTarget(e.clientX,e.clientY);if(!tgt){renderGame();return}
+  if(tgt.id==="gDropDiscard"){discardTile(g.t);return}
+  if(tgt.id==="gDropFinish"){game.sel=g.t;gameMove({action:"finish",tile:g.t});return}
+  const to=+tgt.dataset.slot,from=game.slots.indexOf(g.t);
+  if(from<0||to===from){renderGame();return}
+  // hedef doluysa: taşları kaydırarak araya sok (aynı kat içinde), olmazsa yer değiştir
+  const s=game.slots;
+  if(s[to]==null){s[to]=g.t;s[from]=null}
+  else{const rowEnd=to<SLOTS/2?SLOTS/2:SLOTS;let gap=-1;for(let k=to;k<rowEnd;k++)if(s[k]==null||k===from){gap=k;break}
+    if(gap>=0&&(from<to||from>=rowEnd||from<(to<SLOTS/2?0:SLOTS/2))){s[from]=null;for(let k=gap;k>to;k--)s[k]=s[k-1];s[to]=g.t}
+    else{s[from]=s[to];s[to]=g.t}}
+  game.sel=null;game.newTiles=null;sfx("tile");renderGame();
+}
+$("#gRack").addEventListener("pointerup",e=>endRackDrag(e,false));
+$("#gRack").addEventListener("pointercancel",e=>endRackDrag(e,true));
+function discardTile(t){
+  if(!game||!game.canDiscard||game.busy)return;
+  // anında göster, sunucu onaylayınca kesinleşir
+  const i=game.slots.indexOf(t);if(i>=0)game.slots[i]=null;
+  game.pendingOut=t;game.pendingSlot=i;game.sel=null;sfx("tile");
+  gameMove({action:"discard",tile:t});
+}
 /* ---------- oyunlar: Bilardo (8 top) ---------- */
 // Vuruş sunucuda simüle edilir. İstemci aynı fizik koduyla vuruşları tekrar oynatır (animasyon), sonra sunucunun sonucuna oturur.
 const BALL_COL=["#fff","#F2C200","#1E4FD8","#D7261E","#5B2A86","#F07A12","#127A3A","#7A1B1B","#111"];
@@ -1827,12 +1898,12 @@ function renderPool(d,my){
         game.place=c&&P.canPlace(others,c.x,c.y,d.ballInHand==="kitchen")?{x:c.x,y:c.y}:findSpot(others,d.ballInHand==="kitchen");
     }else game.place=null;
     if(myTurn&&!game.aim){const c=curCue();const t=d.balls.find(b=>b.i!==0);game.aim=c&&t?{x:t.x-c.x,y:t.y-c.y}:{x:1,y:0}}
-    $("#pCtrl").style.display=myTurn?"":"none";
-    $("#pShoot").disabled=!myTurn||game.busy;
+    $("#pCtrl").style.display="";$("#pCtrl").style.visibility=myTurn&&d.status==="play"?"visible":"hidden";
+    $("#gamescr").classList.toggle("myturn",myTurn&&!game.busy);
     let msg="";
     if(d.status==="play"){
       if(my<0)msg="İzliyorsun";
-      else if(myTurn)msg=game.place?"Beyaz topu sürükleyip yerleştir, sonra nişan al":"Sıra sende: masaya dokunup nişan al, gücü seç, Vur";
+      else if(myTurn)msg=game.place?"Beyaz topu sürükleyip yerleştir, sonra nişan al":"Sıra sende: parmağını kaydırıp nişan al, sağdaki ıstakayı çekip bırak";
       else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
       if(d.log)msg=`<span style="opacity:.8;font-weight:500">${esc(d.log)}</span><br>`+msg;
     }
@@ -1842,7 +1913,7 @@ function renderPool(d,my){
       const w=d.winner;
       ov.innerHTML=`<div class="overbox"><b style="font-size:18px">${w==null?"Oyun yarım kaldı":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}</div>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`;
       const ag=$("#gAgain");if(ag)ag.onclick=()=>{game.aim=null;gameMove({action:"again"})};
-      $("#pCtrl").style.display="none";
+      $("#pCtrl").style.visibility="hidden";$("#gamescr").classList.remove("myturn");
     }else ov.innerHTML="";
     drawPool();
   }
@@ -1851,7 +1922,7 @@ function findSpot(others,kitchen){for(const [x,y] of [[200,250],[150,250],[200,1
 function curCue(){const d=game.data;if(game.place)return game.place;return(game.pview||d.balls||[]).find(b=>b.i===0)||null}
 function poolBalls(){const d=game.data;let bs=(game.pview||d.balls||[]);if(game.place&&!game.pview)bs=bs.filter(b=>b.i!==0).concat([{i:0,...game.place}]);return bs}
 function playShots(list,done){
-  game.anim=true;$("#pCtrl").style.display="none";
+  game.anim=true;$("#pCtrl").style.visibility="hidden";$("#gamescr").classList.remove("myturn");
   const next=()=>{
     if(!game)return;const sh=list.shift();
     if(!sh){game.anim=false;done();return}
@@ -1866,95 +1937,198 @@ function playShots(list,done){
   next();
 }
 function poolLayout(){
-  const cv=$("#pc");if(!cv)return null;const box=cv.parentElement;const cw=box.clientWidth,ch=box.clientHeight;const dpr=window.devicePixelRatio||1;
-  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.width=cw+"px";cv.style.height=ch+"px"}
-  const M=42,TW=P.W+2*M,TH=P.H+2*M,rot=ch>cw;
+  const cv=$("#pc");if(!cv)return null;const box=cv.parentElement;const cw=box.clientWidth,ch=box.clientHeight;const dpr=Math.min(2,window.devicePixelRatio||1);
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.width=cw+"px";cv.style.height=ch+"px";game.pstatic=null}
+  const M=48,TW=P.W+2*M,TH=P.H+2*M,rot=ch>cw;
   const s=rot?Math.min(cw/TH,ch/TW):Math.min(cw/TW,ch/TH);
   const ox=rot?(cw-TH*s)/2+M*s:(cw-TW*s)/2+M*s,oy=rot?(ch-TW*s)/2+M*s:(ch-TH*s)/2+M*s;
-  return{cv,dpr,s,ox,oy,rot,M,
+  return{cv,dpr,s,ox,oy,rot,M,cw,ch,
     m:rot?[0,s*dpr,-s*dpr,0,(ox+P.H*s)*dpr,oy*dpr]:[s*dpr,0,0,s*dpr,ox*dpr,oy*dpr],
     toT:(sx,sy)=>rot?{x:(sy-oy)/s,y:P.H-(sx-ox)/s}:{x:(sx-ox)/s,y:(sy-oy)/s}};
 }
-function drawPool(){
-  if(!game||!game.data)return;const L=poolLayout();if(!L)return;const {cv,M}=L;const c=cv.getContext("2d");
-  c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,cv.width,cv.height);c.setTransform(...L.m);
+// Masa (değişmeyen kısım) bir kez çizilip saklanır; her karede sadece toplar ve ıstaka çizilir
+function poolStatic(L){
+  const key=[L.cv.width,L.cv.height,mySkin("table"),mySkin("rack")].join();
+  if(game.pstatic&&game.pstatic.key===key)return game.pstatic.cv;
+  const cv=document.createElement("canvas");cv.width=L.cv.width;cv.height=L.cv.height;const c=cv.getContext("2d");c.setTransform(...L.m);
+  const M=L.M,W=P.W,H=P.H;
   const felt=FELT_COL[mySkin("table")]||FELT_COL.yesil,rail=RAIL_COL[mySkin("rack")]||RAIL_COL.ceviz;
-  c.fillStyle=rail;roundRect(c,-M,-M,P.W+2*M,P.H+2*M,26);c.fill();
-  c.fillStyle="rgba(0,0,0,.25)";c.fillRect(-6,-6,P.W+12,P.H+12);
-  c.fillStyle=felt;c.fillRect(0,0,P.W,P.H);
-  const gr=c.createRadialGradient(P.W/2,P.H/2,40,P.W/2,P.H/2,P.W*0.6);gr.addColorStop(0,"rgba(255,255,255,.10)");gr.addColorStop(1,"rgba(0,0,0,.22)");c.fillStyle=gr;c.fillRect(0,0,P.W,P.H);
-  if(mySkin("table")==="vip_altin"){c.strokeStyle="#c9a43a";c.lineWidth=4;c.strokeRect(6,6,P.W-12,P.H-12)}
-  c.strokeStyle="rgba(255,255,255,.18)";c.lineWidth=2;c.beginPath();c.moveTo(P.HEAD_X,0);c.lineTo(P.HEAD_X,P.H);c.stroke();
-  c.fillStyle="rgba(255,255,255,.35)";[[250,P.H/2],[750,P.H/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3,0,7);c.fill()});
-  for(const [x,y,r] of P.POCKETS){c.fillStyle="#0a0a0a";c.beginPath();c.arc(x,y,r*0.85,0,7);c.fill()}
-  // elmas işaretler
-  c.fillStyle="rgba(255,255,255,.7)";for(let k=1;k<8;k++){if(k===4)continue;[[k*P.W/8,-M/2],[k*P.W/8,P.H+M/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3.5,0,7);c.fill()})}
-  for(let k=1;k<4;k++)[[-M/2,k*P.H/4],[P.W+M/2,k*P.H/4]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3.5,0,7);c.fill()});
-  const d=game.data,bs=poolBalls(),my=mySeatIdx(d);
-  const myTurn=d.status==="play"&&d.turn===my&&!game.anim&&!game.busy;
-  // nişan çizgisi
-  const cue=bs.find(b=>b.i===0);
-  if(myTurn&&cue&&game.aim){
-    const dl=Math.hypot(game.aim.x,game.aim.y)||1,ux=game.aim.x/dl,uy=game.aim.y/dl;
-    let tBest=Infinity,hit=null;
-    for(const b of bs){if(b.i===0)continue;const fx=cue.x-b.x,fy=cue.y-b.y;const bq=fx*ux+fy*uy,cq=fx*fx+fy*fy-4*P.R*P.R;const disc=bq*bq-cq;if(disc<0)continue;const t=-bq-Math.sqrt(disc);if(t>0&&t<tBest){tBest=t;hit=b}}
-    const tw=Math.min(ux>0?(P.W-P.R-cue.x)/ux:ux<0?(P.R-cue.x)/ux:Infinity,uy>0?(P.H-P.R-cue.y)/uy:uy<0?(P.R-cue.y)/uy:Infinity);
-    const t=Math.min(tBest,tw),gx=cue.x+ux*t,gy=cue.y+uy*t;
-    c.setLineDash([10,8]);c.strokeStyle="rgba(255,255,255,.85)";c.lineWidth=2.5;c.beginPath();c.moveTo(cue.x,cue.y);c.lineTo(gx,gy);c.stroke();c.setLineDash([]);
-    c.strokeStyle="rgba(255,255,255,.9)";c.lineWidth=2;c.beginPath();c.arc(gx,gy,P.R,0,7);c.stroke();
-    if(hit&&tBest<=tw){const nx=hit.x-gx,ny=hit.y-gy,nl=Math.hypot(nx,ny)||1;c.strokeStyle="rgba(255,235,120,.9)";c.lineWidth=3;c.beginPath();c.moveTo(hit.x,hit.y);c.lineTo(hit.x+nx/nl*90,hit.y+ny/nl*90);c.stroke()}
-    // ıstaka
-    const pw=(+$("#pPow").value||60)/100,back=P.R+8+pw*60;
-    c.strokeStyle="#d9b77c";c.lineWidth=7;c.lineCap="round";c.beginPath();c.moveTo(cue.x-ux*back,cue.y-uy*back);c.lineTo(cue.x-ux*(back+330),cue.y-uy*(back+330));c.stroke();
-    c.strokeStyle="#333";c.lineWidth=7;c.beginPath();c.moveTo(cue.x-ux*(back+250),cue.y-uy*(back+250));c.lineTo(cue.x-ux*(back+330),cue.y-uy*(back+330));c.stroke();c.lineCap="butt";
-  }
-  if(game.place&&!game.pview&&myTurn){c.strokeStyle="rgba(255,255,255,.6)";c.setLineDash([4,4]);c.lineWidth=2;c.beginPath();c.arc(game.place.x,game.place.y,P.R+7,0,7);c.stroke();c.setLineDash([])}
-  for(const b of bs)drawBall(c,b,L.rot);
+  // gölge
+  c.save();c.shadowColor="rgba(0,0,0,.6)";c.shadowBlur=30;c.fillStyle=rail;roundRect(c,-M,-M,W+2*M,H+2*M,30);c.fill();c.restore();
+  // ahşap kenar
+  let g=c.createLinearGradient(0,-M,0,H+M);g.addColorStop(0,shade(rail,40));g.addColorStop(.08,rail);g.addColorStop(.5,shade(rail,-15));g.addColorStop(.92,rail);g.addColorStop(1,shade(rail,-45));
+  c.fillStyle=g;roundRect(c,-M,-M,W+2*M,H+2*M,30);c.fill();
+  c.strokeStyle="rgba(255,255,255,.18)";c.lineWidth=2;roundRect(c,-M+3,-M+3,W+2*M-6,H+2*M-6,27);c.stroke();
+  // ahşap damarları
+  c.save();roundRect(c,-M,-M,W+2*M,H+2*M,30);c.clip();c.globalAlpha=.08;c.strokeStyle="#000";c.lineWidth=1.2;
+  for(let i=0;i<40;i++){const y=-M+((i*37)%(H+2*M));c.beginPath();c.moveTo(-M,y);c.bezierCurveTo(W*.3,y+8,W*.6,y-8,W+M,y+4);c.stroke()}c.restore();
+  // çuha
+  const fg=c.createRadialGradient(W/2,H/2,40,W/2,H/2,W*.62);fg.addColorStop(0,shade(felt,18));fg.addColorStop(1,shade(felt,-22));
+  c.fillStyle=fg;c.fillRect(-14,-14,W+28,H+28);
+  // çuha dokusu
+  c.save();c.globalAlpha=.07;for(let i=0;i<2600;i++){c.fillStyle=i%2?"#fff":"#000";c.fillRect(((i*9301+49297)%233280)/233280*W,((i*4096+150889)%714025)/714025*H,1.2,1.2)}c.restore();
+  // bantlar (lastik)
+  const cush=shade(felt,-30);c.fillStyle=cush;
+  const segs=[[0,-14,W/2,0,true],[W/2,-14,W,0,true],[0,H,W/2,H+14,false],[W/2,H,W,H+14,false]];
+  for(const [x0,y0,x1,y1,top] of segs){const pad0=x0===0?36:26,pad1=x1===W?36:26;c.beginPath();
+    if(top){c.moveTo(x0+pad0-12,y0);c.lineTo(x1-pad1+12,y0);c.lineTo(x1-pad1,y1);c.lineTo(x0+pad0,y1)}else{c.moveTo(x0+pad0,y0);c.lineTo(x1-pad1,y0);c.lineTo(x1-pad1+12,y1);c.lineTo(x0+pad0-12,y1)}c.closePath();c.fill()}
+  for(const left of [true,false]){const x0=left?-14:W,x1=left?0:W+14;c.beginPath();
+    if(left){c.moveTo(x0,24);c.lineTo(x1,36);c.lineTo(x1,H-36);c.lineTo(x0,H-24)}else{c.moveTo(x1,24);c.lineTo(x0,36);c.lineTo(x0,H-36);c.lineTo(x1,H-24)}c.closePath();c.fill()}
+  c.strokeStyle="rgba(0,0,0,.35)";c.lineWidth=2;c.strokeRect(0,0,W,H);
+  // elmaslar
+  for(let k=1;k<8;k++){if(k===4)continue;for(const y of [-M/2-6,H+M/2+6])pearl(c,k*W/8,y)}
+  for(let k=1;k<4;k++)for(const x of [-M/2-6,W+M/2+6])pearl(c,x,k*H/4);
+  // cepler
+  for(const [x,y,r] of P.POCKETS){
+    const rim=c.createRadialGradient(x,y,r*.6,x,y,r*1.15);rim.addColorStop(0,"#1a1a1a");rim.addColorStop(.75,"#3a3a3a");rim.addColorStop(1,"rgba(200,200,200,.0)");
+    c.fillStyle=rim;c.beginPath();c.arc(x,y,r*1.15,0,7);c.fill();
+    const hole=c.createRadialGradient(x-r*.2,y-r*.2,2,x,y,r*.9);hole.addColorStop(0,"#000");hole.addColorStop(1,"#111");
+    c.fillStyle=hole;c.beginPath();c.arc(x,y,r*.88,0,7);c.fill()}
+  // başlangıç çizgisi ve noktalar
+  c.strokeStyle="rgba(255,255,255,.14)";c.lineWidth=2;c.beginPath();c.moveTo(P.HEAD_X,0);c.lineTo(P.HEAD_X,H);c.stroke();
+  c.fillStyle="rgba(255,255,255,.3)";[[250,H/2],[750,H/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3,0,7);c.fill()});
+  if(mySkin("table")==="vip_altin"){c.strokeStyle="#c9a43a";c.lineWidth=3;c.strokeRect(8,8,W-16,H-16)}
+  game.pstatic={key,cv};return cv;
 }
 function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
-function drawBall(c,b,rot){
-  const R=P.R,col=BALL_COL[b.i>8?b.i-8:b.i];
-  c.save();c.translate(b.x,b.y);if(rot)c.rotate(-Math.PI/2);
-  c.fillStyle="rgba(0,0,0,.3)";c.beginPath();c.arc(1.8,2.2,R,0,7);c.fill();
-  c.beginPath();c.arc(0,0,R,0,7);c.fillStyle=b.i>8?"#fff":col;c.fill();
-  if(b.i>8){c.save();c.beginPath();c.arc(0,0,R,0,7);c.clip();c.fillStyle=col;c.fillRect(-R,-R*0.55,2*R,R*1.1);c.restore()}
-  if(b.i>0){c.fillStyle="#fff";c.beginPath();c.arc(0,0,R*0.5,0,7);c.fill();c.fillStyle="#111";c.font=`bold ${b.i>9?8:9}px sans-serif`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(b.i),0,0.5)}
-  const hl=c.createRadialGradient(-R*0.35,-R*0.4,1,0,0,R);hl.addColorStop(0,"rgba(255,255,255,.55)");hl.addColorStop(0.35,"rgba(255,255,255,0)");hl.addColorStop(1,"rgba(0,0,0,.25)");
-  c.fillStyle=hl;c.beginPath();c.arc(0,0,R,0,7);c.fill();
-  c.restore();
+function pearl(c,x,y){const g=c.createRadialGradient(x-1.5,y-1.5,.5,x,y,5);g.addColorStop(0,"#fff");g.addColorStop(1,"#cfc6b0");c.fillStyle=g;c.beginPath();c.ellipse(x,y,5,3.6,0,0,7);c.fill()}
+function shade(hex,p){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;const f=v=>Math.max(0,Math.min(255,Math.round(v+(p>0?(255-v):v)*p/100)));return"#"+[f(r),f(g),f(b)].map(v=>v.toString(16).padStart(2,"0")).join("")}
+// Top resimleri bir kez çizilip saklanır
+const ballSprites={};
+function ballSprite(i,px){
+  const k=i+"_"+px;if(ballSprites[k])return ballSprites[k];
+  const cv=document.createElement("canvas");cv.width=cv.height=px;const c=cv.getContext("2d");const r=px/2;const col=BALL_COL[i>8?i-8:i];
+  c.save();c.beginPath();c.arc(r,r,r-.5,0,7);c.clip();
+  c.fillStyle=i>8||i===0?"#f7f4ea":col;c.fillRect(0,0,px,px);
+  if(i>8){c.fillStyle=col;c.beginPath();c.ellipse(r,r,r*1.05,r*.56,0,0,7);c.fill()}
+  if(i>0){c.fillStyle="#fbfaf5";c.beginPath();c.arc(r,r,r*.44,0,7);c.fill();c.fillStyle="#111";c.font=`800 ${Math.round(r*(i>9?.52:.6))}px Arial`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(i),r,r+r*.03)}
+  if(i===0){c.fillStyle="rgba(200,0,0,.55)";c.beginPath();c.arc(r,r,r*.12,0,7);c.fill()}
+  const sh=c.createRadialGradient(r*.65,r*.6,r*.1,r,r,r*1.05);sh.addColorStop(0,"rgba(255,255,255,0)");sh.addColorStop(.7,"rgba(0,0,0,.12)");sh.addColorStop(1,"rgba(0,0,0,.55)");c.fillStyle=sh;c.fillRect(0,0,px,px);
+  const hl=c.createRadialGradient(r*.62,r*.55,0,r*.62,r*.55,r*.45);hl.addColorStop(0,"rgba(255,255,255,.95)");hl.addColorStop(.35,"rgba(255,255,255,.35)");hl.addColorStop(1,"rgba(255,255,255,0)");c.fillStyle=hl;c.fillRect(0,0,px,px);
+  c.restore();ballSprites[k]=cv;return cv;
+}
+function drawPool(){
+  if(!game||!game.data)return;const L=poolLayout();if(!L)return;const {cv}=L;const c=cv.getContext("2d");
+  c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,cv.width,cv.height);c.drawImage(poolStatic(L),0,0);c.setTransform(...L.m);
+  const d=game.data,bs=poolBalls(),my=mySeatIdx(d),R=P.R;
+  const myTurn=d.status==="play"&&d.turn===my&&!game.anim&&!game.busy;
+  // top gölgeleri
+  c.fillStyle="rgba(0,0,0,.35)";for(const b of bs){c.beginPath();c.ellipse(b.x+3,b.y+4,R*1.02,R*.9,0,0,7);c.fill()}
+  const cue=bs.find(b=>b.i===0);
+  let ux=0,uy=0;
+  if(myTurn&&cue&&game.aim){
+    const dl=Math.hypot(game.aim.x,game.aim.y)||1;ux=game.aim.x/dl;uy=game.aim.y/dl;
+    let tBest=Infinity,hit=null;
+    for(const b of bs){if(b.i===0)continue;const fx=cue.x-b.x,fy=cue.y-b.y;const bq=fx*ux+fy*uy,cq=fx*fx+fy*fy-4*R*R;const disc=bq*bq-cq;if(disc<0)continue;const t=-bq-Math.sqrt(disc);if(t>0&&t<tBest){tBest=t;hit=b}}
+    const tw=Math.min(ux>0?(P.W-R-cue.x)/ux:ux<0?(R-cue.x)/ux:Infinity,uy>0?(P.H-R-cue.y)/uy:uy<0?(R-cue.y)/uy:Infinity);
+    const t=Math.min(tBest,tw),gx=cue.x+ux*t,gy=cue.y+uy*t;
+    c.strokeStyle="rgba(255,255,255,.9)";c.lineWidth=2;c.setLineDash([]);c.beginPath();c.moveTo(cue.x+ux*R,cue.y+uy*R);c.lineTo(gx,gy);c.stroke();
+    c.strokeStyle="rgba(255,255,255,.95)";c.lineWidth=2;c.beginPath();c.arc(gx,gy,R,0,7);c.stroke();
+    if(hit&&tBest<=tw){
+      const nx=hit.x-gx,ny=hit.y-gy,nl=Math.hypot(nx,ny)||1,ex=nx/nl,ey=ny/nl;
+      const mine=d.groups?d.groups[my]:null,bad=mine&&P.typeOf(hit.i)!==mine&&!(hit.i===8&&!bs.some(b=>P.typeOf(b.i)===mine));
+      c.strokeStyle=bad?"rgba(255,80,80,.95)":"rgba(255,235,120,.95)";c.lineWidth=3;c.beginPath();c.moveTo(hit.x,hit.y);c.lineTo(hit.x+ex*110,hit.y+ey*110);c.stroke();
+      // beyaz topun sekme yönü
+      const dot=ux*ex+uy*ey,tx=ux-ex*dot,ty=uy-ey*dot,tl=Math.hypot(tx,ty);
+      if(tl>.05){c.strokeStyle="rgba(255,255,255,.5)";c.lineWidth=2;c.setLineDash([6,6]);c.beginPath();c.moveTo(gx,gy);c.lineTo(gx+tx/tl*60*tl,gy+ty/tl*60*tl);c.stroke();c.setLineDash([])}
+      if(bad){c.strokeStyle="rgba(255,80,80,.95)";c.lineWidth=3;c.beginPath();c.moveTo(gx-6,gy-6);c.lineTo(gx+6,gy+6);c.moveTo(gx+6,gy-6);c.lineTo(gx-6,gy+6);c.stroke()}
+    }
+  }
+  if(game.place&&!game.pview&&myTurn){c.strokeStyle="rgba(255,255,255,.7)";c.setLineDash([5,5]);c.lineWidth=2;c.beginPath();c.arc(game.place.x,game.place.y,R+8,0,7);c.stroke();c.setLineDash([]);
+    c.fillStyle="rgba(255,255,255,.85)";c.font="bold 16px Arial";c.textAlign="center";c.save();c.translate(game.place.x,game.place.y-R-16);if(L.rot)c.rotate(-Math.PI/2);c.fillText("✋",0,0);c.restore()}
+  // toplar
+  const px=Math.max(8,Math.round(2*R*L.s*L.dpr));
+  for(const b of bs){const sp=ballSprite(b.i,px);c.save();c.translate(b.x,b.y);if(L.rot)c.rotate(-Math.PI/2);c.drawImage(sp,-R,-R,2*R,2*R);c.restore()}
+  // ıstaka
+  if(myTurn&&cue&&game.aim)drawCue(c,cue,ux,uy,game.pull||0);
+}
+function drawCue(c,cue,ux,uy,pull){
+  const R=P.R,back=R+6+pull*90,len=560;
+  const x0=cue.x-ux*back,y0=cue.y-uy*back,x1=cue.x-ux*(back+len),y1=cue.y-uy*(back+len);
+  const nx=-uy,ny=ux;
+  // gölge
+  c.strokeStyle="rgba(0,0,0,.35)";c.lineWidth=9;c.lineCap="round";c.beginPath();c.moveTo(x0+6,y0+8);c.lineTo(x1+6,y1+8);c.stroke();
+  const seg=(a,b,w0,w1,col)=>{const ax=cue.x-ux*(back+a),ay=cue.y-uy*(back+a),bx=cue.x-ux*(back+b),by=cue.y-uy*(back+b);
+    const g=c.createLinearGradient(ax+nx*w1,ay+ny*w1,ax-nx*w1,ay-ny*w1);g.addColorStop(0,shade(col,-35));g.addColorStop(.35,shade(col,35));g.addColorStop(1,shade(col,-45));
+    c.fillStyle=g;c.beginPath();c.moveTo(ax+nx*w0,ay+ny*w0);c.lineTo(bx+nx*w1,by+ny*w1);c.lineTo(bx-nx*w1,by-ny*w1);c.lineTo(ax-nx*w0,ay-ny*w0);c.closePath();c.fill()};
+  seg(0,4,2.6,2.7,"#3a6fd8");      // uç (mavi tebeşir)
+  seg(4,16,2.7,2.9,"#f2f2ee");     // fildişi halka
+  seg(16,330,2.9,4.4,"#e3c48c");   // akçaağaç gövde
+  seg(330,340,4.4,4.5,"#c0c0c0");  // metal ek yeri
+  seg(340,470,4.5,5.6,"#2a1a12");  // abanoz
+  seg(470,490,5.6,5.8,"#c9a43a");  // altın halka
+  seg(490,len,5.8,6.2,"#1a1a1a");  // sap
 }
 function poolInput(){
-  const cv=$("#pc");let drag=null;
+  const cv=$("#pc");let drag=null,lastAng=null;
   const pt=e=>{const r=cv.getBoundingClientRect();const L=poolLayout();return L.toT(e.clientX-r.left,e.clientY-r.top)};
   const myTurn=()=>{const d=game&&game.data;return d&&d.status==="play"&&d.turn===mySeatIdx(d)&&!game.anim&&!game.busy};
   cv.addEventListener("pointerdown",e=>{if(!myTurn())return;const p=pt(e);e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(_){}
-    if(game.place&&Math.hypot(p.x-game.place.x,p.y-game.place.y)<P.R*3){drag="cue";return}
-    drag="aim";aimAt(p)});
+    if(game.place&&Math.hypot(p.x-game.place.x,p.y-game.place.y)<P.R*3.5){drag="cue";return}
+    const c=curCue();if(!c)return;
+    // beyaz topa yakınsa parmağı göster, uzaktaysa sürüklerken açıyı yavaşça döndür (ince ayar)
+    drag="aim";lastAng=Math.atan2(p.y-c.y,p.x-c.x);if(Math.hypot(p.x-c.x,p.y-c.y)>P.R*4&&!game.aimTouched)aimAt(p);game.aimTouched=true});
   cv.addEventListener("pointermove",e=>{if(!drag||!myTurn())return;const p=pt(e);
     if(drag==="cue"){const d=game.data,others=d.balls.filter(b=>b.i!==0),k=d.ballInHand==="kitchen";
       const x=Math.max(P.R,Math.min(k?P.HEAD_X:P.W-P.R,p.x)),y=Math.max(P.R,Math.min(P.H-P.R,p.y));
-      if(P.canPlace(others,x,y,k)){game.place={x,y};drawPool()}}
-    else aimAt(p)});
+      if(P.canPlace(others,x,y,k)){game.place={x,y};drawPool()}return}
+    const c=curCue();if(!c)return;const ang=Math.atan2(p.y-c.y,p.x-c.x);
+    let da=ang-lastAng;if(da>Math.PI)da-=2*Math.PI;if(da<-Math.PI)da+=2*Math.PI;lastAng=ang;
+    const dist=Math.hypot(p.x-c.x,p.y-c.y),k=dist<120?1:Math.max(.25,120/dist); // uzakta daha hassas
+    const cur=Math.atan2(game.aim.y,game.aim.x)+da*k;game.aim={x:Math.cos(cur),y:Math.sin(cur)};drawPool()});
   const up=()=>{drag=null};cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+  cv.addEventListener("dblclick",e=>{if(!myTurn())return;aimAt(pt(e))});
   function aimAt(p){const c=curCue();if(!c)return;const ax=p.x-c.x,ay=p.y-c.y;if(Math.hypot(ax,ay)<4)return;game.aim={x:ax,y:ay};drawPool()}
+  // güç çubuğu: aşağı çek, bırak = vur
+  const bar=$("#pPower");let pd=null;
+  const setPull=(v)=>{game.pull=Math.max(0,Math.min(1,v));bar.style.setProperty("--p",game.pull);$("#pPowV").textContent=Math.round(game.pull*100)+"%";drawPool()};
+  bar.addEventListener("pointerdown",e=>{if(!myTurn())return;e.preventDefault();try{bar.setPointerCapture(e.pointerId)}catch(_){}pd={y0:e.clientY,h:bar.getBoundingClientRect().height};setPull(0)});
+  bar.addEventListener("pointermove",e=>{if(!pd)return;setPull((e.clientY-pd.y0)/(pd.h*.85))});
+  const rel=e=>{if(!pd)return;pd=null;const p=game.pull||0;if(p<.04){setPull(0);return}shoot(Math.max(.05,p))};
+  bar.addEventListener("pointerup",rel);bar.addEventListener("pointercancel",()=>{pd=null;setPull(0)});
 }
-$("#pPow").addEventListener("input",()=>{$("#pPowV").textContent=$("#pPow").value+"%";drawPool()});
-$("#pShoot").onclick=async()=>{sfx("ball");
-  if(!game||!game.data||!game.aim||game.anim)return;
-  const body={action:"shoot",dx:game.aim.x,dy:game.aim.y,power:(+$("#pPow").value||60)/100};
+async function shoot(power){
+  if(!game||!game.data||!game.aim||game.anim||game.busy)return;
+  // ıstaka ileri hareket animasyonu
+  const p0=game.pull||power;const t0=performance.now();
+  await new Promise(res=>{const step=now=>{const k=Math.min(1,(now-t0)/110);game.pull=p0*(1-k);drawPool();if(k<1)requestAnimationFrame(step);else res()};requestAnimationFrame(step)});
+  sfx("ball");
+  const body={action:"shoot",dx:game.aim.x,dy:game.aim.y,power};
   if(game.place){body.cx=game.place.x;body.cy=game.place.y}
-  game.aim=null;await gameMove(body);
-};
-window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type==="pool")drawPool()});
-$("#gDiscard").onclick=()=>{if(game&&game.sel!=null)gameMove({action:"discard",tile:game.sel})};
+  game.aim=null;game.pull=0;game.aimTouched=false;$("#pPower").style.setProperty("--p",0);
+  await gameMove(body);
+}
+// ince nişan düğmeleri (basılı tutunca döner)
+for(const [id,dir] of [["pRotL",-1],["pRotR",1]]){let t=null;const b=$("#"+id);
+  const tick=()=>{if(!game||!game.aim)return;const a=Math.atan2(game.aim.y,game.aim.x)+dir*0.0035;game.aim={x:Math.cos(a),y:Math.sin(a)};drawPool()};
+  b.addEventListener("pointerdown",e=>{e.preventDefault();tick();t=setInterval(tick,40)});["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>clearInterval(t)))}
+window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type==="pool"){game.pstatic=null;drawPool()}});
+
+$("#gDiscard").onclick=()=>{if(game&&game.sel!=null)discardTile(game.sel)};
 $("#gFinish").onclick=()=>{if(game&&game.sel!=null)gameMove({action:"finish",tile:game.sel})};
 function sortRack(mode){
   if(!game||!game.data||!game.data.indicator)return;const ok=tOkey(game.data.indicator);
   const key=t=>tIsWild(t,ok)?[9,99]:tIsFake(t)?[ok.c,ok.n]:[tColor(t),tNum(t)];
-  let arr=[...game.hand];
-  if(mode==="run")arr.sort((a,b)=>{const x=key(a),y=key(b);return x[0]-y[0]||x[1]-y[1]});
-  else{const k=t=>{const v=key(t);return v[0]*100+v[1]};const cnt={};arr.forEach(t=>cnt[k(t)]=(cnt[k(t)]||0)+1);arr.sort((a,b)=>(cnt[k(b)]-cnt[k(a)])||k(a)-k(b))}
-  game.order=arr;game.sel=null;game.newTiles=null;renderGame();
+  const tiles=[...game.hand];let groups=[];
+  if(mode==="run"){
+    // renge göre, ardışık sayılar bir grup
+    const by={};tiles.forEach(t=>{const [c]=key(t);(by[c]=by[c]||[]).push(t)});
+    Object.keys(by).sort().forEach(c=>{const arr=by[c].sort((a,b)=>key(a)[1]-key(b)[1]);let g=[];
+      arr.forEach(t=>{if(g.length&&key(t)[1]-key(g[g.length-1])[1]>1&&c!=="9"){groups.push(g);g=[]}g.push(t)});if(g.length)groups.push(g)});
+    // tek kalan taşlar en sonda yan yana dursun
+    const singles=groups.filter(g=>g.length<2).flat();groups=groups.filter(g=>g.length>=2);if(singles.length)groups.push(singles);
+  }else{
+    // aynı sayılar (farklı renk) ya da aynı taş çiftleri bir grup
+    const k=t=>{const v=key(t);return v[0]*100+v[1]};const by={};tiles.forEach(t=>{(by[k(t)]=by[k(t)]||[]).push(t)});
+    const pairs=Object.values(by).filter(g=>g.length>1),singles=Object.values(by).filter(g=>g.length===1).flat().sort((a,b)=>k(a)-k(b));
+    groups=[...pairs];if(singles.length)groups.push(singles);
+  }
+  // grupları aralarında birer boşlukla iki kata yerleştir
+  const slots=Array(SLOTS).fill(null);let pos=0;const half=SLOTS/2;
+  for(const g of groups){if(pos<half&&pos+g.length>half)pos=half;if(pos+g.length>SLOTS)pos=slots.indexOf(null);
+    for(const t of g){while(pos<SLOTS&&slots[pos]!=null)pos++;if(pos>=SLOTS)break;slots[pos++]=t}pos++}
+  for(const t of tiles)if(!slots.includes(t)){const i=slots.indexOf(null);if(i>=0)slots[i]=t}
+  game.slots=slots;game.sel=null;game.newTiles=null;sfx("tile");renderGame();
 }
 $("#gSortRun").onclick=()=>sortRack("run");
 $("#gSortPair").onclick=()=>sortRack("pair");

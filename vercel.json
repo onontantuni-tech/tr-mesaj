@@ -55,5 +55,8 @@
       "path": "/api/cron",
       "schedule": "1 21 * * *"
     }
+  ],
+  "regions": [
+    "fra1"
   ]
 }

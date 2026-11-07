@@ -442,6 +442,91 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   .fab{left:306px;right:auto}
   .row:hover{background:var(--bg)}
 }
+
+/* ===== Okey v2: gerçekçi masa, ıstaka ve taşlar ===== */
+.gamescr:not(.pool) .g-table{margin:6px 6px 0}
+.otable{position:absolute;inset:0}
+.ofelt{position:absolute;inset:0;border-radius:22px;box-shadow:inset 0 0 0 7px rgba(70,40,15,.95),inset 0 0 0 9px rgba(255,215,140,.35),inset 0 0 60px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.45);
+  background:radial-gradient(circle at 50% 45%,rgba(255,255,255,.10),transparent 60%),repeating-radial-gradient(circle at 30% 30%,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)}
+.oseat{position:absolute;display:flex;align-items:center;gap:7px;z-index:2}
+.oseat .oav .av{width:42px;height:42px;font-size:15px;border:2px solid rgba(255,255,255,.55);box-shadow:0 3px 8px rgba(0,0,0,.5)}
+.oseat.turn .oav .av{border-color:#FFD54F;animation:pulse 1.2s infinite}
+.oname{background:rgba(0,0,0,.45);border-radius:10px;padding:3px 9px;display:flex;flex-direction:column;line-height:1.2;max-width:118px;backdrop-filter:blur(4px)}
+.oname b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.oname span{font-size:10.5px;opacity:.8}
+.oseat.turn .oname{background:rgba(224,168,0,.85);color:#1b1300}
+.ohand{display:flex}.ohand span{width:7px;height:20px;margin-left:-3px;border-radius:2px;background:linear-gradient(90deg,#f4ecd6,#d9cba6);box-shadow:0 1px 2px rgba(0,0,0,.5)}
+.o-top{top:14px;left:50%;transform:translateX(-50%);flex-direction:row}
+.o-left{left:12px;top:17%;flex-direction:column;align-items:flex-start}
+.o-right{right:12px;top:17%;flex-direction:column;align-items:flex-end}
+.o-left .ohand,.o-right .ohand{display:none}
+.odisc{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:600;text-shadow:0 1px 2px #000;z-index:1}
+.odisc .stk{position:relative;width:40px;height:55px}
+.odisc .st{position:absolute;left:calc(var(--k,0)*3px);top:calc(var(--k,0)*-3px)}
+.od-me{right:14px;bottom:12px}.od-left{left:14px;bottom:12px}.od-top{top:76px;left:50%;transform:translateX(-50%)}
+.od-right{right:18px;top:calc(17% + 96px)}
+.odisc.take .stk .st:last-child .tile,.odisc.drop .stk{box-shadow:0 0 0 3px #4FC3F7;border-radius:5px;animation:pulse2 1s infinite}
+.odisc.drop{padding:6px;border:2px dashed rgba(255,255,255,.55);border-radius:12px}
+.odisc.hov,.ofinish.hov{background:rgba(79,195,247,.3);transform:scale(1.08)}
+.od-top.hov{transform:translateX(-50%) scale(1.08)}
+.ocenter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;gap:12px;align-items:flex-end;z-index:1}
+.odeck,.oind{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:600;text-shadow:0 1px 2px #000}
+.odeck{cursor:pointer;position:relative}.odeck b{position:absolute;top:18px;left:50%;transform:translateX(-50%);font-size:15px;color:#5a4a28;text-shadow:none}
+.dstack{position:relative;width:44px;height:60px}
+.tback{position:relative;width:40px;height:55px}
+.tback span{position:absolute;inset:0;border-radius:5px;background:linear-gradient(160deg,#fbf5e4,#e5d8b4);box-shadow:inset 0 -3px 0 #cdbb8c,0 1px 2px rgba(0,0,0,.45)}
+.tback span:nth-child(2){transform:translate(2px,-3px)}.tback span:nth-child(3){transform:translate(4px,-6px)}
+.odeck.take .tback span:last-child{box-shadow:0 0 0 3px #4FC3F7,inset 0 -3px 0 #cdbb8c;animation:pulse2 1s infinite}
+.indt .tile{transform:rotate(-4deg)}
+.ofinish{display:flex;flex-direction:column;align-items:center;justify-content:center;width:62px;height:62px;border-radius:50%;border:2px dashed #FFD54F;font-size:20px;text-align:center;transition:transform .12s}
+.ofinish span{font-size:8.5px;line-height:1.15;font-weight:700}
+/* taş */
+.tile{background:linear-gradient(170deg,#fffef9 0%,#f6efdc 60%,#eadfc2 100%);border-radius:5px;box-shadow:inset 0 -3px 0 #d8c89d,inset 0 1px 0 #fff,0 1px 0 #b29f6e,0 2px 4px rgba(0,0,0,.35);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:12%;aspect-ratio:auto;font-size:inherit;cursor:grab;touch-action:none}
+.tile b{font-family:"Arial Black","Segoe UI Black",Arial,sans-serif;font-weight:900;line-height:1;letter-spacing:-.5px}
+.tile i{display:block;width:34%;aspect-ratio:1;border-radius:50%;margin-top:9%;background:currentColor;opacity:.9;-webkit-mask:radial-gradient(circle at 70% 35%,transparent 38%,#000 40%);mask:radial-gradient(circle at 70% 35%,transparent 38%,#000 40%)}
+.tile.c0{color:#C62828}.tile.c1{color:#E09B00}.tile.c2{color:#1565C0}.tile.c3{color:#1a1a1a}
+.tile.fake{color:#0E7C3A}
+.tile.wild{box-shadow:0 0 0 2px #FFC107,inset 0 -3px 0 #d8c89d,0 2px 8px rgba(255,193,7,.9)}
+.tile.sel{transform:translateY(-22%);box-shadow:0 0 0 2px #29B6F6,inset 0 -3px 0 #d8c89d,0 6px 10px rgba(0,0,0,.45)}
+.tile.sm{width:40px;height:55px;font-size:23px;padding-top:7px}
+.tile.empty{background:rgba(0,0,0,.18);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2)}
+.tile.lifting{opacity:.25}
+.tile.ghost{position:fixed;left:0;top:0;z-index:9999;pointer-events:none;box-shadow:0 12px 22px rgba(0,0,0,.5),inset 0 -3px 0 #d8c89d;transition:none}
+/* ıstaka */
+.g-rack{background:none!important;box-shadow:none!important;padding:0 4px;margin:0;min-height:0;display:block}
+.rackwood{--w1:#a86f36;--w2:#7a4a1e;--w3:#5b3412;border-radius:14px 14px 8px 8px;padding:6px 6px 4px;
+  background:repeating-linear-gradient(92deg,rgba(255,255,255,.05) 0 2px,transparent 2px 9px),repeating-linear-gradient(90deg,rgba(0,0,0,.06) 0 1px,transparent 1px 23px),linear-gradient(180deg,var(--w1),var(--w2));
+  box-shadow:0 -1px 0 rgba(255,255,255,.25) inset,0 8px 18px rgba(0,0,0,.55)}
+.tier{display:grid;grid-template-columns:repeat(13,1fr);gap:2px;padding:2px 2px 9px;position:relative}
+.tier::after{content:"";position:absolute;left:-4px;right:-4px;bottom:0;height:9px;border-radius:3px;background:linear-gradient(180deg,var(--w2),var(--w3));box-shadow:0 2px 3px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.25)}
+.tier+.tier{margin-top:4px}
+.slot{aspect-ratio:3/4.2;container-type:inline-size;border-radius:4px;position:relative;z-index:1}
+.slot.hov{background:rgba(255,255,255,.28);box-shadow:inset 0 0 0 2px #4FC3F7}
+.slot .tile{width:100%;height:100%;font-size:52cqw}
+.gamescr.rack-abanoz .rackwood{--w1:#3d2a1e;--w2:#24170f;--w3:#130c07}
+.gamescr.rack-kiraz .rackwood{--w1:#b4503f;--w2:#7d2c22;--w3:#5a1d16}
+.gamescr.rack-altin .rackwood{--w1:#f3d77d;--w2:#c79a2a;--w3:#9b7516}
+.gamescr.rack-vip_sedef .rackwood{--w1:#f6efe6;--w2:#cdd8e8;--w3:#a9b5c8}
+.gamescr.rack-vip_elmas .rackwood{--w1:#e3f6ff;--w2:#8fc6e8;--w3:#5f9fc9;box-shadow:0 0 16px rgba(140,210,255,.6),0 8px 18px rgba(0,0,0,.5)}
+.gamescr:not(.pool) .g-actions{padding-top:6px}
+.gamescr:not(.pool) .g-actions button{padding:9px 4px;font-size:13.5px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18)}
+.gamescr:not(.pool) .g-actions button.pri{background:linear-gradient(#e53935,#b71c1c)}
+.gamescr:not(.pool) .g-actions button.gold{background:linear-gradient(#ffd54f,#e0a800);color:#2b1d00}
+.gamescr:not(.pool) .g-msg{font-size:13px;min-height:24px;padding:4px 10px}
+@media (min-width:700px){.ohand span{height:26px;width:9px}.tile.sm{width:46px;height:63px;font-size:27px}.odisc .stk,.tback{width:46px;height:63px}.dstack{width:50px;height:68px}.gamescr:not(.pool) .g-rack{max-width:760px;margin:0 auto;width:100%}}
+
+/* ===== Bilardo v2 ===== */
+.gamescr.pool{background:radial-gradient(ellipse at 50% 30%,#3a3f4a 0%,#1a1d24 60%,#0d0f13 100%)}
+.gamescr.pool .pcv{margin-right:54px}
+.ppower{display:none;position:absolute;right:5px;top:130px;bottom:110px;width:44px;border-radius:23px;background:linear-gradient(90deg,rgba(0,0,0,.55),rgba(30,30,30,.55));box-shadow:inset 0 0 0 2px rgba(255,255,255,.15);z-index:30;touch-action:none;--p:0;overflow:hidden}
+.gamescr.pool.myturn .ppower{display:block}
+.ppower .pfill{position:absolute;left:0;right:0;top:0;height:calc(var(--p)*100%);background:linear-gradient(#4caf50,#ffeb3b 55%,#f44336)}
+.ppower .pcue{position:absolute;left:50%;width:10px;margin-left:-5px;top:calc(8px + var(--p)*70%);height:75%;border-radius:5px;background:linear-gradient(#3a6fd8 0 3%,#f2f2ee 3% 6%,#e3c48c 6% 62%,#c0c0c0 62% 64%,#2a1a12 64% 88%,#c9a43a 88% 91%,#1a1a1a 91%);box-shadow:0 2px 6px rgba(0,0,0,.6)}
+.gamescr.pool .p-ctrl{gap:8px;padding:6px 10px calc(10px + env(safe-area-inset-bottom))}
+.gamescr.pool .p-ctrl .pl{flex:1;font-size:11.5px;line-height:1.35;opacity:.9;white-space:normal;text-align:center}
+.gamescr.pool .p-ctrl button{width:46px;height:46px;border-radius:50%;padding:0;font-size:22px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25)}
+.gamescr.pool .pbar .pp{background:rgba(255,255,255,.08);backdrop-filter:blur(6px)}
+@media (min-width:700px){.ppower{top:90px;bottom:90px}}
 </style>
 </head>
 <body>
@@ -609,10 +694,11 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button id="gFinish" class="gold">Bitir</button>
     </div>
     <div class="p-ctrl" id="pCtrl" style="display:none">
-      <span class="pl">Güç <b id="pPowV">60%</b></span>
-      <input type="range" id="pPow" min="5" max="100" value="60" aria-label="Vuruş gücü">
-      <button id="pShoot">Vur</button>
+      <button id="pRotL" aria-label="Nişanı sola çevir">⟲</button>
+      <div class="pl"><b>Nişan:</b> masada parmağını kaydır · <b>Vuruş:</b> sağdaki ıstakayı aşağı çek, bırak <span id="pPowV">0%</span></div>
+      <button id="pRotR" aria-label="Nişanı sağa çevir">⟳</button>
     </div>
+    <div class="ppower" id="pPower" aria-label="Vuruş gücü: aşağı çek ve bırak"><div class="pfill"></div><div class="pcue"></div></div>
   </div>
 
   <div class="callscr" id="callscr">
