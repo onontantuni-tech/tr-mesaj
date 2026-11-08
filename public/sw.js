@@ -1,5 +1,5 @@
 // TR service worker: çevrimdışı kabuk + bildirimler
-const C = "tr-v26";
+const C = "tr-v27";
 const SHELL = ["/", "/index.html", "/app.js", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

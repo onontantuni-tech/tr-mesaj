@@ -46,7 +46,8 @@ let reads={};        // "okuyan_conv" -> zaman
 let statuses={};
 let contacts=[];
 let friends={};
-let vipU={};
+let vipU={};const bdg={};   // uid -> {ach:[], gifts:{}} (badges/{uid})
+
 let blocked={};
 let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all"};
 const readsHidden={},ctSeen={};
@@ -271,8 +272,10 @@ function tick(m){
   return`<svg class="tk ${read?"read":""}" viewBox="0 0 16 11"><path d="M1 6l3 3 6-7"/><path d="M6 9l1 0 6-7"/></svg>`;
 }
 const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
+const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
+const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 function convMsgs(c){return raw.filter(m=>convOfMsg(m)===c).concat(pending.filter(m=>m.conv===c)).sort((a,b)=>a.at-b.at)}
@@ -354,6 +357,7 @@ function bubbleBody(m,c){
     const ar=c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:"";
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
+  if(c.t==="gift"){const G=giftOf(c.id);if(G)return`<div class="giftmsg"><span>${G.icon}</span><b>${esc(G.name)}</b><small>hediye</small></div>`}
   if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
   if(c.t==="voice"){
     if(c._local)return`<audio controls src="${esc(c._local)}"></audio>`;
@@ -822,12 +826,16 @@ function openInfo(){
     const u=users[cur]||{};
     $("#iAv").innerHTML=avHTML(cur);$("#iName").innerHTML=esc(realName(cur))+vipMark(cur);recordView(cur);$("#iSub").textContent=u.code?"TR ID "+fmtCode(u.code):"";
     $("#iLabel").innerHTML=(u.bio?`<div class="ibio">${esc(u.bio)}</div>`:"")+(u.joined?`<div class="ijoin">📅 ${new Date(u.joined).toLocaleDateString("tr-TR",{month:"long",year:"numeric"})} tarihinden beri TR'de</div>`:"");
+    {const bd=bdg[cur];const A=catalog?.ach||[];const achH=(bd?.ach||[]).map(a=>A.find(x=>x.id===a)).filter(Boolean).map(x=>`<span title="${esc(x.name)}">${x.icon}</span>`).join("");
+      const gH=Object.entries(bd?.gifts||{}).map(([k,n])=>[giftOf(k),+n||0]).filter(([g,n])=>g&&n>0).map(([g,n])=>`<span>${g.icon}<small>${n}</small></span>`).join("");
+      $("#iLabel").innerHTML+=(achH?`<div class="ibadges"><div class="fl">Başarımlar</div><div class="irow">${achH}</div></div>`:"")+(gH?`<div class="ibadges"><div class="fl">Aldığı hediyeler</div><div class="irow g">${gH}</div></div>`:"")}
     {const im=avUrl(cur);$("#iAv").onclick=im?()=>{const big=avCache[cur]?.img;if(big)openViewer(big)}:null}
     const common=Object.entries(groups).filter(([,g])=>g.members.includes(cur));
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
     const bl=isBlocked(cur);
-    $("#iActs").innerHTML=(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    $("#iActs").innerHTML=(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    if($("#iGift")){const peer=cur;$("#iGift").onclick=()=>{closeInfo();openGift(peer)}}
     {const pc=cur;$("#iMedia").onclick=()=>{closeInfo();openGallery(pc)};$("#iExport").onclick=()=>{closeInfo();exportChat(pc)}}
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
     if(isFriend(cur)){const peer=cur;$("#iUnf").onclick=()=>{closeInfo();openModal({title:"Arkadaşlıktan çıkar",text:`${esc(realName(peer))} arkadaşlıktan çıkarılsın mı? Tekrar yazışmak için yeni istek gerekir.`,input:false,ok:"Çıkar"},()=>removeFriend(peer))}}
@@ -1132,7 +1140,11 @@ const watched=new Set();
 function watchUser(uid){
   if(!uid||watched.has(uid)||!me)return;watched.add(uid);
   unsubs.push(onSnapshot(doc(fs,"users",uid),s=>{if(s.exists()){users[uid]=cleanUser(s.data());decryptAll();renderAll();if(uid===me)updateIdLabel()}},()=>{}));
-  unsubs.push(onSnapshot(doc(fs,"badges",uid),s=>{const v=s.exists()?+s.data().vipUntil||0:0;if((vipU[uid]||0)!==v){vipU[uid]=v;renderAll()}},()=>{}));
+  unsubs.push(onSnapshot(doc(fs,"badges",uid),s=>{const bd=s.exists()?s.data():{};
+    {const prev=bdg[uid];const ach=Array.isArray(bd.ach)?bd.ach.filter(x=>typeof x==="string"):[];const gifts=bd.gifts&&typeof bd.gifts==="object"?bd.gifts:{};
+      if(uid===me&&prev){const fresh=ach.filter(a=>!prev.ach.includes(a));fresh.forEach((a,i)=>setTimeout(()=>{const A=(catalog?.ach||[]).find(x=>x.id===a);if(A){toast(`${A.icon} Başarım: ${A.name} · +${fmtCoin(A.prize)} jeton`,4000);sfx("win")}},i*4200))}
+      bdg[uid]={ach,gifts}}
+    const v=+bd.vipUntil||0;if((vipU[uid]||0)!==v){vipU[uid]=v;renderAll()}},()=>{}));
   unsubs.push(onSnapshot(doc(fs,"statuses",uid),s=>{const x=s.exists()?s.data():null;if(x&&x.text)statuses[uid]={text:cleanText(String(x.text).slice(0,300)),at:+x.at||0,bg:/^#[0-9a-fA-F]{6}$/.test(x.bg)?x.bg:"#111"};else delete statuses[uid];renderStatus()},()=>{}));
 }
 
@@ -1572,6 +1584,7 @@ function renderGamesTab(){
     <button data-g="store"><span>🪙</span>Jeton al</button>
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
+    <button data-g="ach"><span>🏅</span>Başarımlar ${(wallet.ach||[]).length}/${(catalog?.ach||[]).length||16}</button>
     <button data-g="ledger"><span>📜</span>Jeton hareketlerim</button>
     <button data-g="history"><span>🕘</span>Oyun geçmişim</button>
     <button data-g="play"><span>💬</span>Arkadaşınla oyna</button>
@@ -1584,7 +1597,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -1605,6 +1618,19 @@ function renderBell(){const b=$("#btnBell");if(!b||!me)return;const n=notifItems
 $("#btnBell").onclick=()=>{const it=notifItems();
   openInfoModal("🔔 Bildirimler",it.length?it.map((x,i)=>`<div class="nitem" data-n="${i}"><span class="nic">${x.ic}</span><span class="nt">${x.t}</span><span class="nar">›</span></div>`).join(""):'<div class="isub" style="text-align:center;padding:24px 0">Yeni bildirim yok 🎉</div>');
   $("#eBody").onclick=e=>{const r=e.target.closest("[data-n]");if(!r)return;closeAll();$("#emodal").classList.remove("show");it[+r.dataset.n].go()}};
+function openGift(peer){
+  if(!wallet){toast("Cüzdan yükleniyor, birazdan tekrar dene");return}
+  openInfoModal(`🎁 ${realName(peer)} için hediye`,`<p class="isub">Hediye sohbette görünür ve arkadaşının profiline eklenir. Jetonla alınır, jeton olarak geri dönmez.</p><div class="giftgrid">${giftList().map(g=>`<button data-gift="${g.id}" ${(wallet.balance||0)<g.price?"disabled":""}><span>${g.icon}</span><b>${esc(g.name)}</b><small><span class="coin"></span> ${fmtCoin(g.price)}</small></button>`).join("")}</div><p class="isub">Bakiyen: ${fmtCoin(wallet.balance||0)}</p>`);
+  $("#eBody").onclick=async e=>{const b=e.target.closest("[data-gift]");if(!b||b.disabled)return;const G=giftOf(b.dataset.gift);
+    $("#eBody").querySelectorAll("[data-gift]").forEach(x=>x.disabled=true);
+    try{const r=await callApi("/api/wallet",{action:"gift",to:peer,id:G.id});applyWallet({...wallet,...r.wallet});closeE();
+      await sendContent(peer,{t:"gift",id:G.id});sfx("win");toast(`${G.icon} ${G.name} gönderildi`)}
+    catch(err){toast(err.status===402?"Bakiyen yetmiyor":err.status===403?"Sadece arkadaşlarına hediye gönderebilirsin":"Gönderilemedi");openGift(peer)}};
+}
+function openAch(){
+  const A=catalog?.ach||[],have=new Set(wallet?.ach||[]);
+  openInfoModal("🏅 Başarımlar",`<p class="isub">${have.size}/${A.length} başarım · her biri bir kez jeton ödülü verir ve profilinde rozet olarak görünür.</p>`+A.map(a=>`<div class="pk ach ${have.has(a.id)?"on":""}"><span class="ai">${a.icon}</span><div style="flex:1"><b>${esc(a.name)}</b><div class="isub">${esc(a.desc)}</div></div><span class="isub">${have.has(a.id)?"✅":"+"+fmtCoin(a.prize)}</span></div>`).join(""));
+}
 function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
 function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
 $("#eClose").onclick=closeE;
@@ -1764,9 +1790,10 @@ async function gameApi(body,type){
   const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
   return r;
 }
-$("#gameBtn").onclick=()=>{if(!cur)return;closeAll();overlay.classList.add("show");$("#gpick").classList.add("show")};
+$("#gameBtn").onclick=()=>{if(!cur)return;closeAll();{const gi=$("#gpick [data-gift-open]");if(gi)gi.style.display=isGroupConv(cur)||!isFriend(cur)?"none":""}overlay.classList.add("show");$("#gpick").classList.add("show")};
 $("#gpickClose").onclick=()=>{$("#gpick").classList.remove("show");overlay.classList.remove("show")};
 $("#gpick").addEventListener("click",async e=>{
+  if(e.target.closest("[data-gift-open]")){$("#gpick").classList.remove("show");overlay.classList.remove("show");if(cur&&!isGroupConv(cur))openGift(cur);return}
   const it=e.target.closest("[data-newgame]");if(!it||!cur)return;
   const conv=cur,type=it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
   pickStake(async stake=>{

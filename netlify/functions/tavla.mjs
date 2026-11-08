@@ -237,7 +237,7 @@ function settle(tx, db, st, wallets) {
     if (s.bot || !wallets[s.uid]) continue;
     const won = s.uid === winnerUid;
     const delta = draw ? 0 : won ? (st.payout?.amount || 0) - (st.stake || 0) : -(st.stake || 0);
-    E.afterGame(tx, db, s.uid, wallets[s.uid], { won, draw, type: "tavla", stake: st.stake, delta, opp: humansAll.filter((u) => u !== s.uid), gid: st.gid || "g", round: st.round || 1, points: st.points });
+    E.afterGame(tx, db, s.uid, wallets[s.uid], { won, draw, type: "tavla", stake: st.stake, delta, opp: humansAll.filter((u) => u !== s.uid), gid: st.gid || "g", round: st.round || 1, points: st.points, mars: !!st.mars });
   }
   st.pot = 0;
 }

@@ -2,7 +2,7 @@
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
 import { FieldValue } from "firebase-admin/firestore";
-import { migrateFriends } from "../lib/friends.mjs";
+import { migrateFriends, areFriends } from "../lib/friends.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
@@ -14,6 +14,11 @@ export default async (req) => {
   const act = String(b?.action || "me");
   const ref = db.doc(`wallets/${uid}`);
   let migrate = false;
+  let giftOk = false;
+  if (act === "gift") {
+    const to = String(b?.to || "");
+    giftOk = /^[A-Za-z0-9]{10,40}$/.test(to) && (await areFriends(db, uid, to));
+  }
   if (act === "me") {
     try {
       const w0 = await ref.get();
@@ -144,7 +149,7 @@ export default async (req) => {
         daily = { day: streak, amount, vip: 0 };
         if (streak === 30) {
           w.vipUntil = Math.max(Date.now(), w.vipUntil || 0) + E.LOGIN_VIP_DAYS * 86400000;
-          tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil });
+          tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil }, { merge: true });
           daily.vip = E.LOGIN_VIP_DAYS;
         }
       }
@@ -159,13 +164,26 @@ export default async (req) => {
         w.adult = now - y > 18 || (now - y === 18 && !!b.hadBirthday);
       }
 
+      // Sanal hediye (çay, gül, taç…): jetonla alınır, arkadaşın profiline eklenir. Jeton transferi değildir.
+      if (act === "gift") {
+        const it = E.GIFTS.find((x) => x.id === b.id);
+        const to = String(b.to || "");
+        if (!it || !/^[A-Za-z0-9]{10,40}$/.test(to) || to === uid) return { status: 400, body: { error: "gift" } };
+        if (!giftOk) return { status: 403, body: { error: "friend" } };
+        if ((w.balance || 0) < it.price) return { status: 402, body: { error: "balance", wallet: view(w) } };
+        E.credit(tx, db, uid, w, -it.price, `Hediye: ${it.name}`);
+        tx.set(db.doc(`badges/${to}`), { gifts: { [it.id]: FieldValue.increment(1) } }, { merge: true });
+        w.giftsSent = (w.giftsSent || 0) + 1;
+        E.checkAch(tx, db, uid, w);
+        gift = { id: it.id };
+      }
       if (act === "buyVip") {
         if (!w.adult) return { status: 403, body: { error: "age" } };
         if ((w.balance || 0) < E.VIP.price) return { status: 402, body: { error: "balance" } };
         E.credit(tx, db, uid, w, -E.VIP.price, `VIP üyelik (${E.VIP.days} gün)`);
         const now = Date.now();
         w.vipUntil = Math.max(now, w.vipUntil || 0) + E.VIP.days * 86400000;
-        tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil });
+        tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil }, { merge: true });
       }
 
       if (act === "views") {
@@ -203,12 +221,13 @@ export default async (req) => {
           if (it && it.vip) w.skin[k] = k === "table" ? "yesil" : "ceviz";
         }
       }
+      if (act === "me") E.checkAch(tx, db, uid, w);
       tx.set(ref, w);
       return { status: 200, body: { wallet: view(w), welcomed, daily, gift } };
     });
     return json(res.status, res.body);
   } catch (e) {
-    return json(500, { error: "server" });
+    return json(500, { error: "server", detail: String((e && e.message) || e).slice(0, 200) });
   }
 };
 
@@ -229,9 +248,10 @@ function view(w) {
     chestAt: w.chestAt || 0, chestEvery: E.CHEST.every, rescueDay: w.rescueDay || "", spinDay: w.spinDay || "", winStreak: w.winStreak || 0,
     tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
+    ach: w.ach || [], achStats: { wins: w.wins || 0, games: w.games || 0, maxStreak: w.maxStreak || 0, tw: w.tw || {}, marsN: w.marsN || 0, giftsSent: w.giftsSent || 0 },
     tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
   };
 }
 

@@ -161,9 +161,50 @@ export function todayTasks(w) {
   const day = trDate().day;
   return w.td && w.td.day === day ? w.td : { day, played: 0, won: 0, okey: 0, pool: 0, claimed: [] };
 }
-export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp, gid, round, points }) {
+// ---- Sanal hediyeler ----
+export const GIFTS = [
+  { id: "cay", icon: "☕", name: "Çay", price: 500 },
+  { id: "gul", icon: "🌹", name: "Gül", price: 2000 },
+  { id: "pasta", icon: "🎂", name: "Pasta", price: 5000 },
+  { id: "kupa", icon: "🏆", name: "Kupa", price: 15000 },
+  { id: "tac", icon: "👑", name: "Taç", price: 25000 },
+  { id: "elmas", icon: "💎", name: "Elmas", price: 100000 },
+];
+
+// ---- Başarımlar: bir kez kazanılır, küçük jeton ödülü verir, profilde rozet olarak görünür ----
+export const ACH = [
+  { id: "w1", icon: "🥇", name: "İlk zafer", desc: "İlk oyununu kazan", prize: 2000, t: (w) => (w.wins || 0) >= 1 },
+  { id: "w10", icon: "🎖️", name: "Kazanmaya alıştı", desc: "10 oyun kazan", prize: 5000, t: (w) => (w.wins || 0) >= 10 },
+  { id: "w100", icon: "🏅", name: "Usta", desc: "100 oyun kazan", prize: 25000, t: (w) => (w.wins || 0) >= 100 },
+  { id: "w1000", icon: "🏆", name: "Efsane", desc: "1000 oyun kazan", prize: 100000, t: (w) => (w.wins || 0) >= 1000 },
+  { id: "g10", icon: "🎮", name: "Isınma turu", desc: "10 oyun oyna", prize: 2000, t: (w) => (w.games || 0) >= 10 },
+  { id: "g100", icon: "🕹️", name: "Müdavim", desc: "100 oyun oyna", prize: 10000, t: (w) => (w.games || 0) >= 100 },
+  { id: "g1000", icon: "☕", name: "Kahvehane demirbaşı", desc: "1000 oyun oyna", prize: 50000, t: (w) => (w.games || 0) >= 1000 },
+  { id: "s3", icon: "🔥", name: "Seri", desc: "Üst üste 3 oyun kazan", prize: 5000, t: (w) => (w.maxStreak || 0) >= 3 },
+  { id: "s10", icon: "⚡", name: "Durdurulamaz", desc: "Üst üste 10 oyun kazan", prize: 30000, t: (w) => (w.maxStreak || 0) >= 10 },
+  { id: "okey1", icon: "🀄", name: "Okey bitirdi", desc: "Bir Okey eli kazan", prize: 3000, t: (w) => (w.tw?.okey || 0) >= 1 },
+  { id: "pool1", icon: "🎱", name: "Siyahı soktu", desc: "Bir Bilardo oyunu kazan", prize: 3000, t: (w) => (w.tw?.pool || 0) >= 1 },
+  { id: "pisti1", icon: "🃏", name: "Kart ustası", desc: "Bir Pişti eli kazan", prize: 3000, t: (w) => (w.tw?.pisti || 0) >= 1 },
+  { id: "tavla1", icon: "🎲", name: "Zarlar benden yana", desc: "Bir Tavla oyunu kazan", prize: 3000, t: (w) => (w.tw?.tavla || 0) >= 1 },
+  { id: "mars", icon: "💥", name: "Mars!", desc: "Tavlada rakibini mars et", prize: 5000, t: (w) => (w.marsN || 0) >= 1 },
+  { id: "all4", icon: "🌟", name: "Çok yönlü", desc: "Dört oyunun hepsinde kazan", prize: 20000, t: (w) => ["okey", "pool", "pisti", "tavla"].every((k) => (w.tw?.[k] || 0) >= 1) },
+  { id: "gift1", icon: "🎁", name: "Gönlü zengin", desc: "Bir arkadaşına hediye gönder", prize: 1000, t: (w) => (w.giftsSent || 0) >= 1 },
+];
+export function checkAch(tx, db, uid, wl) {
+  const have = new Set(wl.ach || []);
+  const fresh = ACH.filter((a) => !have.has(a.id) && a.t(wl));
+  if (!fresh.length) return [];
+  for (const a of fresh) { have.add(a.id); credit(tx, db, uid, wl, a.prize, `Başarım: ${a.name}`); }
+  wl.ach = [...have];
+  tx.set(db.doc(`badges/${uid}`), { ach: wl.ach }, { merge: true });
+  return fresh.map((a) => a.id);
+}
+
+export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp, gid, round, points, mars }) {
   wl.games = (wl.games || 0) + 1;
   if (won) wl.wins = (wl.wins || 0) + 1;
+  if (won) { wl.tw = { ...(wl.tw || {}) }; wl.tw[type] = (wl.tw[type] || 0) + 1; }
+  if (won && mars) wl.marsN = (wl.marsN || 0) + 1;
   wl.xp = (wl.xp || 0) + (won ? XP_WIN : XP_PLAY);
   addStats(tx, db, uid, won ? points || 2 : 0, won);
   const lp = leaguePoints({ won, draw, stake, opp, points });
@@ -174,10 +215,12 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
     wl.winStreak = (wl.winStreak || 0) + 1;
     if (wl.winStreak % STREAK_BONUS.every === 0) credit(tx, db, uid, wl, STREAK_BONUS.amount, `Seri bonusu (${wl.winStreak} galibiyet üst üste)`);
   } else if (!draw && !won) wl.winStreak = 0;
+  wl.maxStreak = Math.max(wl.maxStreak || 0, wl.winStreak || 0);
   // günlük görevler
   const t = todayTasks(wl);
   t.played++; if (won) t.won++; if (type === "pool") t.pool++; else if (type === "okey") t.okey++;
   wl.td = t;
   // oyun geçmişi
+  checkAch(tx, db, uid, wl);
   tx.set(db.doc(`gh/${uid}/g/${gid}_${round}`), { at: Date.now(), type, stake: stake || 0, won: !!won, draw: !!draw, delta: delta || 0, opp: (opp || []).slice(0, 3) });
 }
