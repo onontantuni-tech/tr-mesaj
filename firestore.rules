@@ -248,6 +248,17 @@ service cloud.firestore {
         allow read: if isMe(u);
         allow write: if false;
       }
+      // masa sohbeti: masadakiler yazar, masayı görebilen herkes okur
+      match /chat/{x} {
+        allow read: if signedIn() && (request.auth.uid in get(/databases/$(database)/documents/games/$(gid)).data.members
+          || get(/databases/$(database)/documents/games/$(gid)).data.public == true);
+        allow create: if signedIn() && notBanned()
+          && nd().keys().hasOnly(['by', 'text', 'at'])
+          && nd().by == request.auth.uid
+          && nd().text is string && nd().text.size() > 0 && nd().text.size() <= 120
+          && nd().at is number
+          && request.auth.uid in get(/databases/$(database)/documents/games/$(gid)).data.members;
+      }
     }
     match /gsecret/{gid} {
       allow read, write: if false;

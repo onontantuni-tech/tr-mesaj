@@ -569,6 +569,56 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   .gamescr.okeyg .ofinish{width:54px;height:54px}
   .gamescr.okeyg .overbox{max-height:90%;overflow:auto}
 }
+
+/* ===== Masa sohbeti ===== */
+.g-chat{position:relative;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.25);font-size:18px;color:#fff;display:grid;place-items:center;margin-right:6px}
+.g-chat i{position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:#ff3b30;display:none;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
+.g-chat i.on{display:block}
+.gbubbles{position:absolute;top:58px;left:50%;transform:translateX(-50%);z-index:45;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:92%}
+.gbub{background:rgba(255,255,255,.96);color:#1b1b1b;border-radius:16px;padding:6px 12px;font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.4);display:flex;align-items:center;gap:7px;animation:gbub 4s forwards;max-width:100%}
+.gbub .av{width:24px;height:24px;font-size:10px}
+.gbub b{color:#C62828;font-size:12px}
+@keyframes gbub{0%{opacity:0;transform:translateY(-8px) scale(.9)}8%,82%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-6px)}}
+.gchat{position:absolute;right:0;top:0;bottom:0;width:min(340px,92%);z-index:70;background:rgba(18,22,28,.97);display:flex;flex-direction:column;transform:translateX(105%);transition:transform .22s;box-shadow:-8px 0 24px rgba(0,0,0,.5)}
+.gchat.show{transform:none}
+.gch-top{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid rgba(255,255,255,.1)}
+.gch-top button{background:none;border:0;color:#fff;font-size:20px}
+.gch-list{flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+.gch-list .gm{display:flex;gap:8px;align-items:flex-start}.gch-list .gm .av{width:28px;height:28px;font-size:11px;flex-shrink:0}
+.gch-list .gm div{background:rgba(255,255,255,.08);border-radius:12px;padding:6px 10px}.gch-list .gm b{display:block;font-size:11.5px;color:#ffd54f}
+.gch-list .gm.me{flex-direction:row-reverse}.gch-list .gm.me div{background:#1f6f43}
+.gch-quick{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.1)}
+.gch-quick button{border:0;border-radius:16px;padding:7px 11px;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:13px}
+.gch-form{display:flex;gap:6px;padding:8px 10px calc(10px + env(safe-area-inset-bottom))}
+.gch-form input{flex:1;border:0;border-radius:20px;padding:10px 14px;font:inherit;background:rgba(255,255,255,.12);color:#fff}
+.gch-form button{width:42px;height:42px;border-radius:50%;border:0;background:#D81E2A;color:#fff;font-size:17px}
+@media (orientation:landscape) and (max-height:560px){.gamescr.okeyg .gbubbles{top:44px}.gamescr.okeyg .g-chat{width:32px;height:32px;font-size:15px}}
+
+/* ===== Bilardo v3: oyuncu kartları, mini toplar, yatay düzen ===== */
+.gamescr.pool .pbar{gap:8px;padding:6px 8px}
+.gamescr.pool .pbar .pp{border-radius:14px;padding:6px 10px;background:linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.04));border:1.5px solid rgba(255,255,255,.12)}
+.gamescr.pool .pbar .pp.turn{border-color:#ffd54f;box-shadow:0 0 14px rgba(255,213,79,.45)}
+.gamescr.pool .pbar .vs{font-weight:900;font-size:13px;color:#ffd54f;text-shadow:0 1px 3px #000}
+.ppi{min-width:0;display:flex;flex-direction:column;gap:3px}.ppi b small{font-weight:600;opacity:.8;font-size:11px}
+.mbs{display:flex;gap:2px;flex-wrap:nowrap}.mbs.q{font-size:10px;opacity:.75}
+.mb{width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.8) 0 12%,transparent 30%),var(--c);box-shadow:inset -1px -2px 2px rgba(0,0,0,.4);flex-shrink:0}
+.mb.st{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.8) 0 12%,transparent 30%),linear-gradient(#f5f2e8 0 25%,var(--c) 25% 75%,#f5f2e8 75%)}
+.mb.gone{opacity:.18;filter:grayscale(1)}
+@media (orientation:landscape) and (max-height:560px){
+  .gamescr.show.pool{position:fixed;inset:0}
+  .gamescr.pool .g-top{position:absolute;top:0;left:0;right:0;z-index:40;background:none;padding:calc(4px + env(safe-area-inset-top)) 8px 0;pointer-events:none}
+  .gamescr.pool .g-top>*{pointer-events:auto}.gamescr.pool .g-title{visibility:hidden}
+  .gamescr.pool .g-table{position:absolute;inset:0}
+  .gamescr.pool .pwrap .pbar{position:absolute;top:4px;left:56px;right:150px;z-index:5;padding:0;justify-content:center}
+  .gamescr.pool .pbar .pp{flex:0 1 230px;padding:4px 8px;background:rgba(10,12,16,.75)}
+  .gamescr.pool .pbar .pp .av{width:28px;height:28px;font-size:11px}
+  .gamescr.pool .pcv{position:absolute;inset:0;margin:0 52px 0 0}
+  .gamescr.pool .g-msg{position:absolute;bottom:calc(4px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:20;font-size:12px;min-height:0;background:rgba(0,0,0,.45);border-radius:12px;padding:3px 12px;pointer-events:none;max-width:60%}
+  .gamescr.pool .p-ctrl{position:absolute;left:6px;bottom:calc(6px + env(safe-area-inset-bottom));z-index:20;padding:0;flex-direction:column;gap:6px}
+  .gamescr.pool .p-ctrl .pl{display:none}
+  .gamescr.pool .p-ctrl button{width:40px;height:40px;font-size:19px}
+  .ppower{top:52px;bottom:12px}
+}
 </style>
 </head>
 <body>
@@ -724,7 +774,15 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="g-top">
       <button class="ibtn" id="gBack" aria-label="Geri"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
       <div class="g-title"><b id="gTitleTxt">Okey</b><span id="gSub"></span></div>
+      <button class="g-chat" id="gChatBtn" aria-label="Masa sohbeti">💬<i id="gChatDot"></i></button>
       <button class="g-leave" id="gLeave">Masadan kalk</button>
+    </div>
+    <div class="gbubbles" id="gBubbles"></div>
+    <div class="gchat" id="gChat">
+      <div class="gch-top"><b>Masa sohbeti</b><button id="gChatX" aria-label="Kapat">✕</button></div>
+      <div class="gch-list" id="gChatList"></div>
+      <div class="gch-quick" id="gChatQuick"></div>
+      <form class="gch-form" id="gChatForm"><input id="gChatIn" maxlength="120" placeholder="Mesaj yaz…" autocomplete="off"><button aria-label="Gönder">➤</button></form>
     </div>
     <div class="g-table" id="gTable"></div>
     <div class="g-msg" id="gMsg"></div>
@@ -740,7 +798,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="pl"><b>Nişan:</b> masada parmağını kaydır · <b>Vuruş:</b> sağdaki ıstakayı aşağı çek, bırak <span id="pPowV">0%</span></div>
       <button id="pRotR" aria-label="Nişanı sağa çevir">⟳</button>
     </div>
-    <div class="rothint" id="rotHint"><div class="rotbox"><div class="rotph">📱</div><b>Okey yatay ekranda daha güzel</b><span>Telefonunu yan çevir; ıstaka ve taşlar büyür.</span><button id="rotGo">Yatay ekrana geç</button><button id="rotSkip" class="sk">Dikey devam et</button></div></div>
+    <div class="rothint" id="rotHint"><div class="rotbox"><div class="rotph">📱</div><b>Yatay ekranda daha güzel</b><span>Telefonunu yan çevir; ıstaka ve taşlar büyür.</span><button id="rotGo">Yatay ekrana geç</button><button id="rotSkip" class="sk">Dikey devam et</button></div></div>
     <div class="ppower" id="pPower" aria-label="Vuruş gücü: aşağı çek ve bırak"><div class="pfill"></div><div class="pcue"></div></div>
   </div>
 

@@ -1688,6 +1688,14 @@ function openGame(id){
       else if(prevD&&d.type!=="pool"&&JSON.stringify(prevD.discards)!==JSON.stringify(d.discards))sfx("tile")}
     renderGame();
   },()=>{$("#gTable").innerHTML='<div class="lobby">Masa açılamadı.</div>'}));
+  game.chat=[];game.chatSeen=Date.now();
+  game.unsubs.push(onSnapshot(query(collection(fs,"games",id,"chat"),orderBy("at","desc"),limit(40)),s=>{
+    if(!game||game.id!==id)return;
+    const rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(m=>typeof m.text==="string").reverse();
+    const known=new Set(game.chat.map(m=>m.id));game.chat=rows;
+    rows.filter(m=>!known.has(m.id)&&m.at>game.chatSeen-5000).forEach(m=>{watchUser(m.by);showBubble(m)});
+    renderGameChat();
+  },()=>{}));
   game.unsubs.push(onSnapshot(doc(fs,"games",id,"hands",me),s=>{
     if(!game||game.id!==id)return;
     const tiles=s.exists()&&Array.isArray(s.data().tiles)?s.data().tiles:[];
@@ -1707,7 +1715,7 @@ function openGame(id){
 function closeGame(silent){
   if(!game)return;
   {const d=game.data;if(d&&d.public&&d.status==="lobby"&&mySeatIdx(d)>=0)gameApi({action:"leave",id:game.id},d.type)}game.unsubs.forEach(u=>{try{u()}catch(e){}});clearInterval(game.poke);if(game.raf)cancelAnimationFrame(game.raf);game=null;$("#gamescr").classList.remove("pool","okeyg");
-  $("#gamescr").classList.remove("show");$("#rotHint").classList.remove("show");leaveLandscape();
+  $("#gamescr").classList.remove("show");$("#rotHint").classList.remove("show");leaveLandscape();$("#gChat").classList.remove("show");$("#gBubbles").innerHTML="";
 }
 $("#gBack").onclick=()=>{try{if(history.state&&history.state.game){history.back();return}}catch(e){}closeGame()};
 window.addEventListener("popstate",()=>{if(game&&!(history.state&&history.state.game))closeGame()});
@@ -1718,7 +1726,7 @@ function renderGame(){
   if(!game||!game.data)return;
   const d=game.data,my=mySeatIdx(d);
   const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack");
-  if(d.type==="pool"){gs.classList.add("pool");return renderPool(d,my)}
+  if(d.type==="pool"){gs.classList.add("pool");if(d.status==="play"||d.status==="over")askLandscape();return renderPool(d,my)}
   gs.classList.add("okeyg");
   if(d.status==="play"||d.status==="over")askLandscape();
   $("#gTitleTxt").textContent="Okey";
@@ -1794,6 +1802,34 @@ async function gameMove(body){
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}
 }
+/* ---------- masa sohbeti ---------- */
+const QUICK=["Selam 👋","İyi oyunlar","Hadi! ⏳","Tebrikler 👏","Şanslısın 😄","Bir dakika","Rövanş? 🔁","😂","👍","🙏"];
+$("#gChatQuick").innerHTML=QUICK.map(q=>`<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+function renderGameChat(){
+  if(!game)return;const list=$("#gChatList");
+  list.innerHTML=game.chat.length?game.chat.map(m=>`<div class="gm ${m.by===me?"me":""}">${avHTML(m.by)}<div><b>${esc(m.by===me?"Sen":realName(m.by))}</b>${esc(cleanText(m.text))}</div></div>`).join(""):'<div class="isub" style="text-align:center;opacity:.7;margin-top:20px">Masadakilere bir şey yaz ya da hazır mesaj seç</div>';
+  list.scrollTop=list.scrollHeight;
+  const open=$("#gChat").classList.contains("show");
+  if(open)game.chatSeen=Date.now();
+  $("#gChatDot").classList.toggle("on",!open&&game.chat.some(m=>m.by!==me&&m.at>game.chatSeen));
+}
+function showBubble(m){
+  if($("#gChat").classList.contains("show"))return;
+  const el=document.createElement("div");el.className="gbub";el.innerHTML=`${avHTML(m.by)}<b>${esc(m.by===me?"Sen":realName(m.by).split(" ")[0])}</b>${esc(cleanText(m.text))}`;
+  const box=$("#gBubbles");box.appendChild(el);while(box.children.length>3)box.firstChild.remove();setTimeout(()=>el.remove(),4100);
+  if(m.by!==me)sfx("tile");
+}
+async function sendGameChat(text){
+  text=String(text||"").trim().slice(0,120);if(!text||!game)return;
+  const d=game.data;if(!d||mySeatIdx(d)<0){toast("Sohbet için masada oturuyor olmalısın");return}
+  if(Date.now()-(game.lastChat||0)<1500){toast("Biraz yavaş 🙂");return}game.lastChat=Date.now();
+  try{await addDoc(collection(fs,"games",game.id,"chat"),{by:me,text,at:Date.now()})}catch(e){toast("Gönderilemedi")}
+}
+$("#gChatBtn").onclick=()=>{$("#gChat").classList.add("show");game&&(game.chatSeen=Date.now());renderGameChat();$("#gBubbles").innerHTML=""};
+$("#gChatX").onclick=()=>{$("#gChat").classList.remove("show");renderGameChat()};
+$("#gChatQuick").onclick=e=>{const b=e.target.closest("[data-q]");if(b){sendGameChat(b.dataset.q)}};
+$("#gChatForm").onsubmit=e=>{e.preventDefault();const v=$("#gChatIn").value;$("#gChatIn").value="";sendGameChat(v)};
+
 /* Okey yatay ekranda oynanır: telefon dikse yan çevirme önerisi; tam ekran + yatay kilit denenir */
 let landDismissed=false;
 function askLandscape(){
@@ -1808,7 +1844,7 @@ async function goLandscape(){
 function leaveLandscape(){try{screen.orientation&&screen.orientation.unlock&&screen.orientation.unlock()}catch(e){}try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}}
 $("#rotGo").onclick=goLandscape;
 $("#rotSkip").onclick=()=>{landDismissed=true;askLandscape()};
-window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type!=="pool"){askLandscape()}});
+window.addEventListener("resize",()=>{if(game&&game.data&&(game.data.status==="play"||game.data.status==="over"))askLandscape()});
 /* ıstaka: dokun = seç, sürükle = yerini değiştir / at / bitir, çift dokun = at */
 const SLOTS=26;
 function syncSlots(tiles){
@@ -1898,7 +1934,10 @@ function renderPool(d,my){
   }
   const g=d.groups;
   const left=k=>(game.pview||d.balls||[]).filter(b=>P.typeOf(b.i)===k).length;
-  $("#pBar").innerHTML=d.seats.map((s,i)=>`<div class="pp ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div><b>${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""}</b><span>${g?GROUP_TR[g[i]]+" · "+left(g[i])+" top kaldı":"Grup belli değil"} · ${(d.scores||[])[i]||0} galibiyet</span></div></div>`).join('<div class="vs">vs</div>');
+  const onT=new Set((game.pview||d.balls||[]).map(b=>b.i));
+  const mini=i=>{const col=BALL_COL[i>8?i-8:i];return`<i class="mb ${onT.has(i)?"":"gone"} ${i>8?"st":""}" style="--c:${col}"></i>`};
+  const balls=k=>k?`<div class="mbs">${(k==="solid"?[1,2,3,4,5,6,7]:[9,10,11,12,13,14,15]).map(mini).join("")}${mini(8)}</div>`:'<div class="mbs q">Grup ilk sokan topla belli olur</div>';
+  $("#pBar").innerHTML=d.seats.map((s,i)=>`<div class="pp ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(s)}<div class="ppi"><b>${esc(seatName(s))}${s&&!s.bot?vipMark(s.uid):""} <small>${(d.scores||[])[i]||0}🏆</small></b>${balls(g&&g[i])}</div></div>`).join('<div class="vs">VS</div>');
   // yeni vuruş(lar) geldiyse oynat
   if(game.pseq!==d.seq){
     const first=game.pseq==null;game.pseq=d.seq;
@@ -1995,12 +2034,18 @@ function poolStatic(L){
   // elmaslar
   for(let k=1;k<8;k++){if(k===4)continue;for(const y of [-M/2-6,H+M/2+6])pearl(c,k*W/8,y)}
   for(let k=1;k<4;k++)for(const x of [-M/2-6,W+M/2+6])pearl(c,x,k*H/4);
-  // cepler
+  // cepler: pirinç halka + deri file
   for(const [x,y,r] of P.POCKETS){
-    const rim=c.createRadialGradient(x,y,r*.6,x,y,r*1.15);rim.addColorStop(0,"#1a1a1a");rim.addColorStop(.75,"#3a3a3a");rim.addColorStop(1,"rgba(200,200,200,.0)");
-    c.fillStyle=rim;c.beginPath();c.arc(x,y,r*1.15,0,7);c.fill();
-    const hole=c.createRadialGradient(x-r*.2,y-r*.2,2,x,y,r*.9);hole.addColorStop(0,"#000");hole.addColorStop(1,"#111");
-    c.fillStyle=hole;c.beginPath();c.arc(x,y,r*.88,0,7);c.fill()}
+    const br=c.createLinearGradient(x-r,y-r,x+r,y+r);br.addColorStop(0,"#f6e3a1");br.addColorStop(.45,"#b8892e");br.addColorStop(1,"#6e4e14");
+    c.fillStyle=br;c.beginPath();c.arc(x,y,r*1.22,0,7);c.fill();
+    c.fillStyle="#3b2414";c.beginPath();c.arc(x,y,r*1.05,0,7);c.fill();
+    const hole=c.createRadialGradient(x-r*.25,y-r*.25,1,x,y,r*.95);hole.addColorStop(0,"#000");hole.addColorStop(.8,"#0c0c0c");hole.addColorStop(1,"#2a1a10");
+    c.fillStyle=hole;c.beginPath();c.arc(x,y,r*.9,0,7);c.fill()}
+  // tepe lambası ışığı
+  const lamp=c.createRadialGradient(W/2,H/2,20,W/2,H/2,W*.55);lamp.addColorStop(0,"rgba(255,248,220,.16)");lamp.addColorStop(.6,"rgba(255,248,220,.04)");lamp.addColorStop(1,"rgba(0,0,0,.18)");
+  c.fillStyle=lamp;c.fillRect(0,0,W,H);
+  // kenar parlaklığı
+  c.strokeStyle="rgba(255,255,255,.22)";c.lineWidth=1.5;roundRect(c,-M+8,-M+8,W+2*M-16,H+2*M-16,24);c.stroke();
   // başlangıç çizgisi ve noktalar
   c.strokeStyle="rgba(255,255,255,.14)";c.lineWidth=2;c.beginPath();c.moveTo(P.HEAD_X,0);c.lineTo(P.HEAD_X,H);c.stroke();
   c.fillStyle="rgba(255,255,255,.3)";[[250,H/2],[750,H/2]].forEach(([x,y])=>{c.beginPath();c.arc(x,y,3,0,7);c.fill()});
