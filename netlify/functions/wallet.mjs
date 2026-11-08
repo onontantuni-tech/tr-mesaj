@@ -239,19 +239,24 @@ export default async (req) => {
       }
       // Kelimece: günlük kelime tahmini (cevap sunucuda)
       if (act === "kelime") {
-        const day = E.trDate().day;
-        const st = w.kel && w.kel.day === day ? w.kel : { day, g: [], s: [], done: false, won: false };
-        if (b.guess !== undefined && !st.done) {
-          const g = String(b.guess || "").toLocaleUpperCase("tr-TR").trim();
-          if (!K.LETTERS.test(g)) return { status: 400, body: { error: "word" } };
-          const ans = K.wordOf(day), sc = K.score(g, ans);
-          st.g = [...st.g, g]; st.s = [...st.s, sc.join("")];
-          if (g === ans) { st.done = true; st.won = true; E.credit(tx, db, uid, w, K.PRIZE, "Kelimece ödülü"); gift = { amount: K.PRIZE }; }
-          else if (st.g.length >= K.TRIES) { st.done = true; st.ans = ans; }
-          w.kel = st;
+        const day = E.trDate().day, idx = K.dayIdx(day);
+        const st = w.kel2 && w.kel2.day === day ? w.kel2 : { day, q: idx.map(() => ({ g: [], s: [], ok: false })) };
+        if (b.guess !== undefined) {
+          const qi = Math.floor(Number(b.q));
+          const it = st.q[qi];
+          if (!it) return { status: 400, body: { error: "q" } };
+          const ans = K.norm(K.PUZ[idx[qi]][1]);
+          const g = K.norm(String(b.guess || ""));
+          if (!K.LETTERS.test(g) || [...g].length !== [...ans].length) return { status: 400, body: { error: "len", len: [...ans].length } };
+          if (it.ok || it.g.length >= K.TRIES) return { status: 409, body: { error: "done" } };
+          it.g = [...it.g, g]; it.s = [...it.s, K.score(g, ans).join("")];
+          if (g === ans) { it.ok = true; E.credit(tx, db, uid, w, K.PRIZE, "Kelimece ödülü"); gift = { amount: K.PRIZE }; }
+          w.kel2 = st;
         }
         tx.set(ref, w);
-        return { status: 200, body: { kel: { g: st.g, s: st.s, done: st.done, won: st.won, ans: st.done ? st.ans || (st.won ? st.g[st.g.length - 1] : null) : null }, gift, wallet: view(w) } };
+        const out = st.q.map((it, i) => { const ans = K.norm(K.PUZ[idx[i]][1]); const over = it.ok || it.g.length >= K.TRIES;
+          return { clue: K.PUZ[idx[i]][0], len: [...ans].length, g: it.g, s: it.s, ok: it.ok, ans: over ? ans : null, first: ans[0] }; });
+        return { status: 200, body: { kel: out, tries: K.TRIES, prize: K.PRIZE, gift, wallet: view(w) } };
       }
       // Günün bilgi yarışması: sorular istemciye cevapsız gider, cevaplar burada kontrol edilir
       if (act === "quiz") {

@@ -1832,11 +1832,11 @@ function openPublic(type){
   };
   const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0,canak:!!window.__canak},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
   $("#eBody").onclick=e=>{const w=e.target.closest("[data-watch]");if(w){closeE();pubUnsub&&pubUnsub();pubUnsub=null;openGame(w.dataset.watch);return}const b=e.target.closest("[data-pubjoin]");if(b)join(b.dataset.pubjoin,+b.dataset.stake)};
-  $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake))};
+  $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake),type)};
   $("#pubQuick").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>{
     const lv=wallet?.level||1;const m=rows.filter(g=>(g.stake||0)===stake&&!g.seats.some(x=>x&&x.uid===me)).sort((a,b)=>Math.abs((a.hostLvl||lv)-lv)-Math.abs((b.hostLvl||lv)-lv))[0];
     if(m)join(m.id,stake);else create(stake);
-  })};
+  },type)};
 }
 
 /* ---------- VIP ---------- */
@@ -1905,7 +1905,7 @@ function renderGamesTab(){
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
     <button data-g="cb"><span>💸</span>Harcama iadesi${wallet.cb&&wallet.cb.amount&&!wallet.cb.claimed?'<i class="dot"></i>':""}</button>
-    <button data-g="kelime"><span>🔤</span>Kelimece (günlük)</button>
+    <button data-g="kelime"><span>🔤</span>Kelimece · günlük bulmaca</button>
     <button data-g="cafe" style="grid-column:span 2"><span>☕</span>Kahvehane · bütün açık masalar</button>
     <button data-g="quiz"><span>🧠</span>Bilgi yarışması</button>
     <button data-g="cal"><span>📅</span>Etkinlik takvimi</button>
@@ -1998,16 +1998,18 @@ function openCashback(){const c=wallet.cb||{today:0,yesterday:0,rate:0,amount:0,
     <div class="pk" style="display:block"><div>Dün harcadığın: <b>${fmtCoin(c.yesterday)}</b></div><div>Bugün harcadığın: <b>${fmtCoin(c.today)}</b> <span class="isub">(yarın iade alınır)</span></div></div>
     <div class="row2"><button id="cbGo" style="background:var(--brand)" ${!c.amount||c.claimed?"disabled":""}>${c.claimed?"Bugünkü iade alındı ✓":c.amount?`İadeni al · +${fmtCoin(c.amount)} jeton`:"Dün için iade yok"}</button></div>`);
   $("#cbGo").onclick=async()=>{$("#cbGo").disabled=true;try{const r=await callApi("/api/wallet",{action:"cashback"});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`💸 +${fmtCoin(r.gift.amount)} jeton iade`);renderGamesTab();openCashback()}catch(e){toast("Alınamadı");$("#cbGo").disabled=false}}}
-async function openKelime(guess){
-  let r;try{r=await callApi("/api/wallet",guess?{action:"kelime",guess}:{action:"kelime"})}catch(e){toast(e.status===400?"5 harfli bir kelime yaz":"Yüklenemedi");return}
-  if(r.wallet)applyWallet({...wallet,...r.wallet});const k=r.kel;if(r.gift){sfx("win");toast(`🎉 Bildin! +${fmtCoin(r.gift.amount)} jeton`,3500)}
-  const rows=Array.from({length:6},(_,i)=>{const g=k.g[i]||"",sc=k.s[i]||"";return`<div class="kr">${Array.from({length:5},(_,j)=>`<span class="k${sc[j]||""}">${esc([...g][j]||"")}</span>`).join("")}</div>`}).join("");
-  const KB=["ERTYUIOPĞÜ","ASDFGHJKLŞİ","ZCVBNMÖÇ"];const st={};k.g.forEach((g,i)=>[...g].forEach((c,j)=>{st[c]=Math.max(st[c]??-1,+k.s[i][j])}));
-  openInfoModal("🔤 Kelimece",`<p class="isub">Her gün yeni bir 5 harfli kelime. 6 hakkın var. 🟩 doğru yer, 🟨 kelimede var. Bilene ${fmtCoin(5000)} jeton.</p><div class="kgrid">${rows}</div>
-    ${k.done?`<div class="pk" style="justify-content:center">${k.won?"🎉 Bildin!":"Bugünün kelimesi: <b>"+esc(k.ans||"")+"</b>"} Yarın yeni kelime.</div>`:`<div class="kin"><input id="kIn" maxlength="5" autocomplete="off" placeholder="Tahminin"><button id="kGo">Dene</button></div>
-    <div class="kkb">${KB.map(r=>`<div>${[...r].map(c=>`<button data-kk="${c}" class="k${st[c]??""}">${c}</button>`).join("")}</div>`).join("")}<div><button data-kk="⌫" class="wide">⌫</button><button data-kk="↵" class="wide">Dene</button></div></div>`}`);
-  if(!k.done){const inp=$("#kIn");const go=()=>{const v=inp.value.trim();if([...v].length!==5){toast("5 harf olmalı");return}openKelime(v)};$("#kGo").onclick=go;inp.onkeydown=e=>{if(e.key==="Enter")go()};
-    $("#eBody").onclick=e=>{const b=e.target.closest("[data-kk]");if(!b)return;const c=b.dataset.kk;if(c==="⌫")inp.value=[...inp.value].slice(0,-1).join("");else if(c==="↵")go();else if([...inp.value].length<5)inp.value+=c}}}
+async function openKelime(q,guess){
+  let r;try{r=await callApi("/api/wallet",guess!=null?{action:"kelime",q,guess}:{action:"kelime"})}catch(e){toast(e.status===400?"Harf sayısı tutmuyor":"Yüklenemedi");return}
+  if(r.wallet)applyWallet({...wallet,...r.wallet});if(r.gift){sfx("win");toast(`🎉 Bildin! +${fmtCoin(r.gift.amount)} jeton`,3000)}
+  const solved=r.kel.filter(x=>x.ok).length;
+  openInfoModal("🔤 Kelimece",`<p class="isub">Her gün 5 soru. İpucunu oku, kelimeyi bul. Her soru için ${r.tries} hakkın var, her doğruya ${fmtCoin(r.prize)} jeton. 🟩 doğru yer · 🟨 kelimede var. Bugün: <b>${solved}/5</b></p>
+    ${r.kel.map((k,i)=>{const over=k.ok||k.g.length>=r.tries;return`<div class="kq ${k.ok?"ok":over?"fail":""}"><div class="kqh"><b>${i+1}. ${esc(k.clue)}</b><span>${k.len} harf · “${esc(k.first)}” ile başlar</span></div>
+      ${k.g.map((g,j)=>`<div class="kr">${[...g].map((c,x)=>`<span class="k${k.s[j][x]}">${esc(c)}</span>`).join("")}</div>`).join("")}
+      ${over?(k.ok?`<div class="kres">✅ Bildin</div>`:`<div class="kres">Cevap: <b>${esc(k.ans)}</b></div>`):`<div class="kin"><input data-kq="${i}" maxlength="${k.len+3}" autocomplete="off" placeholder="${"_ ".repeat(k.len).trim()}"><button data-kgo="${i}">Dene (${r.tries-k.g.length})</button></div>`}</div>`}).join("")}`);
+  const go=i=>{const inp=document.querySelector(`[data-kq="${i}"]`);const v=inp.value.trim().replace(/\s+/g,"");const L=r.kel[i].len;if([...v].length!==L){toast(`${L} harfli olmalı`);return}openKelime(i,v)};
+  $("#eBody").onclick=e=>{const b=e.target.closest("[data-kgo]");if(b)go(+b.dataset.kgo)};
+  $("#eBody").onkeydown=e=>{const t=e.target.closest("[data-kq]");if(t&&e.key==="Enter")go(+t.dataset.kq)};
+  const firstOpen=document.querySelector("#eBody [data-kq]");if(firstOpen&&q!=null){const nx=document.querySelector(`[data-kq="${q}"]`)||firstOpen;nx.focus()}}
 async function openQuiz(answers){let r;try{r=await callApi("/api/wallet",answers?{action:"quiz",answers}:{action:"quiz"})}catch(e){toast("Yüklenemedi");return}
   if(r.wallet)applyWallet({...wallet,...r.wallet});if(r.gift){sfx("win");toast(`🧠 +${fmtCoin(r.gift.amount)} jeton`,3000)}
   const res=r.result,sel=[];
@@ -2203,17 +2205,18 @@ async function adminLookup(){
 }
 // Masa ücreti seçimi: salonlar bakiyeye göre açılır
 function tierIdx(bal){const t=catalog?.tiers||[];let i=0;t.forEach((x,k)=>{if((bal||0)>=x.min)i=k});return i}
-function pickStake(cb){
+function pickStake(cb,type="okey"){
   const bal=wallet?.balance||0,ti=tierIdx(bal),tiers=catalog?.tiers||[{name:"Çaylak Salonu",icon:"🌱",min:0,stakes:[0]}];
   const rk=Math.round((catalog?.rake??0.05)*100);
   const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open||v>bal?"disabled":""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
-  const spd=`<div class="fl">Okey tur süresi</div><div class="seg" id="tsSeg">${[[0,"Normal · 45 sn"],[30,"Hızlı · 30 sn"],[15,"Şimşek · 15 sn"]].map(([v,l])=>`<button data-ts="${v}" class="${(window.__turnSec||0)===v?"on":""}">${l}</button>`).join("")}</div>`;
-  const cnk=`<label class="tgl"><span><b>🍯 Çanak Okey</b><small>Her elden %5 kasaya, %5 çanağa. Okey atarak biten çanaktakinin hepsini alır (jetonlu masada).</small></span><input type="checkbox" id="cnkT" ${window.__canak?"checked":""}></label>`;
+  const isOk=type==="okey";if(!isOk){window.__turnSec=0;window.__canak=false}
+  const spd=!isOk?"":`<div class="fl">Okey tur süresi</div><div class="seg" id="tsSeg">${[[0,"Normal · 45 sn"],[30,"Hızlı · 30 sn"],[15,"Şimşek · 15 sn"]].map(([v,l])=>`<button data-ts="${v}" class="${(window.__turnSec||0)===v?"on":""}">${l}</button>`).join("")}</div>`;
+  const cnk=!isOk?"":`<label class="tgl"><span><b>🍯 Çanak Okey</b><small>Her elden %5 kasaya, %5 çanağa. Okey atarak biten çanaktakinin hepsini alır (jetonlu masada).</small></span><input type="checkbox" id="cnkT" ${window.__canak?"checked":""}></label>`;
   openInfoModal("Masa ücreti",spd+cnk+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html}`);
   $("#eBody").onclick=e=>{const ts=e.target.closest("[data-ts]");if(ts){window.__turnSec=+ts.dataset.ts;$("#tsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===ts));return}
     if(e.target.id==="cnkT"){window.__canak=e.target.checked;return}
     const b=e.target.closest("[data-stake]");if(!b||b.disabled)return;const v=+b.dataset.stake;
-    if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb));return}
+    if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb,type));return}
     closeE();cb(v)};
 }
 /* ---------- oyunlar: Okey ---------- */
@@ -2247,7 +2250,7 @@ $("#gpick").addEventListener("click",async e=>{
     if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
     await sendContent(conv,{t:"game",gid:r.id,kind:type,stake});
     openGame(r.id);
-  });
+  },type);
 });
 $("#msgs").addEventListener("click",e=>{const c=e.target.closest("[data-game]");if(c)openGame(c.dataset.game)});
 
@@ -2703,7 +2706,7 @@ function renderTavla(d,my){
   const chk=(n,mine)=>{const a=Math.abs(n),show=Math.min(a,5);return Array.from({length:show},(_,i)=>`<i class="ck ${mine?"w":"b"}">${i===show-1&&a>5?a:""}</i>`).join("")};
   const pt=(i,top,col)=>{const v=r.b[i];return`<div style="grid-column:${col}" class="tp ${top?"t":"u"} ${(i%2)^(top?1:0)?"d":"l"} ${srcs.has(i)&&game.tvSel==null?"src":""} ${game.tvSel===i?"sel":""} ${tgts.has(i)?"tgt":""}" data-p="${i}">${v?chk(v,v>0):""}</div>`};
   const row=(arr,top,c0)=>arr.map((i,k)=>pt(i,top,c0+k)).join("");
-  const bar=`<div class="tbar"><div class="bo">${r.obar?chk(-r.obar,false):""}</div><div class="bm ${srcs.has(24)&&game.tvSel==null?"src":""} ${game.tvSel===24?"sel":""}" data-p="24">${r.bar?chk(r.bar,true):""}</div></div>`;
+  const bar=`<div class="tvbar"><div class="bo">${r.obar?chk(-r.obar,false):""}</div><div class="bm ${srcs.has(24)&&game.tvSel==null?"src":""} ${game.tvSel===24?"sel":""}" data-p="24">${r.bar?chk(r.bar,true):""}</div></div>`;
   const offT=`<div class="toff"><div class="oo"><b>${d.tv.off[op]}</b><span>${Array.from({length:Math.min(d.tv.off[op],15)},()=>'<u class="b"></u>').join("")}</span></div><div class="om ${tgts.has(-1)?"tgt":""}" data-p="-1"><span>${Array.from({length:Math.min(r.off,15)},()=>'<u class="w"></u>').join("")}</span><b>${r.off}</b></div></div>`;
   const usedN=game.tvPath.length,dice=d.dice||[];const dl=dice.length?(dice[0]===dice[1]?[dice[0],dice[0],dice[0],dice[0]]:dice):[];
   const usedVals=game.tvPath.map(m=>m.d);const dUsed=dl.map(()=>false);usedVals.forEach(v=>{const k=dl.findIndex((x,i)=>x===v&&!dUsed[i]);if(k>=0)dUsed[k]=true});
@@ -2718,8 +2721,9 @@ function renderTavla(d,my){
   const hint=d.status!=="play"?"":isMy?(game.tvSel==null?(nx.next.length?"Oynatacağın pulu seç":""):"Gideceği haneyi seç"):esc(seatName(d.seats[d.turn]))+" oynuyor…";
   $("#gTable").innerHTML=`<div class="ttable">${side(op,true)}
     <div class="tboard"><div class="trow top">${row([12,13,14,15,16,17],true,1)}</div><div class="trow top r">${row([18,19,20,21,22,23],true,8)}</div>${bar}
-      <div class="trow bot">${row([11,10,9,8,7,6],false,1)}</div><div class="trow bot r">${row([5,4,3,2,1,0],false,8)}</div>${offT}</div>
-    <div class="tctl"><div class="tdice ${d.turn===my?"mine":""}">${(needRoll?[1,1]:dl.slice(0,dice[0]===dice[1]?4:2)).map((v,i)=>dieH(v,!needRoll&&dUsed[i],needRoll)).join("")}</div>
+      <div class="trow bot">${row([11,10,9,8,7,6],false,1)}</div><div class="trow bot r">${row([5,4,3,2,1,0],false,8)}</div>${offT}
+      ${dl.length||needRoll?`<div class="tbdice ${d.turn===my?"r":"l"} ${animDice?"throw":""}">${(needRoll?[]:dl.slice(0,dice[0]===dice[1]?4:2)).map((v,i)=>dieH(v,!needRoll&&dUsed[i],false)).join("")}</div>`:""}</div>
+    <div class="tctl">
       ${needRoll?`<button id="tRoll">🎲 Zar at</button>`:`<div class="thint">${hint}<small>${esc(d.log||"")} · pip ${pipsTxt}</small></div>`}${isMy&&usedN?`<button id="tUndo">↶ Geri al</button>`:""}
       ${my>=0?`<div class="tmode"><button data-tm="auto" class="${tmode==="auto"?"on":""}">Otomatik zar</button><button data-tm="manual" class="${tmode==="manual"?"on":""}">Elle zar at</button></div>`:""}</div>
     ${side(me2,false)}${over}</div>`;
