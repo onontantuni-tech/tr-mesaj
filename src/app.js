@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import * as P from "../netlify/lib/pool.mjs";
+import * as OK from "../netlify/lib/okey.mjs";
 import * as TV from "../netlify/lib/tavla.mjs";
 import { hasBad, clean as cleanText } from "../netlify/lib/filter.mjs";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
@@ -1960,14 +1961,15 @@ function renderGame(){
   $("#gMsg").innerHTML=msg;
   // ıstaka: iki kat, 13'er yuva
   syncSlots(game.hand);
-  const slot=(i)=>{const t=game.slots[i];return`<div class="slot" data-slot="${i}">${t==null?"":tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})}</div>`};
+  // yan yana duran geçerli perler/seriler yeşil çizgiyle işaretlenir
+  const good=new Set();{const okv={c:ok.c,n:ok.n};for(const base of [0,SLOTS/2]){let seg=[];for(let k=base;k<=base+SLOTS/2;k++){const t=k<base+SLOTS/2?game.slots[k]:null;if(t!=null)seg.push(k);else{if(seg.length>=3&&OK.validRun(seg.map(x=>game.slots[x]),okv))seg.forEach(x=>good.add(x));seg=[]}}}}
+  const slot=(i)=>{const t=game.slots[i];return`<div class="slot ${good.has(i)?"okg":""}" data-slot="${i}">${t==null?"":tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})}</div>`};
   const tier=(from)=>`<div class="tier">${Array.from({length:SLOTS/2},(_,k)=>slot(from+k)).join("")}</div>`;
   $("#gRack").innerHTML=my>=0?`<div class="rackwood">${tier(0)}${tier(SLOTS/2)}</div>`:"";
   $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";$("#pCtrl").style.display="none";
   $("#gDiscard").disabled=!(canDiscard&&game.sel!=null)||game.busy;
   $("#gFinish").disabled=!(canDiscard&&game.sel!=null)||game.busy;
-  const pile=$("#gPile");if(pile)pile.onclick=()=>canDraw&&gameMove({action:"draw",from:"pile"});
-  const ld=$("#gLeftDisc");if(ld)ld.onclick=()=>canDraw&&gameMove({action:"draw",from:"left"});
+  game.canDraw=canDraw;
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 function renderLobby(d,my){
@@ -2043,10 +2045,47 @@ function syncSlots(tiles){
   game.slots=game.slots.map(t=>t!=null&&set.has(t)?t:null);
   const placed=new Set(game.slots.filter(t=>t!=null));
   for(const t of tiles){if(placed.has(t))continue;
+    if(game.drawSlot!=null){const ds=game.drawSlot;game.drawSlot=null;
+      if(game.slots[ds]==null){game.slots[ds]=t;placed.add(t);continue}
+      // dolu yuvaya bırakıldıysa sağa kaydırarak araya sok
+      const rowEnd=ds<SLOTS/2?SLOTS/2:SLOTS;let gap=-1;for(let k=ds;k<rowEnd;k++)if(game.slots[k]==null){gap=k;break}
+      if(gap>=0){for(let k=gap;k>ds;k--)game.slots[k]=game.slots[k-1];game.slots[ds]=t;placed.add(t);continue}}
     let last=-1;game.slots.forEach((x,i)=>{if(x!=null)last=i});
     let i=game.slots.findIndex((x,k)=>x==null&&k>last);if(i<0)i=game.slots.indexOf(null);
     if(i<0)break;game.slots[i]=t;placed.add(t)}
 }
+/* desteden / soldan taş çekme: tek dokunuş ya da ıstakaya sürükle-bırak */
+let drawDrag=null;
+document.addEventListener("pointerdown",e=>{
+  const src=e.target.closest("#gPile,#gLeftDisc");if(!src||!game||!game.canDraw||game.busy)return;
+  e.preventDefault();const from=src.id==="gPile"?"pile":"left";
+  if(from==="left"&&!src.querySelector(".tile:not(.empty)"))return;
+  const r=src.getBoundingClientRect();
+  drawDrag={from,src,x0:e.clientX,y0:e.clientY,moved:false,ghost:null};
+  try{src.setPointerCapture(e.pointerId)}catch(_){}
+});
+document.addEventListener("pointermove",e=>{const g=drawDrag;if(!g)return;
+  if(!g.moved&&Math.hypot(e.clientX-g.x0,e.clientY-g.y0)<8)return;
+  if(!g.moved){g.moved=true;const sample=document.querySelector("#gRack .tile:not(.empty)");const w=sample?sample.getBoundingClientRect().width:40,h=sample?sample.getBoundingClientRect().height:56;
+    const top=g.from==="left"?g.src.querySelector(".st:last-child .tile"):null;
+    g.ghost=top?top.cloneNode(true):document.createElement("div");if(!top)g.ghost.className="tile back";
+    g.ghost.classList.add("ghost");Object.assign(g.ghost.style,{width:w+"px",height:h+"px",fontSize:sample?getComputedStyle(sample).fontSize:"",paddingTop:sample?getComputedStyle(sample).paddingTop:""});
+    g.w=w;g.h=h;document.body.appendChild(g.ghost);sfx("tile")}
+  g.ghost.style.transform=`translate(${e.clientX-g.w/2}px,${e.clientY-g.h/2}px) scale(1.1)`;
+  document.querySelectorAll(".hov").forEach(x=>x.classList.remove("hov"));
+  g.ghost.style.display="none";const el=document.elementFromPoint(e.clientX,e.clientY);g.ghost.style.display="";
+  const sl=el&&el.closest("#gRack .slot");if(sl)sl.classList.add("hov");
+});
+function endDrawDrag(e,cancel){const g=drawDrag;drawDrag=null;if(!g)return;
+  document.querySelectorAll(".hov").forEach(x=>x.classList.remove("hov"));
+  let slot=null;
+  if(g.ghost){g.ghost.style.display="none";const el=document.elementFromPoint(e.clientX,e.clientY);g.ghost.remove();const sl=el&&el.closest("#gRack .slot");if(sl)slot=+sl.dataset.slot;
+    if(cancel||slot==null)return}
+  if(cancel)return;
+  game.drawSlot=slot;gameMove({action:"draw",from:g.from});
+}
+document.addEventListener("pointerup",e=>endDrawDrag(e,false));
+document.addEventListener("pointercancel",e=>endDrawDrag(e,true));
 let rackDrag=null,lastTap={t:null,at:0};
 $("#gRack").addEventListener("pointerdown",e=>{
   const el=e.target.closest(".tile");if(!el||!game||el.closest(".tile.empty"))return;
@@ -2445,7 +2484,12 @@ function sortRack(mode){
   const key=t=>tIsWild(t,ok)?[9,99]:tIsFake(t)?[ok.c,ok.n]:[tColor(t),tNum(t)];
   const tiles=[...game.hand];let groups=[];
   if(mode==="run"){
-    // renge göre, ardışık sayılar bir grup
+    // perler (aynı sayı farklı renk) ve seriler (aynı renk ardışık, okeyle boşluk doldurma, 12-13-1)
+    const r=OK.arrange(tiles,{c:ok.c,n:ok.n});
+    groups=[...r.groups];
+    // kalanlar: renk ve sayıya göre sıralı, en sonda
+    const rest=r.rest.sort((a,b)=>(key(a)[0]-key(b)[0])||(key(a)[1]-key(b)[1]));if(rest.length){rest.loose=true;groups.push(rest)}
+  }else if(mode==="oldrun"){
     const by={};tiles.forEach(t=>{const [c]=key(t);(by[c]=by[c]||[]).push(t)});
     Object.keys(by).sort().forEach(c=>{const arr=by[c].sort((a,b)=>key(a)[1]-key(b)[1]);let g=[];
       arr.forEach(t=>{if(g.length&&key(t)[1]-key(g[g.length-1])[1]>1&&c!=="9"){groups.push(g);g=[]}g.push(t)});if(g.length)groups.push(g)});
@@ -2459,7 +2503,7 @@ function sortRack(mode){
   }
   // grupları aralarında birer boşlukla iki kata yerleştir
   const slots=Array(SLOTS).fill(null);let pos=0;const half=SLOTS/2;
-  for(const g of groups){if(pos<half&&pos+g.length>half)pos=half;if(pos+g.length>SLOTS)pos=slots.indexOf(null);
+  for(const g of groups){if(pos<half&&pos+g.length>half&&!g.loose)pos=half;if(pos+g.length>SLOTS)pos=slots.indexOf(null);
     for(const t of g){while(pos<SLOTS&&slots[pos]!=null)pos++;if(pos>=SLOTS)break;slots[pos++]=t}pos++}
   for(const t of tiles)if(!slots.includes(t)){const i=slots.indexOf(null);if(i>=0)slots[i]=t}
   game.slots=slots;game.sel=null;game.newTiles=null;sfx("tile");renderGame();

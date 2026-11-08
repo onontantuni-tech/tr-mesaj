@@ -208,3 +208,90 @@ export function tileLabel(t) {
   if (isFake(t)) return "sahte okey";
   return `${COLORS[colorOf(t)]} ${numOf(t)}`;
 }
+
+/* ---------------- ıstaka dizme (istemci kullanır) ---------------- */
+
+// Taşları perlere (aynı sayı farklı renk 3-4), serilere (aynı renk ardışık ≥3, 12-13-1 dahil) ayırır.
+// Mümkün olduğunca çok taşı gruba koyar; okeyler boşlukları doldurur. Dönüş: { groups: [[taş…]…], rest: [taş…] }
+export function arrange(tiles, okey) {
+  const wilds = tiles.filter((t) => valueOf(t, okey) === "W");
+  const norm = tiles.filter((t) => valueOf(t, okey) !== "W").map((t) => ({ t, ...valueOf(t, okey) }));
+  norm.sort((a, b) => a.c - b.c || a.n - b.n || a.t - b.t);
+  let best = { score: -1, groups: [], rest: tiles.slice() };
+  let steps = 0;
+  const take = (pool, c, n) => { const i = pool.findIndex((x) => x.c === c && x.n === n); return i < 0 ? null : pool.splice(i, 1)[0]; };
+
+  function rec(pool, w, groups, rest, placed) {
+    if (++steps > 60000) return;
+    // üst sınır: kalan taşların hepsi yerleşse bile en iyiyi geçemiyorsa dur
+    if (placed + pool.length + w <= best.score) return;
+    if (!pool.length) {
+      // artan okeyler: varsa bir grubun ucuna ekle (seri 13'ü geçmesin diye basitçe sona)
+      const g2 = groups.map((g) => g.slice()), left = w;
+      const score = placed + (g2.length ? left : 0);
+      if (score > best.score || (score === best.score && g2.length < best.groups.length)) {
+        let wl = wilds.slice(wilds.length - w);
+        if (g2.length) { for (const x of wl) g2[g2.length - 1].push(x); wl = []; }
+        best = { score, groups: g2, rest: [...rest, ...wl] };
+      }
+      return;
+    }
+    const first = pool[0];
+    const others = pool.slice(1);
+    const useW = (k) => wilds.slice(wilds.length - w, wilds.length - w + k);
+
+    // 1) seri: first'ten başlayıp yukarı (13'ten sonra 1)
+    {
+      const p = others.slice(); const run = [first.t]; let jw = 0; const jt = [];
+      for (let n = first.n + 1; n <= 14; n++) {
+        const num = n === 14 ? 1 : n;
+        if (n === 14 && first.n === 1) break;
+        const got = take(p, first.c, num);
+        if (got) run.push(got.t);
+        else { if (jw >= w) break; run.push(null); jw++; }
+        if (run.length >= 3 && run[run.length - 1] !== null) {
+          const wl = useW(jw); let k = 0;
+          rec(p.slice(), w - jw, [...groups, run.map((x) => (x === null ? wl[k++] : x))], rest, placed + run.length);
+        }
+      }
+    }
+    // 1b) first = 1 ise ...12-13-1 serisinin sonu olabilir
+    if (first.n === 1) {
+      for (let s = 12; s >= 2; s--) {
+        const p = others.slice(); const run = []; let jw = 0; let ok = true;
+        for (let n = s; n <= 13; n++) { const got = take(p, first.c, n); if (got) run.push(got.t); else if (jw < w) { run.push(null); jw++; } else { ok = false; break; } }
+        if (!ok || run.every((x) => x === null) && jw > 1) continue;
+        run.push(first.t);
+        const wl = useW(jw); let k = 0;
+        rec(p, w - jw, [...groups, run.map((x) => (x === null ? wl[k++] : x))], rest, placed + run.length);
+      }
+    }
+    // 2) per: aynı sayı farklı renkler (+okey)
+    {
+      const cols = [0, 1, 2, 3].filter((c) => c !== first.c && others.some((x) => x.c === c && x.n === first.n));
+      for (let mask = (1 << cols.length) - 1; mask >= 0; mask--) {
+        const pick = cols.filter((_, i) => mask & (1 << i));
+        for (const size of [4, 3]) {
+          const need = size - 1 - pick.length;
+          if (need < 0 || need > w) continue;
+          const p = others.slice(); const g = [first.t];
+          for (const c of pick) g.push(take(p, c, first.n).t);
+          g.push(...useW(need));
+          rec(p, w - need, [...groups, g], rest, placed + size);
+        }
+      }
+    }
+    // 3) tek kalsın
+    rec(others, w, groups, [...rest, first.t], placed);
+  }
+  rec(norm, wilds.length, [], [], 0);
+  return { groups: best.groups, rest: best.rest };
+}
+
+// Istakada yan yana duran taşlar geçerli bir grup (ya da gruplar) mı?
+export function validRun(tiles, okey) {
+  if (tiles.length < 3) return false;
+  const { cnt, w } = toCounts(tiles, okey);
+  if (w === tiles.length) return true;
+  return canGroup(cnt, w, 0);
+}
