@@ -421,7 +421,7 @@ function tick(m){
 const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
-const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
+const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],batak:["♠️","Batak"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
 function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="card")return"💌 "+((CARDS[c.k]||[])[1]||"Kart");if(c.t==="stk")return"🧿 "+((STK[c.k]||[])[1]||"Çıkartma");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
@@ -1873,6 +1873,7 @@ function renderGamesTab(){
     <button data-g="pub-pool"><span>🎱</span><b>Bilardo</b><small>Açık masalar · hemen otur</small></button>
     <button data-g="pub-pisti" class="pubpisti" ><span>🃏</span><b>Pişti</b><small>Açık masalar · 2 kişilik</small></button>
     <button data-g="pub-tavla" class="pubtavla"><span>🎲</span><b>Tavla</b><small>Açık masalar · 2 kişilik</small></button>
+    <button data-g="pub-batak" class="pubbatak" style="grid-column:span 2"><span>♠️</span><b>İhaleli Batak</b><small>Açık masalar · 4 kişilik</small></button>
   </div>
   <div class="gbtns">
     ${(wallet.balance||0)<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today?`<button data-g="rescue" class="hot" style="grid-column:span 2;background:#fff4d6"><span>🆘</span>Jetonun bitti mi? ${fmtCoin(catalog?.rescue?.amount||10000)} jeton desteği al<i class="dot"></i></button>`:""}
@@ -1903,7 +1904,7 @@ function renderGamesTab(){
 }
 document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
-  if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");
+  if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
   if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
@@ -2188,7 +2189,7 @@ const backHTML=(n=1)=>`<div class="tback">${Array.from({length:Math.min(n,3)},()
 let game=null;            // {id, data, hand, order, sel, unsubs, busy}
 async function gameApi(body,type){
   const t=type||(game&&game.data&&game.data.type);
-  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
+  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":t==="batak"?"/api/batak":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
   return r;
 }
 $("#gameBtn").onclick=()=>{if(!cur)return;closeAll();{const gi=$("#gpick [data-gift-open]");if(gi)gi.style.display=isGroupConv(cur)||!isFriend(cur)?"none":""}overlay.classList.add("show");$("#gpick").classList.add("show")};
@@ -2224,6 +2225,7 @@ function openGame(id){
       if(prevD&&prevD.status==="play"&&d.status==="over"&&d.winner===my)setTimeout(()=>sfx("win"),d.type==="pool"?2500:300);
       if(prevD&&prevD.status!=="over"&&d.status==="over")postResult(d);
       if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){game.tvPath=[];game.tvSel=null;sfx("tile")}
+      else if(prevD&&d.type==="batak"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="pisti"&&prevD.seq!==d.seq){sfx("tile");if(d.last&&d.last.pisti)setTimeout(()=>sfx("win"),250)}
       else if(prevD&&d.type!=="pool"&&d.type!=="pisti"&&JSON.stringify(prevD.discards)!==JSON.stringify(d.discards))sfx("tile")}
     renderGame();
@@ -2272,6 +2274,7 @@ function renderGame(){
   if(d.type==="pool"){gs.classList.add("pool");if(d.status==="play"||d.status==="over")askLandscape();return renderPool(d,my)}
   if(d.type==="pisti"){gs.classList.add("pistig");return renderPisti(d,my)}
   if(d.type==="tavla"){gs.classList.add("tavlag");return renderTavla(d,my)}
+  if(d.type==="batak"){gs.classList.add("pistig","batakg");return renderBatak(d,my)}
   gs.classList.add("okeyg");
   if(d.status==="play"||d.status==="over")askLandscape();
   $("#gTitleTxt").textContent="Okey";
@@ -2344,7 +2347,7 @@ function renderLobby(d,my){
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
   const host=d.host===me,free=d.seats.some(s=>!s),pool=d.type==="pool"||d.type==="pisti"||d.type==="tavla";
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?"Pişti masası · 2 kişilik":d.type==="tavla"?"Tavla masası · 2 kişilik":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?"Pişti masası · 2 kişilik":d.type==="tavla"?"Tavla masası · 2 kişilik":d.type==="batak"?"İhaleli Batak · 4 kişilik":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>{if(d.stake&&!wallet?.adult){if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>gameMove({action:"join"}));return}gameMove({action:"join"})};
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
   if(d.public&&d.status==="lobby"){const lb=$("#gTable .lobby");if(lb&&!$("#gInvite")){const b=document.createElement("button");b.id="gInvite";b.className="ghostbtn";b.textContent="🔗 Davet bağlantısı";lb.appendChild(b);
@@ -2564,6 +2567,45 @@ function renderPisti(d,my){
   const hb=$(".phand.me");if(hb)hb.onclick=e=>{const c=e.target.closest(".pcard[data-c]");if(!c||!isMy)return;const v=+c.dataset.c;
     c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),120)};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
+}
+/* ---------- Batak ---------- */
+const BK_S=["♠","♥","♦","♣"],bkVal=c=>c%13===0?14:c%13+1;
+function bkLegal(hand,trick,trump,broken){const su=c=>Math.floor(c/13);
+  if(!trick.length){if(trump==null||broken)return hand;const n=hand.filter(c=>su(c)!==trump);return n.length?n:hand}
+  const lead=su(trick[0].c);let w=trick[0];for(const t of trick.slice(1)){const ws=su(w.c),ts=su(t.c);if(ts===ws&&bkVal(t.c)>bkVal(w.c))w=t;else if(trump!=null&&ts===trump&&ws!==trump)w=t}
+  const f=hand.filter(c=>su(c)===lead);if(f.length){if(su(w.c)!==lead)return f;const h=f.filter(c=>bkVal(c)>bkVal(w.c));return h.length?h:f}
+  const tr=trump==null?[]:hand.filter(c=>su(c)===trump);if(tr.length){if(su(w.c)===trump){const h=tr.filter(c=>bkVal(c)>bkVal(w.c));return h.length?h:tr}return tr}return hand}
+function renderBatak(d,my){
+  $("#gTitleTxt").textContent="Batak";
+  $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el${d.trump!=null?" · koz "+BK_S[d.trump]:""}${d.bid?" · ihale "+d.bid:""}`:"";
+  $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
+  if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
+  askLandscape();
+  $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
+  const me4=my>=0?my:0,pos=i=>["bottom","right","top","left"][(i-me4+4)%4],isMy=d.status==="play"&&d.turn===my&&!game.busy;
+  const hc=d.handCounts||[0,0,0,0],tk=d.tricks||[0,0,0,0],bids=d.bids||[];
+  const seatBox=i=>`<div class="bkseat bk-${pos(i)} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div><b>${esc(seatName(d.seats[i]))}${d.bidder===i?" 🎯":""}</b><span>${d.phase==="bid"?(bids[i]==null?"…":bids[i]?bids[i]+" dedi":"pas"):`${tk[i]} el`}${pos(i)!=="bottom"?` · 🂠 ${hc[i]}`:""} · ${(d.scores||[])[i]||0}p</span></div></div>`;
+  const showTrick=(d.trick&&d.trick.length)?d.trick:(d.lastTrick&&Date.now()-(d.lastTrick.at||0)<1600?d.lastTrick.cards:[]);
+  const center=`<div class="bkcenter">${showTrick.map(t=>`<div class="bkc bkc-${pos(t.p)}">${cardHTML(t.c)}</div>`).join("")}${d.trump!=null?`<div class="bktrump ${d.trump===1||d.trump===2?"red":""}">${BK_S[d.trump]}<small>koz</small></div>`:""}</div>`;
+  const mine=(game.cards||[]).slice().sort((a,b)=>(Math.floor(a/13)-Math.floor(b/13))||(bkVal(a)-bkVal(b)));
+  const legal=isMy&&d.phase==="play"?new Set(bkLegal(mine,d.trick||[],d.trump,d.broken)):new Set();
+  const hand=`<div class="bkhand">${mine.map(c=>cardHTML(c,{cls:legal.has(c)?"ok":isMy&&d.phase==="play"?"no":""})).join("")}</div>`;
+  let ctrl="";
+  if(isMy&&d.phase==="bid"){const min=Math.max(4,(d.bid||0)+1);ctrl=`<div class="bkctl"><b>İhale${d.bid?` (en yüksek: ${d.bid})`:""}</b><div>${Array.from({length:Math.max(0,14-min)},(_,k)=>`<button data-bid="${min+k}">${min+k}</button>`).join("")}<button data-bid="0" class="pas">Pas</button></div></div>`}
+  else if(isMy&&d.phase==="trump")ctrl=`<div class="bkctl"><b>Kozu seç (ihale ${d.bid})</b><div>${BK_S.map((x,i)=>`<button data-trump="${i}" class="${i===1||i===2?"red":""}" style="font-size:24px">${x}</button>`).join("")}</div></div>`;
+  let over="";
+  if(d.status==="over"&&d.final){const f=d.final,w=d.winner;
+    over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div>${esc(d.log||"")}</div>
+      <table class="pfin"><tr><th></th><th>El</th><th>Puan</th></tr>${d.seats.map((x,i)=>`<tr><td>${esc(seatName(x))}${f.bidder===i?" 🎯"+f.bid:""}</td><td>${f.tricks[i]}</td><td><b>${f.pts[i]>0?"+":""}${f.pts[i]}</b></td></tr>`).join("")}</table>
+      ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:d.payout.refund?"":`<div><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton</div>`):""}${rateHTML(d)}
+      ${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`}
+  const msg=d.status!=="play"?"":isMy?(d.phase==="bid"?"İhale sırası sende":d.phase==="trump"?"Kozu seç":"Kart at"):`${esc(seatName(d.seats[d.turn]))} ${d.phase==="bid"?"ihale düşünüyor…":d.phase==="trump"?"kozu seçiyor…":"oynuyor…"}`;
+  $("#gTable").innerHTML=`<div class="bktable">${d.seats.map((_,i)=>seatBox(i)).join("")}${center}<div class="bkmsg">${msg}<small>${esc(d.log||"")}</small></div>${ctrl}${hand}${over}</div>`;
+  const bt=$("#gTable .bktable");bt.onclick=e=>{const b=e.target.closest("[data-bid]");if(b){gameMove({action:"bid",v:+b.dataset.bid});return}
+    const t=e.target.closest("[data-trump]");if(t){gameMove({action:"trump",suit:+t.dataset.trump});return}
+    const c=e.target.closest(".bkhand .pcard[data-c]");if(c&&legal.has(+c.dataset.c)){const v=+c.dataset.c;c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),100)}};
+  const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
+  if(d.lastTrick&&!(d.trick&&d.trick.length)&&Date.now()-(d.lastTrick.at||0)<1600){clearTimeout(game.bkT);game.bkT=setTimeout(()=>{if(game&&game.data===d)renderGame()},1650)}
 }
 /* ---------- Tavla ---------- */
 function tvLegal(d,my){const key=JSON.stringify([d.seq,d.dice]);if(game.tvKey!==key){game.tvKey=key;game.tvSeqs=d.dice?TV.sequences(TV.rel(d.tv,my),d.dice):[[]]}return game.tvSeqs}

@@ -4,8 +4,9 @@ import okey from "../netlify/functions/game.mjs";
 import pool from "../netlify/functions/pool.mjs";
 import pisti from "../netlify/functions/pisti.mjs";
 import tavla from "../netlify/functions/tavla.mjs";
+import batak from "../netlify/functions/batak.mjs";
 
-const H = { okey, game: okey, pool, pisti, tavla };
+const H = { okey, game: okey, pool, pisti, tavla, batak };
 
 function pick(request) {
   try {
