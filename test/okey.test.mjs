@@ -1,3 +1,4 @@
+import { test } from "node:test";
 import * as O from "../netlify/lib/okey.mjs";
 import assert from "node:assert";
 const T=(c,n,copy=0)=>c*26+(n-1)*2+copy;
@@ -38,3 +39,24 @@ for(let g=0;g<300;g++){const d=O.deal(0);const hands=d.hands;const disc=[[],[],[
   const t=O.botChooseDiscard(hand,d.okey);hand.splice(hand.indexOf(t),1);disc[turn].push(t);turn=(turn+1)%4;phase='draw';}
 }
 console.log("tamam: testler geçti. 300 bot oyunu ->",wins,"bitti,",draws,"berabere,",Date.now()-t0,"ms");
+
+// Kullanıcı bildirimi: per/seri tanıma ve dizme
+import * as O2 from "../netlify/lib/okey.mjs";
+const T2 = (c, n, k = 0) => c * 26 + (n - 1) * 2 + k;
+test("12-13-1, okeyli per, sahte okeyli seri ve 6'lı seri bitiyor", () => {
+  const ok = { c: 3, n: 13 }, W = T2(3, 13);
+  const hands = [
+    [T2(0,12),T2(0,13),T2(0,1),T2(1,4),T2(1,5),T2(1,6),T2(2,8),T2(3,8),T2(0,8),T2(1,2),T2(2,2),T2(3,2),T2(0,2),T2(1,7)],
+    [T2(0,3),T2(1,3),W,T2(1,9),T2(2,9),T2(3,9),T2(1,1),T2(1,2),T2(1,3,1),T2(1,4),T2(2,6),T2(2,7),T2(2,8),T2(2,9,1)],
+    [104,T2(3,12),T2(3,11),T2(1,9),T2(2,9),T2(3,9),T2(1,1),T2(1,2),T2(1,3),T2(1,4),T2(2,6),T2(2,7),T2(2,8),T2(2,9,1)],
+    [T2(0,1),T2(0,2),T2(0,3),T2(0,4),T2(0,5),T2(0,6),T2(1,1),T2(1,2),T2(1,3),T2(1,4),T2(0,8),T2(1,8),T2(2,8),T2(3,8)],
+  ];
+  for (const h of hands) assert.equal(O2.winKind(h, ok), "seri");
+});
+test("arrange bitmiş eli tamamen gruplara ayırır", () => {
+  const ok = { c: 3, n: 13 };
+  const h = [T2(0,12),T2(0,13),T2(0,1),T2(1,4),T2(1,5),T2(1,6),T2(2,8),T2(3,8),T2(0,8),T2(1,2),T2(2,2),T2(3,2),T2(0,2),T2(1,7)];
+  const r = O2.arrange(h, ok);
+  assert.equal(r.rest.length, 0);
+  assert.ok(r.groups.every((g) => O2.validRun(g, ok)));
+});
