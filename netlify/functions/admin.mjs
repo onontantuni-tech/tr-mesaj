@@ -17,13 +17,54 @@ export default async (req) => {
   const uid = await requireUser(req);
   if (!uid) return json(401, { error: "auth" });
   const { db } = admin();
-  if (!(await isAdmin(db, uid))) return json(403, { error: "admin" });
+  const full = await isAdmin(db, uid);
+  // Moderatörler: şikâyet inceleme, en fazla 7 gün askıya alma, kullanıcı bakma ve not
+  const mod = !full && (await db.doc(`mods/${uid}`).get()).exists;
+  if (!full && !mod) return json(403, { error: "admin" });
   let b;
   try { b = await req.json(); } catch { b = {}; }
   const act = String(b?.action || "check");
+  if (mod && !["check", "reports", "resolve", "lookup", "ban", "unban", "note"].includes(act)) return json(403, { error: "mod" });
+  if (mod && (act === "ban" || (act === "resolve" && b.verdict === "ban")) && !(Number(b.days) > 0 && Number(b.days) <= 7)) return json(403, { error: "modban" });
   if (act === "check") {
+    if (mod) return json(200, { admin: true, mod: true, house: null });
     const h = await db.doc("house/stats").get();
     return json(200, { admin: true, house: h.exists ? h.data() : { net: 0, rake: 0, botWin: 0, botStake: 0, hands: 0 } });
+  }
+  // Hediye kodu oluştur (ör. kampanya, telafi): kod başına jeton ve kullanım sayısı
+  if (act === "mkcode") {
+    const amount = Math.trunc(Number(b.amount)), uses = Math.max(1, Math.min(10000, Math.trunc(Number(b.uses) || 1)));
+    if (!(amount > 0 && amount <= 10000000)) return json(400, { error: "amount" });
+    let code = String(b.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+    if (code.length < 5) { code = ""; for (let i = 0; i < 8; i++) code += "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]; }
+    await db.doc(`giftcodes/${code}`).set({ amount, uses, used: 0, by: uid, at: Date.now() });
+    return json(200, { ok: true, code });
+  }
+  // Olağan dışı jeton hareketleri (son 24 saat, 1.000.000 ve üzeri)
+  if (act === "alerts") {
+    const q = await db.collection("ledger").where("at", ">", Date.now() - 86400000).orderBy("at", "desc").limit(1500).get();
+    const big = q.docs.map((d) => d.data()).filter((x) => Math.abs(x.delta || 0) >= 1000000).slice(0, 100);
+    const per = {}; q.docs.forEach((d) => { const x = d.data(); per[x.uid] = (per[x.uid] || 0) + (x.delta || 0); });
+    const top = Object.entries(per).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 15);
+    const uids = [...new Set([...big.map((x) => x.uid), ...top.map((x) => x[0])])].slice(0, 60);
+    const us = await Promise.all(uids.map((u) => db.doc(`users/${u}`).get()));
+    const names = {}; uids.forEach((u, i) => { names[u] = us[i].exists ? { name: us[i].data().nick || "", code: us[i].data().code || "" } : { name: "?", code: "" }; });
+    return json(200, { big, top, names });
+  }
+  // Kasa raporu (CSV için ham satırlar)
+  if (act === "houseRows") {
+    const since = Date.now() - Math.max(1, Math.min(90, Number(b.days) || 30)) * 86400000;
+    const q = await db.collection("house_ledger").where("at", ">", since).orderBy("at", "desc").limit(5000).get();
+    return json(200, { rows: q.docs.map((d) => d.data()) });
+  }
+  // Moderatör ekle / çıkar (TR ID ile)
+  if (act === "mod") {
+    const code = String(b.code || "").replace(/\D/g, "");
+    const cs = await db.doc(`codes/${code}`).get();
+    if (!cs.exists) return json(404, { error: "notfound" });
+    const t = cs.data().uid;
+    if (b.on) await db.doc(`mods/${t}`).set({ by: uid, at: Date.now() }); else await db.doc(`mods/${t}`).delete();
+    return json(200, { ok: true });
   }
 
   // Şikâyetler
@@ -89,11 +130,12 @@ export default async (req) => {
   const target = cs.data().uid;
 
   if (act === "lookup") {
-    const [u, w, led, bn] = await Promise.all([
+    const [u, w, led, bn, nt] = await Promise.all([
       db.doc(`users/${target}`).get(),
       db.doc(`wallets/${target}`).get(),
       db.collection("ledger").where("uid", "==", target).limit(200).get(),
       db.doc(`bans/${target}`).get(),
+      db.collection(`adminNotes/${target}/n`).orderBy("at", "desc").limit(20).get(),
     ]);
     const ban = bn.exists && bn.data().until > Date.now() ? { until: bn.data().until, reason: bn.data().reason || "" } : null;
     const wl = w.exists ? w.data() : null;
@@ -102,7 +144,7 @@ export default async (req) => {
     return json(200, {
       user: { code, name: u.exists ? u.data().nick || "" : "", joined: u.exists ? u.data().joined || 0 : 0 },
       wallet: wl ? { balance: wl.balance || 0, level: lv.level, xp: wl.xp || 0, wins: wl.wins || 0, games: wl.games || 0 } : null,
-      history, ban,
+      history, ban, notes: nt.docs.map((d) => d.data()),
     });
   }
 
@@ -136,6 +178,12 @@ export default async (req) => {
     return json(200, { ok: true, balance });
   }
 
+  // Yönetici iç notu (sadece yöneticiler görür)
+  if (act === "note") {
+    const text = String(b.text || "").slice(0, 1000);
+    await db.collection(`adminNotes/${target}/n`).add({ text, by: uid, at: Date.now() });
+    return json(200, { ok: true });
+  }
   if (act === "ban") {
     if (target === uid) return json(400, { error: "self" });
     await setBan(db, target, b.days, String(b.reason || "Kurallara aykırı davranış").slice(0, 80), uid);

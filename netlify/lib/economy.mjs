@@ -113,6 +113,12 @@ export function addClub(tx, db, wl, pts) {
   if (!pts || !wl.club) return;
   tx.set(db.doc(`club_week/${weekId()}/c/${wl.club}`), { points: FieldValue.increment(pts) }, { merge: true });
 }
+export const CITIES = ["Adana","Adıyaman","Afyonkarahisar","Ağrı","Aksaray","Amasya","Ankara","Antalya","Ardahan","Artvin","Aydın","Balıkesir","Bartın","Batman","Bayburt","Bilecik","Bingöl","Bitlis","Bolu","Burdur","Bursa","Çanakkale","Çankırı","Çorum","Denizli","Diyarbakır","Düzce","Edirne","Elazığ","Erzincan","Erzurum","Eskişehir","Gaziantep","Giresun","Gümüşhane","Hakkari","Hatay","Iğdır","Isparta","İstanbul","İzmir","Kahramanmaraş","Karabük","Karaman","Kars","Kastamonu","Kayseri","Kilis","Kırıkkale","Kırklareli","Kırşehir","Kocaeli","Konya","Kütahya","Malatya","Manisa","Mardin","Mersin","Muğla","Muş","Nevşehir","Niğde","Ordu","Osmaniye","Rize","Sakarya","Samsun","Şanlıurfa","Siirt","Sinop","Şırnak","Sivas","Tekirdağ","Tokat","Trabzon","Tunceli","Uşak","Van","Yalova","Yozgat","Zonguldak","Yurt dışı"];
+// Şehir sıralaması: oyuncuların lig puanları şehirlerine yazılır (aylık)
+export function addCity(tx, db, wl, pts) {
+  if (!pts || !wl.city || !CITIES.includes(wl.city)) return;
+  tx.set(db.doc(`lb_city/${trDate().month}/c/${CITIES.indexOf(wl.city)}`), { points: FieldValue.increment(pts), name: wl.city }, { merge: true });
+}
 export function addLeague(tx, db, uid, wl, pts, won) {
   if (!pts) return;
   const wk = weekId(), tier = Math.max(0, Math.min(LEAGUES.length - 1, wl.league || 0));
@@ -284,6 +290,7 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   addLeague(tx, db, uid, wl, lp, won);
   addTour(tx, db, uid, wl, lp, won);
   addClub(tx, db, wl, lp);
+  addCity(tx, db, wl, lp);
   // galibiyet serisi (sadece jetonlu masalarda; ücretsiz masada bilgisayarı yenip jeton toplanmasın)
   if (won && stake > 0) {
     wl.winStreak = (wl.winStreak || 0) + 1;

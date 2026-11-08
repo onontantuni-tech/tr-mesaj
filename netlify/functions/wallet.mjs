@@ -4,6 +4,7 @@ import * as E from "../lib/economy.mjs";
 import { FieldValue } from "firebase-admin/firestore";
 import { migrateFriends, areFriends } from "../lib/friends.mjs";
 import { hasBad } from "../lib/filter.mjs";
+import * as K from "../lib/kelime.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
@@ -231,6 +232,42 @@ export default async (req) => {
         tx.set(db.doc(`ratings/${to}`), { [v > 0 ? "up" : "down"]: FieldValue.increment(1) }, { merge: true });
         gift = { rated: v };
       }
+      // Kelimece: günlük kelime tahmini (cevap sunucuda)
+      if (act === "kelime") {
+        const day = E.trDate().day;
+        const st = w.kel && w.kel.day === day ? w.kel : { day, g: [], s: [], done: false, won: false };
+        if (b.guess !== undefined && !st.done) {
+          const g = String(b.guess || "").toLocaleUpperCase("tr-TR").trim();
+          if (!K.LETTERS.test(g)) return { status: 400, body: { error: "word" } };
+          const ans = K.wordOf(day), sc = K.score(g, ans);
+          st.g = [...st.g, g]; st.s = [...st.s, sc.join("")];
+          if (g === ans) { st.done = true; st.won = true; E.credit(tx, db, uid, w, K.PRIZE, "Kelimece ödülü"); gift = { amount: K.PRIZE }; }
+          else if (st.g.length >= K.TRIES) { st.done = true; st.ans = ans; }
+          w.kel = st;
+        }
+        tx.set(ref, w);
+        return { status: 200, body: { kel: { g: st.g, s: st.s, done: st.done, won: st.won, ans: st.done ? st.ans || (st.won ? st.g[st.g.length - 1] : null) : null }, gift, wallet: view(w) } };
+      }
+      // Hediye kodu kullan
+      if (act === "redeem") {
+        const code = String(b.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 16);
+        if (code.length < 5) return { status: 400, body: { error: "code" } };
+        if ((w.codes || []).includes(code)) return { status: 409, body: { error: "used" } };
+        const cref = db.doc(`giftcodes/${code}`); const cs = await tx.get(cref);
+        if (!cs.exists) return { status: 404, body: { error: "notfound" } };
+        const c = cs.data();
+        if ((c.used || 0) >= (c.uses || 1)) return { status: 410, body: { error: "spent" } };
+        tx.update(cref, { used: (c.used || 0) + 1 });
+        w.codes = [...(w.codes || []), code].slice(-100);
+        E.credit(tx, db, uid, w, c.amount, `Hediye kodu: ${code}`);
+        gift = { amount: c.amount };
+      }
+      // Şehir (şehir sıralaması için)
+      if (act === "city") {
+        const city = E.CITIES.includes(b.city) ? b.city : null;
+        if (!city) return { status: 400, body: { error: "city" } };
+        w.city = city;
+      }
       // Harcama iadesi (dünkü harcamaya göre)
       if (act === "cashback") {
         const v = E.spendView(w);
@@ -322,10 +359,10 @@ function view(w) {
     tasks: (() => { const t = E.todayTasks(w); return E.tasksFor(t).map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
     ach: w.ach || [], achStats: { wins: w.wins || 0, games: w.games || 0, maxStreak: w.maxStreak || 0, tw: w.tw || {}, marsN: w.marsN || 0, giftsSent: w.giftsSent || 0 },
-    club: w.club || null, vipLeft: w.vipLeft || 0, cb: E.spendView(w),
+    club: w.club || null, city: w.city || "", vipLeft: w.vipLeft || 0, cb: E.spendView(w),
     tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, titles: E.TITLES.map(({ id, name, icon }) => ({ id, name, icon })), refPrizes: E.REF_PRIZES, cashback: E.CASHBACK, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, cities: E.CITIES, titles: E.TITLES.map(({ id, name, icon }) => ({ id, name, icon })), refPrizes: E.REF_PRIZES, cashback: E.CASHBACK, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
   };
 }
 

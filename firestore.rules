@@ -165,7 +165,7 @@ service cloud.firestore {
       allow read: if signedIn() && (request.auth.uid == u || resource.data.vis == 'all'
         || (resource.data.vis == 'friends' && areFriends(request.auth.uid, u)));
       allow write: if isMe(u)
-        && nd().keys().hasOnly(['at', 'vis', 'ty', 'tyAt'])
+        && nd().keys().hasOnly(['at', 'vis', 'ty', 'tyAt', 'g', 'gid'])
         && nd().vis in ['all', 'friends', 'none']
         && nd().at is number;
     }
@@ -342,6 +342,10 @@ service cloud.firestore {
       allow write: if false;
     }
     match /lb_day/{d}/u/{u} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /lb_city/{m}/c/{c} {
       allow read: if signedIn();
       allow write: if false;
     }
