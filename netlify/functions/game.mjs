@@ -55,7 +55,7 @@ export default async (req) => {
       if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
-        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl), turnSec: [15, 30].includes(Number(b.turnSec)) ? Number(b.turnSec) : 0,
+        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl), turnSec: [15, 30].includes(Number(b.turnSec)) ? Number(b.turnSec) : 0, canak: b.canak === true && stake > 0, canakPot: 0, hostLvl: lvl,
         seats: [{ uid, bot: false }, null, null, null],
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0, 0, 0], v: 1,
       });
@@ -141,7 +141,7 @@ export default async (req) => {
           ...g, status: "play", dealer, turn: dealer, phase: "discard", indicator: d.indicator, settled: false,
           discards: { 0: [], 1: [], 2: [], 3: [] }, pileCount: d.pile.length,
           handCounts: d.hands.map((h) => h.length), winner: null, winKind: null, winHand: null,
-          round: (g.round || 0) + 1, lastMoveAt: Date.now(), updatedAt: Date.now(), log: "Oyun başladı",
+          round: (g.round || 0) + 1, shown: [], withOkey: false, lastMoveAt: Date.now(), updatedAt: Date.now(), log: "Oyun başladı",
         };
         const hands = {};
         g.seats.forEach((s, i) => { if (s.bot) secret.bots[i] = d.hands[i]; else hands[s.uid] = d.hands[i]; });
@@ -194,6 +194,17 @@ export default async (req) => {
       const hand = hands[uid];
       const okey = O.okeyOf(st.indicator);
 
+      // Göstergeyi göster: elinde göstergenin eşi varsa, ilk taşını atmadan önce +1 puan
+      if (act === "show") {
+        const twin = hand.find((t) => t !== st.indicator && !O.isFake(t) && O.colorOf(t) === O.colorOf(st.indicator) && O.numOf(t) === O.numOf(st.indicator));
+        if (twin == null || (st.shown || []).includes(mySeat) || (st.discards[mySeat] || []).length) return { status: 409, body: { error: "noshow" } };
+        st.shown = [...(st.shown || []), mySeat];
+        st.scores = (st.scores || [0, 0, 0, 0]).slice(); st.scores[mySeat] += 1;
+        st.log = "Göstergeyi gösterdi (+1 puan)";
+        st.showTile = twin;
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        return { status: 200, body: { ok: true } };
+      }
       if (act === "draw") {
         if (st.phase !== "draw") return { status: 409, body: { error: "phase" } };
         const from = b.from === "left" ? "left" : "pile";
@@ -261,6 +272,7 @@ function finish(st, seat, kind, rest, withOkey) {
   st.winHand = rest;
   let pts = kind === "cift" ? 4 : 2;
   if (withOkey) pts *= 2;
+  st.withOkey = !!withOkey;
   st.scores = (st.scores || [0, 0, 0, 0]).slice();
   st.scores[seat] += pts;
   st.points = pts;
@@ -281,8 +293,14 @@ function settle(tx, db, st, wallets) {
     if (winnerUid && wallets[winnerUid]) {
       const total = humanPot + (st.botStake || 0);
       const rake = Math.round(total * E.RAKE);
-      E.credit(tx, db, winnerUid, wallets[winnerUid], total - rake, "Okey kazanç");
-      st.payout = { uid: winnerUid, amount: total - rake, rake };
+      // Çanak Okey: %5 kasaya + %5 çanağa; okey atarak biten çanaktakini de alır
+      const toCanak = st.canak ? Math.round(total * E.RAKE) : 0;
+      let canakWin = 0;
+      st.canakPot = (st.canakPot || 0) + toCanak;
+      if (st.canak && st.withOkey) { canakWin = st.canakPot; st.canakPot = 0; }
+      const amount = total - rake - toCanak + canakWin;
+      E.credit(tx, db, winnerUid, wallets[winnerUid], amount, canakWin ? "Okey kazanç + çanak" : "Okey kazanç");
+      st.payout = { uid: winnerUid, amount, rake, canak: toCanak, canakWin };
       houseLog(tx, db, rake - (st.botStake || 0), { rake, botStake: st.botStake || 0 });
     } else if (w != null) {
       st.payout = { house: true, amount: humanPot };
