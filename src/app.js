@@ -160,6 +160,7 @@ async function sendContent(conv,content,{blob,mime,meta,men}={}){
   try{
     const {key,aad,base}=await prepareSend(conv,at);
     if(men&&men.length&&base.gid)base.men=men.slice(0,50);
+    {const ttl=content.t==="ttl"?0:convTTL(conv);if(ttl)base.exp=at+ttl}
     let c=content;
     if(blob){
       const bytes=new Uint8Array(await blob.arrayBuffer());
@@ -275,11 +276,19 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
-function convMsgs(c){return raw.filter(m=>convOfMsg(m)===c).concat(pending.filter(m=>m.conv===c)).sort((a,b)=>a.at-b.at)}
-function unreadOf(c){const last=reads[me+"_"+c]||0;return raw.filter(m=>m.from!==me&&convOfMsg(m)===c&&m.at>last).length}
+/* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
+const TTL_OPTS=[[0,"Kapalı"],[86400e3,"24 saat"],[7*86400e3,"7 gün"],[90*86400e3,"90 gün"]];
+const ttlLabel=v=>(TTL_OPTS.find(x=>x[0]===v)||[0,"Kapalı"])[1];
+function convTTL(c){let best=null;for(const m of raw){if(convOfMsg(m)!==c)continue;const ct=plain[m.id];if(ct&&ct.t==="ttl"&&(!best||m.at>best.at))best={at:m.at,v:+ct.v||0}}return best?best.v:0}
+const alive=m=>!(m.exp&&m.exp<Date.now());
+function openTTL(c){openInfoModal("⏱️ Kaybolan mesajlar",`<p class="isub">Açıkken bu sohbete gönderilen yeni mesajlar seçtiğin süre sonunda herkesten silinir. Daha önce gönderilenler etkilenmez. Şu an: <b>${ttlLabel(convTTL(c))}</b></p>`+TTL_OPTS.map(([v,l])=>`<div class="pk" data-ttl="${v}" style="cursor:pointer"><b style="flex:1">${l}</b>${convTTL(c)===v?"✅":""}</div>`).join(""));
+  $("#eBody").onclick=async e=>{const r=e.target.closest("[data-ttl]");if(!r)return;const v=+r.dataset.ttl;closeE();if(v===convTTL(c))return;await sendContent(c,{t:"ttl",v})}}
+setInterval(()=>{if(raw.some(m=>m.exp&&m.exp<Date.now()&&!m._gone)){raw.forEach(m=>{if(m.exp&&m.exp<Date.now())m._gone=1});try{renderAll()}catch(e){}}},30000);
+function convMsgs(c){return raw.filter(m=>convOfMsg(m)===c&&alive(m)).concat(pending.filter(m=>m.conv===c)).sort((a,b)=>a.at-b.at)}
+function unreadOf(c){const last=reads[me+"_"+c]||0;return raw.filter(m=>m.from!==me&&convOfMsg(m)===c&&m.at>last&&alive(m)).length}
 
 /* ---------- render: list ---------- */
 function chatEntries(){
@@ -357,6 +366,7 @@ function bubbleBody(m,c){
     const ar=c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:"";
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
+  if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
   if(c.t==="gift"){const G=giftOf(c.id);if(G)return`<div class="giftmsg"><span>${G.icon}</span><b>${esc(G.name)}</b><small>hediye</small></div>`}
   if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
   if(c.t==="voice"){
@@ -528,11 +538,13 @@ function openChatSheet(c){
     <button data-ca="fav">${prefs.fav.includes(c)?"☆ Favorilerden çıkar":"⭐ Favorilere ekle"}</button>
     ${muted?'<button data-ca="unmute">🔔 Sesi aç</button>':'<button data-ca="m8">🔕 8 saat sessize al</button><button data-ca="m168">🔕 1 hafta sessize al</button><button data-ca="minf">🔕 Her zaman sessiz</button>'}
     <button data-ca="arch">${prefs.arch.includes(c)?"📤 Arşivden çıkar":"🗄️ Arşivle"}</button>
-    <button data-ca="read">✔️ Okundu say</button>`;
+    <button data-ca="read">✔️ Okundu say</button>
+    <button data-ca="ttl">⏱️ Kaybolan mesajlar · ${esc(ttlLabel(convTTL(c)))}</button>`;
   sheetFor=null;$("#msheet").dataset.conv=c;overlay.classList.add("show");$("#msheet").classList.add("show");
 }
 $("#msheet").addEventListener("click",e=>{
   const b=e.target.closest("[data-ca]");if(!b)return;const c=$("#msheet").dataset.conv,a=b.dataset.ca;closeSheet();
+  if(a==="ttl"){openTTL(c);return}
   const tog=(k)=>prefs[k].includes(c)?prefs[k].filter(x=>x!==c):[...prefs[k],c].slice(-200);
   if(a==="pin"){if(!prefs.pin.includes(c)&&prefs.pin.length>=3){toast("En fazla 3 sohbet sabitlenebilir");return}savePrefs({pin:tog("pin")})}
   if(a==="fav")savePrefs({fav:tog("fav")});
@@ -834,7 +846,8 @@ function openInfo(){
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
     const bl=isBlocked(cur);
-    $("#iActs").innerHTML=(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    $("#iActs").innerHTML=`<button id="iTtl">⏱️ Kaybolan: ${esc(ttlLabel(convTTL(cur)))}</button>`+(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    {const pc=cur;$("#iTtl").onclick=()=>{closeInfo();openTTL(pc)}}
     if($("#iGift")){const peer=cur;$("#iGift").onclick=()=>{closeInfo();openGift(peer)}}
     {const pc=cur;$("#iMedia").onclick=()=>{closeInfo();openGallery(pc)};$("#iExport").onclick=()=>{closeInfo();exportChat(pc)}}
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
@@ -1186,7 +1199,7 @@ onAuthStateChanged(auth,async u=>{
     decryptAll();renderAll();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"msgs"),where("members","array-contains",me)),s=>{
-    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null}})
+    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null}})
       .filter(m=>m.iv&&m.ct&&m.from&&(m.gid||(m.to&&m.from!==m.to&&(m.from===me||m.to===me))));
     raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to);if(ctSeen[m.id]&&ctSeen[m.id]!==m.ct)delete plain[m.id];ctSeen[m.id]=m.ct});
     pending=pending.filter(p=>!raw.find(m=>m.id===p.id));

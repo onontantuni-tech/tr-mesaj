@@ -5,7 +5,7 @@
 // Çağrı CRON_SECRET ile korunur (Vercel Cron bu başlığı kendisi gönderir).
 import { admin, json } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, FieldPath } from "firebase-admin/firestore";
 
 async function payTop(db, kind, period, prizes) {
   const flag = db.doc(`rewards/${kind}_${period}`);
@@ -53,6 +53,21 @@ async function refundStale(db) {
     });
   }
   return { kind: "refund", games: n };
+}
+
+// Kaybolan mesajlar: süresi dolan mesajları ve şifreli medya parçalarını sil
+async function purgeExpired(db) {
+  const q = await db.collection("msgs").where("exp", "<", Date.now()).limit(400).get();
+  let n = 0, blobs = 0;
+  for (const d of q.docs) {
+    const bq = await db.collection("blobs").where(FieldPath.documentId(), ">=", d.id + "_").where(FieldPath.documentId(), "<", d.id + "_~").limit(200).get().catch(() => null);
+    const mine = bq ? bq.docs : [];
+    const batch = db.batch();
+    mine.forEach((x) => batch.delete(x.ref)); blobs += mine.length;
+    batch.delete(d.ref); n++;
+    await batch.commit();
+  }
+  return { kind: "purge", msgs: n, blobs };
 }
 
 // Akşam turnuvası ödülleri (gece 00:01'de dünün turnuvası)
@@ -137,6 +152,7 @@ export default async (req) => {
   if (today.dom === 1) out.push(await payTop(db, "month", y.month, E.MONTHLY_PRIZES));
   if (today.dow === 0) out.push(await settleLeague(db, E.weekId(Date.now() - 10 * 60 * 1000)));
   out.push(await refundStale(db));
+  try { out.push(await purgeExpired(db)); } catch (e) { out.push({ kind: "purge", error: String(e.message || e).slice(0, 100) }); }
   return json(200, { ok: true, out });
 };
 
