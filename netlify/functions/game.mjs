@@ -233,9 +233,10 @@ export default async (req) => {
           const rest = hand.filter((_, i) => i !== idx);
           const kind = O.winKind(rest, okey);
           if (!kind) return { status: 200, body: { ok: false, error: "nowin" } };
+          const firstMove = !(st.discards[mySeat] || []).length;
           hand.splice(idx, 1);
           st.discards[mySeat].push(t);
-          finish(st, mySeat, kind, rest, O.valueOf(t, okey) === "W");
+          finish(st, mySeat, kind, rest, O.valueOf(t, okey) === "W", { firstMove, okey });
           saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
           return { status: 200, body: { ok: true, win: kind } };
         }
@@ -265,7 +266,7 @@ function handOf(st, secret, hands, seat) {
   return s.bot ? secret.bots[seat] : hands[s.uid];
 }
 
-function finish(st, seat, kind, rest, withOkey) {
+function finish(st, seat, kind, rest, withOkey, extra = {}) {
   st.status = "over";
   st.winner = seat;
   st.winKind = kind;
@@ -273,10 +274,16 @@ function finish(st, seat, kind, rest, withOkey) {
   let pts = kind === "cift" ? 4 : 2;
   if (withOkey) pts *= 2;
   st.withOkey = !!withOkey;
+  // Renkten bitme (bütün taşlar tek renk) ve elden bitme (ilk atışta) puanı ikiye katlar
+  const vals = extra.okey ? rest.map((t) => O.valueOf(t, extra.okey)).filter((v) => v !== "W") : [];
+  const color = vals.length && vals.every((v) => v.c === vals[0].c);
+  if (color) pts *= 2;
+  if (extra.firstMove) pts *= 2;
+  st.bonus = [color ? "renkten" : "", extra.firstMove ? "elden" : ""].filter(Boolean);
   st.scores = (st.scores || [0, 0, 0, 0]).slice();
   st.scores[seat] += pts;
   st.points = pts;
-  st.log = `${kind === "cift" ? "Çiftten" : "Seriden"} bitti${withOkey ? ", okey atarak" : ""}`;
+  st.log = `${kind === "cift" ? "Çiftten" : "Seriden"} bitti${withOkey ? ", okey atarak" : ""}${color ? ", renkten" : ""}${extra.firstMove ? ", elden" : ""}`;
 }
 
 // El bitince jetonları dağıt, seviye ve sıralama güncelle (bir kez)

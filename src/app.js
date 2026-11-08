@@ -284,6 +284,8 @@ $("#msgs").addEventListener("click",async e=>{
   const uf=e.target.closest("[data-unfilt]");if(uf){const m=msgById(uf.dataset.unfilt);if(m){m._show=1;renderMsgs()}return}
   const ac=e.target.closest("[data-addcode]");if(ac){addById(ac.dataset.addcode);return}
   const oc=e.target.closest("[data-openc]");if(oc){openChat(oc.dataset.openc);return}
+  const li=e.target.closest("[data-li]");if(li){const id=li.closest("[data-list]").dataset.list,m=msgById(id);if(!m)return;const ck={...(m.ck||{})};const k=li.dataset.li;if(li.checked)ck[k]=me;else delete ck[k];m.ck=ck;renderMsgs();
+    try{await updateDoc(doc(fs,"msgs",id),{ck})}catch(err){toast("Güncellenemedi")}return}
   const v=e.target.closest("[data-vote]");if(v){const id=v.closest("[data-poll]").dataset.poll,m=msgById(id);if(!m)return;const i=+v.dataset.vote;
     const pv={...(m.pv||{})};if(pv[me]===i)delete pv[me];else pv[me]=i;m.pv=pv;renderMsgs();
     try{await updateDoc(doc(fs,"msgs",id),{pv})}catch(err){toast("Oy verilemedi")}return}
@@ -422,7 +424,7 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],batak:["♠️","Batak"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="card")return"💌 "+((CARDS[c.k]||[])[1]||"Kart");if(c.t==="stk")return"🧿 "+((STK[c.k]||[])[1]||"Çıkartma");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="list")return"📝 "+String(c.title||"Liste");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="card")return"💌 "+((CARDS[c.k]||[])[1]||"Kart");if(c.t==="stk")return"🧿 "+((STK[c.k]||[])[1]||"Çıkartma");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 /* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
@@ -520,6 +522,7 @@ function bubbleBody(m,c){
   }
   if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
   if(c.t==="poll"||c.t==="event")return pollHTML(m,c);
+  if(c.t==="list"){const ck=m.ck||{};return`<div class="poll slist" data-list="${esc(m.id)}"><b>📝 ${esc(String(c.title||"Liste").slice(0,80))}</b>${(Array.isArray(c.items)?c.items:[]).slice(0,30).map((it,i)=>`<label class="sli ${ck[i]?"done":""}"><input type="checkbox" data-li="${i}" ${ck[i]?"checked":""}><span>${esc(String(it).slice(0,100))}</span>${ck[i]&&ck[i]!==me?`<small>${esc(realName(ck[i]).split(" ")[0])}</small>`:""}</label>`).join("")}</div>`}
   if(c.t==="card"){const C=CARDS[c.k];if(C)return`<div class="tcard" style="background:${C[3]}"><div class="te">${C[0]}</div><b>${esc(C[1])}</b><span>${esc(C[2])}</span></div>`}
   if(c.t==="stk"){const S=STK[c.k];if(S)return`<div class="stkr"><span class="se">${S[0]}</span><span class="st">${esc(S[1])}</span></div>`}
   if(c.t==="file")return`<div class="fcard" data-file="${esc(m.id)}"><span class="fi">📄</span><div><b>${esc(String(c.name||"belge").slice(0,80))}</b><span>${fmtSize(+c.size||0)} · dokun, indir</span></div></div>`;
@@ -1292,7 +1295,7 @@ $("#composer").onsubmit=async e=>{e.preventDefault();
 /* ---------- fotoğraf ---------- */
 $("#photoBtn").onclick=()=>$("#photoInput").click();
 const fmtSize=n=>n>1048576?(n/1048576).toFixed(1).replace(".",",")+" MB":Math.max(1,Math.round(n/1024))+" KB";
-$("#attBtn").onclick=()=>{if(!cur)return;$("#msheet").innerHTML=`<button data-att="album">🖼️ Fotoğraflar (10'a kadar)</button><button data-att="once">① Tek seferlik fotoğraf</button><button data-att="file">📄 Belge</button><button data-att="loc">📍 Konum</button><button data-att="vnote">🎥 Yuvarlak video mesaj</button><button data-att="stk">🧿 TR çıkartması</button><button data-att="card">💌 Tebrik kartı</button>${isGroupConv(cur)?'<button data-att="poll">📊 Anket</button><button data-att="event">📅 Etkinlik</button>':""}`;
+$("#attBtn").onclick=()=>{if(!cur)return;$("#msheet").innerHTML=`<button data-att="album">🖼️ Fotoğraflar (10'a kadar)</button><button data-att="once">① Tek seferlik fotoğraf</button><button data-att="file">📄 Belge</button><button data-att="loc">📍 Konum</button><button data-att="vnote">🎥 Yuvarlak video mesaj</button><button data-att="stk">🧿 TR çıkartması</button><button data-att="card">💌 Tebrik kartı</button><button data-att="list">📝 Ortak liste</button>${isGroupConv(cur)?'<button data-att="poll">📊 Anket</button><button data-att="event">📅 Etkinlik</button>':""}`;
   sheetFor=null;$("#msheet").dataset.conv="";overlay.classList.add("show");$("#msheet").classList.add("show")};
 $("#msheet").addEventListener("click",e=>{const b=e.target.closest("[data-att]");if(!b)return;e.stopPropagation();closeSheet();const a=b.dataset.att,conv=cur;
   if(a==="album")$("#photoInput").click();
@@ -1302,7 +1305,8 @@ $("#msheet").addEventListener("click",e=>{const b=e.target.closest("[data-att]")
   if(a==="loc"){if(!navigator.geolocation){toast("Konum desteklenmiyor");return}toast("Konum alınıyor…",1500);
     navigator.geolocation.getCurrentPosition(p=>{openModal({title:"Konumu gönder",text:"Şu anki konumun bu sohbete gönderilsin mi?",input:false,ok:"Gönder"},()=>sendContent(conv,{t:"loc",lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy||0)}))},()=>toast("Konum alınamadı, izin vermen gerekiyor",3000),{enableHighAccuracy:true,timeout:15000})}
   if(a==="vnote")recordVideoNote(conv);
-  if(a==="stk")openStickers(conv);if(a==="card")openCards(conv);
+  if(a==="stk")openStickers(conv);
+  if(a==="list")openInfoModal("📝 Ortak liste",`<input id="lsT" maxlength="80" placeholder="Başlık (ör. Pazar alışverişi)"><textarea id="lsI" rows="6" maxlength="2000" style="width:100%" placeholder="Her satıra bir madde"></textarea><div class="row2"><button id="lsGo" style="background:var(--brand)">Gönder</button></div>`),setTimeout(()=>{const g=$("#lsGo");if(g)g.onclick=()=>{const items=$("#lsI").value.split("\n").map(x=>x.trim()).filter(Boolean).slice(0,30);if(!items.length){toast("Madde yaz");return}if(hasBad($("#lsT").value+" "+items.join(" "))){toast("Uygunsuz kelime var");return}closeE();sendContent(conv,{t:"list",title:$("#lsT").value.trim()||"Liste",items})}},50);if(a==="card")openCards(conv);
 },true);
 $("#fileInput").onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!cur)return;
   if(f.size>CHUNK*16){toast("Belge en fazla 9 MB olabilir",3000);return}const conv=cur;
@@ -1467,7 +1471,7 @@ onAuthStateChanged(auth,async u=>{
     decryptAll();renderAll();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"msgs"),where("members","array-contains",me)),s=>{
-    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null,pv:x.pv&&typeof x.pv==="object"?x.pv:null}})
+    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null,pv:x.pv&&typeof x.pv==="object"?x.pv:null,ck:x.ck&&typeof x.ck==="object"?x.ck:null}})
       .filter(m=>m.iv&&m.ct&&m.from&&(m.gid||(m.to&&m.from!==m.to&&(m.from===me||m.to===me))));
     raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to);if(ctSeen[m.id]&&ctSeen[m.id]!==m.ct)delete plain[m.id];ctSeen[m.id]=m.ct});
     pending=pending.filter(p=>!raw.find(m=>m.id===p.id));
@@ -1889,6 +1893,8 @@ function renderGamesTab(){
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
     <button data-g="cb"><span>💸</span>Harcama iadesi${wallet.cb&&wallet.cb.amount&&!wallet.cb.claimed?'<i class="dot"></i>':""}</button>
     <button data-g="kelime"><span>🔤</span>Kelimece (günlük)</button>
+    <button data-g="quiz"><span>🧠</span>Bilgi yarışması</button>
+    <button data-g="cal"><span>📅</span>Etkinlik takvimi</button>
     <button data-g="redeem"><span>🎟️</span>Hediye kodu</button>
     <button data-g="city"><span>🏙️</span>Şehir sıralaması</button>
     <button data-g="records"><span>📜</span>Rekorlarım</button>
@@ -1906,10 +1912,12 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="quiz")openQuiz();if(g==="cal")openCalendar();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
+  {const now=new Date();for(const u of Object.keys(friends).filter(isFriend)){const at=+friends[u].at||0;if(!at)continue;const d=new Date(at),yrs=now.getFullYear()-d.getFullYear();
+    if(yrs>=1&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate())it.push({ic:"🎂",t:`<b>${esc(realName(u))}</b> ile ${yrs}. arkadaşlık yıldönümünüz! Bir kart gönder`,go:()=>{openChat(u);setTimeout(()=>openCards(u),300)},at:2})}}
   const men=raw.filter(m=>m.from!==me&&Array.isArray(m.men)&&m.men.includes(me)&&m.at>(reads[me+"_"+convOfMsg(m)]||0));
   const byC={};for(const m of men)byC[convOfMsg(m)]=m;
   for(const[c,m]of Object.entries(byC))it.push({ic:"@",t:`<b>${esc(realName(m.from))}</b>, ${esc(convTitle(c))} grubunda senden bahsetti`,go:()=>openChat(c),at:m.at});
@@ -1986,6 +1994,15 @@ async function openKelime(guess){
     <div class="kkb">${KB.map(r=>`<div>${[...r].map(c=>`<button data-kk="${c}" class="k${st[c]??""}">${c}</button>`).join("")}</div>`).join("")}<div><button data-kk="⌫" class="wide">⌫</button><button data-kk="↵" class="wide">Dene</button></div></div>`}`);
   if(!k.done){const inp=$("#kIn");const go=()=>{const v=inp.value.trim();if([...v].length!==5){toast("5 harf olmalı");return}openKelime(v)};$("#kGo").onclick=go;inp.onkeydown=e=>{if(e.key==="Enter")go()};
     $("#eBody").onclick=e=>{const b=e.target.closest("[data-kk]");if(!b)return;const c=b.dataset.kk;if(c==="⌫")inp.value=[...inp.value].slice(0,-1).join("");else if(c==="↵")go();else if([...inp.value].length<5)inp.value+=c}}}
+async function openQuiz(answers){let r;try{r=await callApi("/api/wallet",answers?{action:"quiz",answers}:{action:"quiz"})}catch(e){toast("Yüklenemedi");return}
+  if(r.wallet)applyWallet({...wallet,...r.wallet});if(r.gift){sfx("win");toast(`🧠 +${fmtCoin(r.gift.amount)} jeton`,3000)}
+  const res=r.result,sel=[];
+  openInfoModal("🧠 Günün bilgi yarışması",`<p class="isub">Her gün 5 soru, her doğruya ${fmtCoin(r.prize)} jeton. Tek hakkın var.</p>${r.qs.map((q,i)=>`<div class="qz"><b>${i+1}. ${esc(q.q)}</b><div>${q.o.map((o,j)=>`<button data-q="${i}" data-o="${j}" class="${res?(res.correct[i]===j?"ok":res.ans[i]===j?"bad":""):""}" ${res?"disabled":""}>${esc(o)}</button>`).join("")}</div></div>`).join("")}
+    ${res?`<div class="pk" style="justify-content:center"><b>${res.n}/5 doğru</b> · yarın yeni sorular</div>`:`<div class="row2"><button id="qzGo" style="background:var(--brand)">Cevapları gönder</button></div>`}`);
+  if(!res){$("#eBody").onclick=e=>{const b=e.target.closest("[data-q]");if(!b)return;const i=+b.dataset.q;sel[i]=+b.dataset.o;b.parentElement.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))};
+    $("#qzGo").onclick=()=>{if(sel.filter(x=>x!=null).length<r.qs.length){toast("Bütün soruları cevapla");return}openQuiz(sel)}}}
+function openCalendar(){const T=catalog?.tour||{start:20,end:23,fee:100000};
+  openInfoModal("📅 Etkinlik takvimi",[["🎁","Her gün 00:00","Günlük giriş hediyesi, Kelimece, bilgi yarışması ve görevler yenilenir"],["🧰","Her 4 saatte","Bedava sandık"],["🏟️",`Her akşam ${T.start}:00–${T.end}:00`,`Akşam turnuvası (katılım ${fmtCoin(T.fee)} jeton)`],["🏆","Her gün 00:01","Günlük sıralama ödülleri"],["🥇","Her pazartesi 00:01","Haftalık lig kapanışı, yükselme ve düşme"],["👑","Her ayın 1'i","Aylık sıralama ve ayın davet şampiyonları ödülleri"],["💸","Her gün","Dünkü harcamaya göre iade"]].map(x=>`<div class="pk"><span style="font-size:24px">${x[0]}</span><div><b>${x[1]}</b><div class="isub">${x[2]}</div></div></div>`).join(""))}
 function openRedeem(){openModal({title:"🎟️ Hediye kodu",text:"Elindeki hediye kodunu yaz.",placeholder:"örn. BAYRAM2026",ok:"Kullan"},async v=>{
   try{const r=await callApi("/api/wallet",{action:"redeem",code:v});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`🎉 +${fmtCoin(r.gift.amount)} jeton`)}catch(e){toast(e.status===404?"Bu kod geçersiz":e.status===409?"Bu kodu zaten kullandın":e.status===410?"Bu kodun kullanım hakkı bitmiş":"Kullanılamadı",3000)}})}
 function openCity(){const C=catalog?.cities||[];const mo=new Date(Date.now()+3*3600e3).toISOString().slice(0,7).replace("-","");

@@ -151,6 +151,10 @@ service cloud.firestore {
           && nd().rx.diff(resource.data.get('rx', {})).affectedKeys().hasOnly([request.auth.uid])
           && (!(request.auth.uid in nd().rx) || nd().rx[request.auth.uid] in ['❤️', '😂', '👍', '😮', '😢', '🙏']))
         ||
+        // ortak liste: üyeler maddeleri işaretler
+        (nd().diff(resource.data).affectedKeys().hasOnly(['ck'])
+          && nd().ck is map && nd().ck.size() <= 30)
+        ||
         // anket / etkinlik oyu: herkes sadece kendi oyunu değiştirir
         (nd().diff(resource.data).affectedKeys().hasOnly(['pv'])
           && nd().pv is map && nd().pv.size() <= 60

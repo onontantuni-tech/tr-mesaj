@@ -5,6 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { migrateFriends, areFriends } from "../lib/friends.mjs";
 import { hasBad } from "../lib/filter.mjs";
 import * as K from "../lib/kelime.mjs";
+import * as QZ from "../lib/quiz.mjs";
 
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
@@ -247,6 +248,21 @@ export default async (req) => {
         }
         tx.set(ref, w);
         return { status: 200, body: { kel: { g: st.g, s: st.s, done: st.done, won: st.won, ans: st.done ? st.ans || (st.won ? st.g[st.g.length - 1] : null) : null }, gift, wallet: view(w) } };
+      }
+      // Günün bilgi yarışması: sorular istemciye cevapsız gider, cevaplar burada kontrol edilir
+      if (act === "quiz") {
+        const day = E.trDate().day, idx = QZ.dayQs(day);
+        const done = w.qz && w.qz.day === day ? w.qz : null;
+        if (Array.isArray(b.answers) && !done) {
+          const ans = idx.map((_, i) => Number(b.answers[i]));
+          const right = idx.map((q, i) => (QZ.Q[q][2] === ans[i] ? 1 : 0));
+          const n = right.reduce((a, x) => a + x, 0);
+          w.qz = { day, ans, right, n };
+          if (n) { E.credit(tx, db, uid, w, n * QZ.PRIZE, `Bilgi yarışması (${n}/${idx.length})`); gift = { amount: n * QZ.PRIZE }; }
+        }
+        tx.set(ref, w);
+        const r = w.qz && w.qz.day === day ? w.qz : null;
+        return { status: 200, body: { qs: idx.map((q) => ({ q: QZ.Q[q][0], o: QZ.Q[q][1] })), result: r ? { ans: r.ans, right: r.right, n: r.n, correct: idx.map((q) => QZ.Q[q][2]) } : null, prize: QZ.PRIZE, gift, wallet: view(w) } };
       }
       // Hediye kodu kullan
       if (act === "redeem") {
