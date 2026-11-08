@@ -27,6 +27,12 @@ Son güncelleme: 6 Kasım 2026
 - Bildirim merkezi 🔔 (201)
 - Haftalık lig: Bronz/Gümüş/Altın/Elmas, %20 yükselme/düşme, lig ödülleri (1)
 - Akşam turnuvası 20:00–23:00, katılım 10.000, havuz %5 kasa, ilk 3'e %50/%30/%20
+- Pişti (2 kişilik, sunucu dağıtımlı, pişti 10 / vale piştisi 20)
+- Tavla (sunucuda zar ve hamle doğrulama, mars çifte sayı, bilgisayar rakip)
+- Sanal hediyeler (çay, gül, pasta, kupa, taç, elmas) — jeton transferi değil
+- Başarımlar (16 rozet, her biri bir kez jeton ödülü) ve profilde rozet/hediye vitrini
+- Kaybolan mesajlar (24 saat / 7 gün / 90 gün), süresi dolanlar gece silinir
+- Oyun sunucuları tek Vercel fonksiyonunda (api/play.mjs) — Hobby planı 12 fonksiyon sınırı, şu an 9
 - Firestore kuralları her adımda yayınlandı
 
 ## Kullanıcının yapacakları (bekleyen)
