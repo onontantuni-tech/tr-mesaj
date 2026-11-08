@@ -65,6 +65,11 @@ export default async (req) => {
     const cs = await db.doc(`codes/${code}`).get();
     if (cs.exists && cs.data().uid === uid) batch.delete(cs.ref);
   }
+  const un = u.exists ? u.data().un : null;
+  if (typeof un === "string" && /^[a-z0-9_]{3,20}$/.test(un)) {
+    const us = await db.doc(`usernames/${un}`).get();
+    if (us.exists && us.data().uid === uid) batch.delete(us.ref);
+  }
   for (const p of [`users/${uid}`, `wallets/${uid}`, `badges/${uid}`, `statuses/${uid}`, `bans/${uid}`, `avatars/${uid}`, `presence/${uid}`]) batch.delete(db.doc(p));
   await batch.commit();
 

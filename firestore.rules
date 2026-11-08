@@ -20,10 +20,20 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow write: if isMe(uid)
-        && nd().keys().hasOnly(['first','last','nick','code','pub','joined','av','bio'])
+        && nd().keys().hasOnly(['first','last','nick','code','pub','joined','av','bio','un'])
+        && (!('un' in nd()) || nd().un == '' || (nd().un is string && exists(/databases/$(database)/documents/usernames/$(nd().un))
+            && get(/databases/$(database)/documents/usernames/$(nd().un)).data.uid == request.auth.uid))
         && nd().nick is string && nd().nick.size() <= 62
         && (!('bio' in nd()) || (nd().bio is string && nd().bio.size() <= 140))
         && (!('av' in nd()) || nd().av is number);
+    }
+
+    // kullanıcı adları (@harun): ilk alan sahibi olur
+    match /usernames/{un} {
+      allow read: if signedIn();
+      allow create: if signedIn() && notBanned() && un.matches('^[a-z0-9_]{3,20}$')
+        && nd().keys().hasOnly(['uid']) && nd().uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     // profil fotoğrafı (küçük JPEG, herkese açık)

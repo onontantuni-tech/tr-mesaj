@@ -5,6 +5,7 @@ import * as P from "../netlify/lib/pool.mjs";
 import * as OK from "../netlify/lib/okey.mjs";
 import * as TV from "../netlify/lib/tavla.mjs";
 import { hasBad, clean as cleanText } from "../netlify/lib/filter.mjs";
+import qrcode from "qrcode-generator";
 import { getMessaging, getToken, isSupported as messagingSupported } from "firebase/messaging";
 const VAPID_KEY="BNM0muk8JDXqc6KXABvndnLVHQHpYG-EKDet1qC6zkJq21tbM1P3y6sFlms3sSobLPmGBVkh1sbNQoZKo0s5N5w";
 
@@ -242,7 +243,9 @@ function openSettings(){
     ${tog("autoImg","Fotoğrafları otomatik indir","Kapalıyken fotoğraflar dokununca iner (düşük internet / veri tasarrufu)")}
     ${tog("vib","Titreşim","Oyunda sıra gelince ve mesajda")}
     ${tog("left","Solak modu","Oyun butonları sola geçer")}
-    ${tog("hidePush","Bildirimde içerik gizle","Kilit ekranında sadece \"Yeni mesaj\" yazar")}`);
+    ${tog("hidePush","Bildirimde içerik gizle","Kilit ekranında sadece \"Yeni mesaj\" yazar")}
+    <div class="fl">Gizlenecek kelimeler</div><input id="setWords" maxlength="300" placeholder="virgülle ayır: spoiler, maç sonucu" value="${esc(SET.words||"")}">`);
+  $("#setWords").onchange=e=>{saveSet({words:e.target.value.slice(0,300)});if(cur)renderMsgs()};
   $("#eBody").onclick=e=>{const b=e.target.closest(".seg button");if(!b)return;const k=b.closest(".seg").dataset.k;let v=b.dataset.v;if(k==="fs"||k==="vspeed")v=+v;saveSet({[k]:v});
     b.closest(".seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));if(cur)renderMsgs()};
   $("#eBody").onchange=e=>{const t=e.target.dataset.t;if(!t)return;saveSet({[t]:e.target.checked});if(t==="hidePush")setDoc(doc(fs,"private",me,"data","push"),{hide:e.target.checked},{merge:true}).catch(()=>{})};
@@ -271,6 +274,9 @@ function pollHTML(m,c){const opts=c.t==="event"?["✅ Katılıyorum","❌ Katıl
   const head=c.t==="event"?`<div class="evh"><b>📅 ${esc(String(c.title||"").slice(0,100))}</b><span>${new Date(+c.when||0).toLocaleString("tr-TR",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}${c.place?" · 📍 "+esc(String(c.place).slice(0,100)):""}</span></div>`:`<b>📊 ${esc(String(c.q||"").slice(0,200))}</b>`;
   return`<div class="poll" data-poll="${esc(m.id)}">${head}${opts.map((o,i)=>`<button data-vote="${i}" class="${mine===i?"on":""}"><i style="width:${Math.round(100*cnt[i]/tot)}%"></i><span>${esc(String(o).slice(0,80))}</span><b>${cnt[i]||""}</b></button>`).join("")}${c.t==="event"&&+c.when>Date.now()?`<button class="evrem" data-remind="${esc(m.id)}">⏰ Hatırlat</button>`:""}</div>`}
 $("#msgs").addEventListener("click",async e=>{
+  const uf=e.target.closest("[data-unfilt]");if(uf){const m=msgById(uf.dataset.unfilt);if(m){m._show=1;renderMsgs()}return}
+  const ac=e.target.closest("[data-addcode]");if(ac){addById(ac.dataset.addcode);return}
+  const oc=e.target.closest("[data-openc]");if(oc){openChat(oc.dataset.openc);return}
   const v=e.target.closest("[data-vote]");if(v){const id=v.closest("[data-poll]").dataset.poll,m=msgById(id);if(!m)return;const i=+v.dataset.vote;
     const pv={...(m.pv||{})};if(pv[me]===i)delete pv[me];else pv[me]=i;m.pv=pv;renderMsgs();
     try{await updateDoc(doc(fs,"msgs",id),{pv})}catch(err){toast("Oy verilemedi")}return}
@@ -281,6 +287,16 @@ function reminders(){try{return JSON.parse(localStorage.getItem("tr-rem")||"[]")
 function addReminder(at,text){const r=reminders().filter(x=>x.at>Date.now()-60e3);r.push({at,text});localStorage.setItem("tr-rem",JSON.stringify(r.slice(-50)))}
 setInterval(()=>{const now=Date.now(),r=reminders(),due=r.filter(x=>x.at<=now);if(!due.length)return;localStorage.setItem("tr-rem",JSON.stringify(r.filter(x=>x.at>now)));
   due.forEach(x=>{toast("⏰ "+x.text,6000);try{if(Notification.permission==="granted")new Notification("TR hatırlatma",{body:x.text})}catch(e){}})},20000);
+/* ---------- kişi kartı, toplu mesaj, kelime filtresi ---------- */
+function pickFriends(title,okText,cb,{multi=true,extra=""}={}){
+  const list=Object.keys(friends).filter(isFriend).sort((a,b)=>realName(a).localeCompare(realName(b),"tr"));
+  openInfoModal(title,`${extra}<div class="flist pickl">${list.map(u=>`<label class="gitem">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}</b></div><input type="${multi?"checkbox":"radio"}" name="pf" value="${esc(u)}"></label>`).join("")||'<div class="empty">Henüz arkadaşın yok</div>'}</div><div class="row2"><button id="pfOk" style="background:var(--brand)">${okText}</button></div>`);
+  $("#pfOk").onclick=()=>{const sel=[...document.querySelectorAll('.pickl input:checked')].map(x=>x.value);if(!sel.length){toast("Kimseyi seçmedin");return}const ex=$("#pfText")?$("#pfText").value:"";closeE();cb(sel,ex)}}
+function shareContact(uid){pickFriends("👤 Kişiyi kime gönderelim?","Gönder",async sel=>{const u=users[uid]||{};for(const to of sel){if(to===uid)continue;await sendContent(to,{t:"contact",uid,code:u.code||"",name:(u.nick||"").slice(0,62)})}toast("Kişi kartı gönderildi")})}
+function openBroadcast(){pickFriends("📣 Toplu mesaj","Hepsine gönder",async(sel,text)=>{text=String(text||"").trim();if(!text){toast("Mesaj yazmadın");return}
+  if(hasBad(text)){toast("Mesajda uygunsuz kelime var");return}let n=0;for(const to of sel.slice(0,50)){if(await sendContent(to,{t:"text",text}))n++}toast(`${n} kişiye ayrı ayrı gönderildi`)},{extra:'<textarea id="pfText" maxlength="2000" rows="3" placeholder="Mesajın (her kişiye ayrı sohbet olarak gider)" style="width:100%;margin-bottom:8px"></textarea>'})}
+const wordFilter=()=>String(SET.words||"").split(",").map(x=>x.trim().toLocaleLowerCase("tr")).filter(x=>x.length>1);
+function filtered(text){const w=wordFilter();if(!w.length)return false;const t=String(text||"").toLocaleLowerCase("tr");return w.some(x=>t.includes(x))}
 /* ---------- bağlantılar ---------- */
 function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
 function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
@@ -344,7 +360,7 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 /* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
@@ -442,6 +458,7 @@ function bubbleBody(m,c){
   }
   if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
   if(c.t==="poll"||c.t==="event")return pollHTML(m,c);
+  if(c.t==="contact")return`<div class="ccard">${avHTML(c.uid)}<div><b>${esc(String(c.name||"Kişi").slice(0,62))}</b><span>${c.code&&/^\d{6}$/.test(c.code)?"TR ID "+esc(fmtCode(c.code)):""}</span></div>${c.uid!==me&&!isFriend(c.uid)&&/^\d{6}$/.test(c.code||"")?`<button data-addcode="${esc(c.code)}">Ekle</button>`:c.uid!==me?`<button data-openc="${esc(c.uid)}">Mesaj</button>`:""}</div>`;
   if(c.t==="gres")return`<div class="gamecard res"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} bitti</b><span>${c.draw?"Berabere":"🏆 "+esc(String(c.w||"").slice(0,40))+" kazandı"}${+c.pot?" · "+fmtCoin(+c.pot)+" jeton":""}</span></div></div>`;
   if(c.t==="gift"){const G=giftOf(c.id);if(G)return`<div class="giftmsg"><span>${G.icon}</span><b>${esc(G.name)}</b><small>hediye</small></div>`}
   if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
@@ -449,6 +466,7 @@ function bubbleBody(m,c){
     if(c._local)return`<audio controls src="${esc(c._local)}"></audio>`;
     return`<div class="mload" style="height:44px" data-media="${esc(m.id)}">🎤 Yükleniyor… ${c.dur?fmtDur(c.dur):""}</div>`;
   }
+  if(m.from!==me&&filtered(c.text)&&!m._show)return`<span class="filt" data-unfilt="${esc(m.id)}">🙈 Filtrelenen mesaj · göster</span>`;
   return linkify(esc(c.text))+linkCard(c.text);
 }
 $("#msgs").addEventListener("click",async e=>{
@@ -510,6 +528,7 @@ async function saveContact(uid){
   try{await setDoc(contactsRef(),{list:contacts})}catch(e){contacts=prev;renderChats()}
 }
 async function addById(input){
+  if(/^\s*@?[a-zA-Z_][a-zA-Z0-9_]{2,19}\s*$/.test(String(input))&&/[a-zA-Z_]/.test(String(input)))return addByName(String(input).trim());
   const code=String(input).replace(/\D/g,"");
   if(code.length!==6){toast("ID 6 haneli olmalı");return}
   if(code===users[me]?.code){toast("Bu senin kendi ID'n 🙂");return}
@@ -931,7 +950,7 @@ function openInfo(){
         try{await setDoc(doc(fs,"groups",gid),{...g,members:g.members.filter(x=>x!==u),admins:g.admins.filter(x=>x!==u)});toast("Çıkarıldı")}catch(e){toast("Çıkarılamadı")}})};
   }else{
     const u=users[cur]||{};
-    $("#iAv").innerHTML=avHTML(cur);$("#iName").innerHTML=esc(realName(cur))+vipMark(cur);recordView(cur);$("#iSub").textContent=u.code?"TR ID "+fmtCode(u.code):"";
+    $("#iAv").innerHTML=avHTML(cur);$("#iName").innerHTML=esc(realName(cur))+vipMark(cur);recordView(cur);$("#iSub").textContent=(u.code?"TR ID "+fmtCode(u.code):"")+(u.un?" · @"+u.un:"");
     $("#iLabel").innerHTML=(u.bio?`<div class="ibio">${esc(u.bio)}</div>`:"")+(u.joined?`<div class="ijoin">📅 ${new Date(u.joined).toLocaleDateString("tr-TR",{month:"long",year:"numeric"})} tarihinden beri TR'de</div>`:"");
     {const bd=bdg[cur];const A=catalog?.ach||[];const achH=(bd?.ach||[]).map(a=>A.find(x=>x.id===a)).filter(Boolean).map(x=>`<span title="${esc(x.name)}">${x.icon}</span>`).join("");
       const gH=Object.entries(bd?.gifts||{}).map(([k,n])=>[giftOf(k),+n||0]).filter(([g,n])=>g&&n>0).map(([g,n])=>`<span>${g.icon}<small>${n}</small></span>`).join("");
@@ -943,8 +962,8 @@ function openInfo(){
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
     const bl=isBlocked(cur);
-    $("#iActs").innerHTML=`<button id="iTtl">⏱️ Kaybolan: ${esc(ttlLabel(convTTL(cur)))}</button>`+(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
-    {const pc=cur;$("#iTtl").onclick=()=>{closeInfo();openTTL(pc)}}
+    $("#iActs").innerHTML=`<button id="iShareC">👤 Kişiyi paylaş</button><button id="iTtl">⏱️ Kaybolan: ${esc(ttlLabel(convTTL(cur)))}</button>`+(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    {const pc=cur;$("#iTtl").onclick=()=>{closeInfo();openTTL(pc)};$("#iShareC").onclick=()=>{closeInfo();shareContact(pc)}}
     if($("#iGift")){const peer=cur;$("#iGift").onclick=()=>{closeInfo();openGift(peer)}}
     {const pc=cur;$("#iMedia").onclick=()=>{closeInfo();openGallery(pc)};$("#iExport").onclick=()=>{closeInfo();exportChat(pc)}}
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
@@ -1018,13 +1037,37 @@ $("#mOk").onclick=async()=>{const v=$("#mInput").value.trim();const cb=modalCb;
   if($("#mInput").style.display!=="none"&&!v)return;
   modal.dataset.locked="";closeAll();if(cb)await cb(v)};
 $("#btnMenu").onclick=()=>{menu.classList.add("show");overlay.classList.add("show");overlay.style.background="transparent"};
+function qrSVG(text){const q=qrcode(0,"M");q.addData(text);q.make();return q.createSvgTag({cellSize:5,margin:2,scalable:true})}
+async function scanQR(){
+  if(!("BarcodeDetector" in window)){toast("Telefonunun kamerasıyla QR'ı okut, açılan bağlantı arkadaş ekler",4000);return}
+  let st;try{st=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})}catch(e){toast("Kameraya izin verilmedi");return}
+  const det=new BarcodeDetector({formats:["qr_code"]});
+  openInfoModal("📷 QR okut",`<video id="qrV" playsinline autoplay muted style="width:100%;border-radius:12px;background:#000"></video><p class="isub">Arkadaşının TR QR kodunu kameraya göster.</p>`);
+  const v=$("#qrV");v.srcObject=st;let on=true;const stop=()=>{on=false;st.getTracks().forEach(t=>t.stop())};$("#eClose").addEventListener("click",stop,{once:true});
+  const tick=async()=>{if(!on)return;try{const r=await det.detect(v);const val=r[0]&&r[0].rawValue;if(val){const m=val.match(/[?&]add=(\d{6})/);if(m){stop();closeE();addById(m[1]);return}}}catch(e){}setTimeout(tick,350)};setTimeout(tick,600)}
 function showMyId(prefix=""){
   const c=users[me]?.code;
+  if(c){openInfoModal("Benim TR ID'm",`${prefix}<div class="idbox">${esc(fmtCode(c))}</div>${users[me]?.un?`<div style="text-align:center;font-weight:700;color:var(--brand)">@${esc(users[me].un)}</div>`:""}<div class="qrbox">${qrSVG(location.origin+"/?add="+c)}</div><p class="isub" style="text-align:center">Arkadaşın bu QR'ı okutunca sana istek gönderir.</p>
+    <div class="row2"><button id="qrCopy" style="background:var(--brand)">ID'yi kopyala</button><button id="qrScan" style="background:#0E7C3A">📷 QR okut</button></div><div class="row2"><button id="unSet" style="background:#555">${users[me]?.un?"Kullanıcı adını değiştir":"Kullanıcı adı al (@)"}</button></div>`);
+    $("#qrCopy").onclick=async()=>{try{await navigator.clipboard.writeText(c);toast("ID kopyalandı")}catch(e){toast("Kopyalanamadı")}};
+    $("#qrScan").onclick=()=>{closeE();scanQR()};$("#unSet").onclick=()=>{closeE();askUsername()};return}
   openModal({title:"Benim TR ID'm",input:false,ok:"Kopyala",cancelText:"Kapat",
     text:`${prefix}<div class="idbox">${esc(fmtCode(c)||"…")}</div>Bu numarayı arkadaşına ver. O “ID ile arkadaş ekle”den sana istek gönderir, sen kabul edince yazışabilirsiniz.`},
     async()=>{try{await navigator.clipboard.writeText(c);toast("ID kopyalandı")}catch(e){toast("Kopyalanamadı — numarayı elle yaz")}});
 }
-function askAdd(){openModal({title:"ID ile arkadaş ekle",text:"Arkadaşının 6 haneli TR ID'sini yaz. Ona arkadaşlık isteği gidecek; kabul edince yazışabilirsiniz.",placeholder:"örn. 482 913",ok:"İstek gönder",numeric:true},addById)}
+function askUsername(){
+  openModal({title:"Kullanıcı adı",text:"3–20 karakter: küçük harf, rakam ve alt çizgi. Arkadaşların seni @adın ile bulabilir.",placeholder:"örn. harun_34",value:users[me]?.un||"",ok:"Kaydet"},async v=>{
+    const un=String(v||"").trim().toLowerCase().replace(/^@/,"").replace(/ı/g,"i").replace(/ğ/g,"g").replace(/ü/g,"u").replace(/ş/g,"s").replace(/ö/g,"o").replace(/ç/g,"c");
+    if(!/^[a-z0-9_]{3,20}$/.test(un)){toast("Geçersiz kullanıcı adı",3000);return}if(hasBad(un)){toast("Uygunsuz kelime içeriyor");return}
+    if(un===users[me]?.un)return;
+    try{const ex=await getDoc(doc(fs,"usernames",un));if(ex.exists()){toast("Bu kullanıcı adı alınmış");return}
+      await setDoc(doc(fs,"usernames",un),{uid:me});const old=users[me]?.un;if(old)deleteDoc(doc(fs,"usernames",old)).catch(()=>{});
+      await saveMe({un});toast("Kullanıcı adın: @"+un)}catch(e){toast("Kaydedilemedi, başka bir ad dene")}})}
+async function addByName(un){un=un.toLowerCase().replace(/^@/,"");let uid=null;try{const s=await getDoc(doc(fs,"usernames",un));if(s.exists())uid=s.data().uid}catch(e){}
+  if(!uid||uid===me){toast(uid?"Bu sensin 🙂":"Bu kullanıcı adıyla kimse bulunamadı");return}
+  watchUser(uid);try{const u=await getDoc(doc(fs,"users",uid));if(u.exists())users[uid]=cleanUser(u.data())}catch(e){}
+  await saveContact(uid);openChat(uid);if(!isFriend(uid))await sendRequest(uid)}
+function askAdd(){openModal({title:"Arkadaş ekle",text:"Arkadaşının 6 haneli TR ID'sini ya da @kullanıcı adını yaz. Ona arkadaşlık isteği gidecek; kabul edince yazışabilirsiniz.",placeholder:"örn. 482 913",ok:"İstek gönder"},addById)}
 menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="myid")showMyId();
   if(a==="add")askAdd();
@@ -1034,6 +1077,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="starred")openStarred();
   if(a==="settings")openSettings();
   if(a==="notes")openNotes();
+  if(a==="broadcast")openBroadcast();
   if(a==="sound"){const m=localStorage.getItem("tr-mute")==="1";localStorage.setItem("tr-mute",m?"0":"1");toast(m?"🔊 Sesler açıldı":"🔇 Sesler kapatıldı");if(m)sfx("coin")}
   if(a==="privacy2")openPrivacy();
   if(a==="terms")window.open("/kosullar.html","_blank");
@@ -1051,7 +1095,7 @@ $("#fab").onclick=()=>{if(tabNow==="status")askStatus();else if(tabNow==="games"
 document.querySelector(".content").addEventListener("click",e=>{const r=e.target.closest("[data-callback]");if(r)startCall(r.dataset.callback,r.dataset.video==="1")});
 
 /* ---------- profil / ID ---------- */
-function cleanUser(x){return{nick:typeof x.nick==="string"?cleanText(x.nick.slice(0,62)):"",first:typeof x.first==="string"?cleanText(x.first.slice(0,30)):"",last:typeof x.last==="string"?cleanText(x.last.slice(0,30)):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0,av:+x.av||0,bio:typeof x.bio==="string"?cleanText(x.bio.slice(0,140)):""}}
+function cleanUser(x){return{nick:typeof x.nick==="string"?cleanText(x.nick.slice(0,62)):"",first:typeof x.first==="string"?cleanText(x.first.slice(0,30)):"",last:typeof x.last==="string"?cleanText(x.last.slice(0,30)):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0,av:+x.av||0,bio:typeof x.bio==="string"?cleanText(x.bio.slice(0,140)):"",un:typeof x.un==="string"&&/^[a-z0-9_]{3,20}$/.test(x.un)?x.un:""}}
 function cleanGroup(x){if(!x||!Array.isArray(x.members))return null;return{name:typeof x.name==="string"?cleanText(x.name.slice(0,50)):"Grup",members:x.members.filter(u=>typeof u==="string").slice(0,MAX_GROUP),admins:Array.isArray(x.admins)?x.admins.filter(u=>typeof u==="string"):[],createdBy:String(x.createdBy||""),at:+x.at||0,adminOnly:!!x.adminOnly,inv:typeof x.inv==="string"&&/^[A-Za-z0-9]{8,32}$/.test(x.inv)?x.inv:""}}
 async function claimCode(){
   for(let i=0;i<10;i++){
@@ -1062,7 +1106,7 @@ async function claimCode(){
 }
 async function saveMe(patch){
   const prev=users[me];
-  const next={nick:prev?.nick||"",first:prev?.first||"",last:prev?.last||"",code:prev?.code||"",pub:prev?.pub||myPub,joined:prev?.joined||Date.now(),av:prev?.av||0,bio:prev?.bio||"",...patch};
+  const next={nick:prev?.nick||"",first:prev?.first||"",last:prev?.last||"",code:prev?.code||"",pub:prev?.pub||myPub,joined:prev?.joined||Date.now(),av:prev?.av||0,bio:prev?.bio||"",un:prev?.un||"",...patch};
   users[me]=next;renderAll();
   try{await setDoc(doc(fs,"users",me),next);return true}catch(e){users[me]=prev;renderAll();return false}
 }
@@ -2679,11 +2723,13 @@ function notifMenu(){
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){try{const c=new URL(e.data.url,location.origin).searchParams.get("c");if(c){deepLink=c;openPendingDeepLink()}const k=new URL(e.data.url,location.origin).searchParams.get("call");if(k&&callLog[k])onIncoming(k,callLog[k])}catch(_){}}});
 let deepLink=null,pendingCallId=null,deepGame=null,deepJoin=null;
+let deepAdd=null;try{const a=new URLSearchParams(location.search).get("add");if(a&&/^\d{6}$/.test(a))deepAdd=a}catch(e){}
 try{const j=new URLSearchParams(location.search).get("j");if(j&&/^[A-Za-z0-9]{10,40}\.[A-Za-z0-9]{8,32}$/.test(j))deepJoin=j}catch(e){}
 try{deepGame=new URLSearchParams(location.search).get("g");if(deepGame&&!/^[A-Za-z0-9]{10,40}$/.test(deepGame))deepGame=null}catch(e){}
 try{pendingCallId=new URLSearchParams(location.search).get("call");deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
 function openPendingDeepLink(){
   if(deepGame&&ready){const g=deepGame;deepGame=null;openGame(g)}
+  if(deepAdd&&ready){const a=deepAdd;deepAdd=null;if(a!==users[me]?.code)openModal({title:"Arkadaş ekle",text:`TR ID ${fmtCode(a)} kişisine arkadaşlık isteği gönderilsin mi?`,input:false,ok:"İstek gönder"},()=>addById(a))}
   if(deepJoin&&ready){const [gid,tok]=deepJoin.split(".");deepJoin=null;
     if(groups[gid]){openChat("g:"+gid)}
     else openModal({title:"Gruba katıl",text:"Davet bağlantısıyla bir gruba katılmak üzeresin. Katılınca grup üyeleri adını ve TR ID'ni görür.",input:false,ok:"Katıl"},async()=>{
