@@ -5,6 +5,22 @@
   "installCommand": "npm install",
   "rewrites": [
     {
+      "source": "/api/game",
+      "destination": "/api/play?k=game"
+    },
+    {
+      "source": "/api/pool",
+      "destination": "/api/play?k=pool"
+    },
+    {
+      "source": "/api/pisti",
+      "destination": "/api/play?k=pisti"
+    },
+    {
+      "source": "/api/tavla",
+      "destination": "/api/play?k=tavla"
+    },
+    {
       "source": "/__/auth/:path*",
       "destination": "https://trtr-f0f6d.firebaseapp.com/__/auth/:path*"
     },
