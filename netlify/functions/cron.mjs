@@ -55,6 +55,24 @@ async function refundStale(db) {
   return { kind: "refund", games: n };
 }
 
+// Ayın en çok davet edenleri (ayın 1'inde geçen ay için)
+async function payRefTop(db, month) {
+  const flag = db.doc(`rewards/ref_${month}`);
+  if ((await flag.get()).exists) return { kind: "ref", month, skipped: true };
+  const q = await db.collection(`lb_ref/${month}/u`).orderBy("n", "desc").limit(3).get();
+  const paid = [];
+  for (let i = 0; i < q.docs.length; i++) {
+    const uid = q.docs[i].id, amount = E.REF_PRIZES[i];
+    await db.runTransaction(async (tx) => {
+      const ref = db.doc(`wallets/${uid}`); const ws = await tx.get(ref); if (!ws.exists) return;
+      const w = ws.data(); E.credit(tx, db, uid, w, amount, `Ayın davet şampiyonu ${i + 1}.lik ödülü`); tx.set(ref, w);
+    });
+    paid.push({ uid, amount });
+  }
+  await flag.set({ at: Date.now(), paid });
+  return { kind: "ref", month, paid };
+}
+
 // Kaybolan mesajlar: süresi dolan mesajları ve şifreli medya parçalarını sil
 async function purgeExpired(db) {
   const q = await db.collection("msgs").where("exp", "<", Date.now()).limit(400).get();

@@ -1020,6 +1020,9 @@ function openInfo(){
     $("#iLabel").innerHTML=(u.bio?`<div class="ibio">${esc(u.bio)}</div>`:"")+(u.joined?`<div class="ijoin">📅 ${new Date(u.joined).toLocaleDateString("tr-TR",{month:"long",year:"numeric"})} tarihinden beri TR'de</div>`:"");
     {const bd=bdg[cur];const A=catalog?.ach||[];const achH=(bd?.ach||[]).map(a=>A.find(x=>x.id===a)).filter(Boolean).map(x=>`<span title="${esc(x.name)}">${x.icon}</span>`).join("");
       const gH=Object.entries(bd?.gifts||{}).map(([k,n])=>[giftOf(k),+n||0]).filter(([g,n])=>g&&n>0).map(([g,n])=>`<span>${g.icon}<small>${n}</small></span>`).join("");
+      const T=(catalog?.titles||[]),ttl=(bd?.titles||[]).map(x=>T.find(y=>y.id===x)).filter(Boolean).map(x=>`<span class="ttl">${x.icon} ${esc(x.name)}</span>`).join("");
+      if(ttl)$("#iLabel").innerHTML+=`<div class="ibadges"><div class="irow">${ttl}</div></div>`;
+      {const pc=cur;getDoc(doc(fs,"ratings",pc)).then(r=>{if(cur!==pc||!r.exists())return;const u=+r.data().up||0,dn=+r.data().down||0;if(u+dn<3)return;$("#iLabel").insertAdjacentHTML("beforeend",`<div class="ibadges"><div class="fl">Oyuncu puanı</div><div>👍 %${Math.round(100*u/(u+dn))} <span class="isub">(${u+dn} değerlendirme)</span></div></div>`)}).catch(()=>{})}
       $("#iLabel").innerHTML+=(achH?`<div class="ibadges"><div class="fl">Başarımlar</div><div class="irow">${achH}</div></div>`:"")+(gH?`<div class="ibadges"><div class="fl">Aldığı hediyeler</div><div class="irow g">${gH}</div></div>`:"")}
     {const peer=cur;getDocs(query(collection(fs,"gh",me,"g"),where("opp","array-contains",peer),limit(200))).then(s=>{if(cur!==peer)return;let w=0,l=0;s.docs.forEach(d=>{const x=d.data();if(x.draw)return;x.won?w++:l++});
       if(w+l)$("#iLabel").insertAdjacentHTML("beforeend",`<div class="ibadges"><div class="fl">Aranızdaki skor</div><div class="h2h"><b>${w}</b> – <b>${l}</b><small>sen – ${esc(realName(peer).split(" ")[0])}</small></div></div>`)}).catch(()=>{})}
@@ -1670,7 +1673,7 @@ async function initWallet(){
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
 function applyWallet(w){wallet=w;setTimeout(renderBell,0);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
-function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ceviz");if(id.startsWith("vip_")&&!isVipU(me))return kind==="table"?"yesil":"ceviz";return id}
+function mySkin(kind){const def=kind==="table"?"yesil":kind==="tile"?"klasik":"ceviz";const id=wallet?.skin?.[kind]||def;if((id.startsWith("vip_")||id==="sedef")&&!isVipU(me))return def;return id}
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
 const chestLeft=()=>wallet?(wallet.chestAt||0)+(wallet.chestEvery||4*3600e3)-Date.now():1;
@@ -1751,7 +1754,10 @@ function openInvite(){
     <div class="pk" style="display:block;text-align:center"><div class="isub">Senin TR ID'n</div><div style="font-size:28px;font-weight:800;letter-spacing:2px">${esc(fmtCode(code))}</div></div>
     <div class="row2"><button id="invShare" style="background:var(--brand)">Davet bağlantısını paylaş</button></div>
     <p class="isub" style="margin-top:8px">Şimdiye kadar ${fmtCoin(wallet?.refCount||0)} arkadaşın katıldı.</p>
+    <div class="fl">🏆 Ayın davet şampiyonları <span class="isub">ilk 3'e ${(catalog?.refPrizes||[300000,200000,100000]).map(fmtCoin).join(" / ")} jeton</span></div><div id="refTop"><div class="isub">Yükleniyor…</div></div>
     ${wallet?.canRef?`<div class="fl" style="margin-top:12px">Seni davet eden biri var mı?</div><input id="refCode" inputmode="numeric" placeholder="Davet edenin TR ID'si"><div class="row2"><button id="refGo" style="background:#0E7C3A">Kaydet</button></div>`:""}`);
+  {const mo=new Date(Date.now()+3*3600e3).toISOString().slice(0,7).replace("-","");getDocs(query(collection(fs,"lb_ref",mo,"u"),orderBy("n","desc"),limit(10))).then(s=>{const el=$("#refTop");if(!el)return;s.docs.forEach(d=>watchUser(d.id));
+    setTimeout(()=>{if($("#refTop"))$("#refTop").innerHTML=s.empty?'<div class="isub">Bu ay henüz davet yok, ilk sen ol!</div>':s.docs.map((d,i)=>`<div class="lbrow ${d.id===me?"me":""}"><span class="rk">${i<3?["🥇","🥈","🥉"][i]:i+1}</span>${avHTML(d.id)}<span class="nm">${esc(d.id===me?"Sen":realName(d.id))}</span><span class="pt">${d.data().n||0} kişi</span></div>`).join("")},400)}).catch(()=>{const el=$("#refTop");if(el)el.innerHTML=""})}
   $("#invShare").onclick=async()=>{const url=inviteLink(),text=`TR'de bana katıl! Kaydolurken davet kodu olarak ${fmtCode(code)} yaz, birlikte Okey ve bilardo oynayalım: ${url}`;
     try{if(navigator.share){await navigator.share({title:"TR",text,url});return}}catch(e){return}
     try{await navigator.clipboard.writeText(text);toast("Davet mesajı kopyalandı")}catch(e){toast(url,5000)}};
@@ -1799,7 +1805,7 @@ function openPublic(type){
     if(r&&r.error){toast("Masaya oturulamadı, dolmuş olabilir");return}
     openGame(id);
   };
-  const create=stake=>gameApi({action:"create",type,public:true,stake},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
+  const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
   $("#eBody").onclick=e=>{const w=e.target.closest("[data-watch]");if(w){closeE();pubUnsub&&pubUnsub();pubUnsub=null;openGame(w.dataset.watch);return}const b=e.target.closest("[data-pubjoin]");if(b)join(b.dataset.pubjoin,+b.dataset.stake)};
   $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake))};
   $("#pubQuick").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>{
@@ -1968,13 +1974,13 @@ function openStore(){
   openInfoModal("Jeton al",pk+`<p class="isub" style="margin-top:8px">Ödeme, TR Play Store'da yayınlandığında Google Play üzerinden açılacak. Şimdilik jeton yükleme için yöneticiyle iletişime geç.</p>`);
   $("#eBody").onclick=e=>{if(e.target.closest("[data-buy]"))toast("Ödeme henüz açık değil. Play Store yayınından sonra aktif olacak.",3500)};
 }
-const SW_COLORS={vip_mor:"linear-gradient(135deg,#4a1a6b,#2a0b40)",vip_mermer:"linear-gradient(135deg,#f4f1ea,#cfc8bb)",vip_altin:"linear-gradient(135deg,#1b3d2a,#c9a43a)",vip_sedef:"linear-gradient(135deg,#f6efe6,#c9d6e8,#e8d3e6)",vip_elmas:"linear-gradient(135deg,#dff3ff,#8fc6e8)",yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
+const SW_COLORS={klasik:"#f7f1e3",fildisi:"linear-gradient(#fffaf0,#f1e4c8)",mermer:"linear-gradient(135deg,#fafafa,#d8d8de)",sedef:"linear-gradient(135deg,#fff6fb,#e6f2ff,#fdf0e6)",vip_mor:"linear-gradient(135deg,#4a1a6b,#2a0b40)",vip_mermer:"linear-gradient(135deg,#f4f1ea,#cfc8bb)",vip_altin:"linear-gradient(135deg,#1b3d2a,#c9a43a)",vip_sedef:"linear-gradient(135deg,#f6efe6,#c9d6e8,#e8d3e6)",vip_elmas:"linear-gradient(135deg,#dff3ff,#8fc6e8)",yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
 function openSkins(){
-  const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=it.vip?isVipU(me):(wallet.owned?.[kind]||[]).includes(it.id),eq=mySkin(kind)===it.id;
+  const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=it.vip?isVipU(me):(wallet.owned?.[kind]||[]).includes(it.id)||!it.price,eq=mySkin(kind)===it.id;
     if(it.vip)return`<div class="pk"><span class="sw" style="background:${SW_COLORS[it.id]||"#888"}"></span><div><b style="font-size:15px">${esc(it.name)}</b><div class="isub">👑 VIP'e özel</div></div><button class="pr ${eq?"eq":own?"own":"vipx"}" data-skin="${kind}:${it.id}" ${eq?"disabled":""}>${eq?"Kullanılıyor":own?"Kullan":"VIP ol"}</button></div>`;
     return`<div class="pk"><span class="sw" style="background:${SW_COLORS[it.id]||"#888"}"></span><div><b style="font-size:15px">${esc(it.name)}</b><div class="isub">${it.price?fmtCoin(it.price)+" jeton":"Ücretsiz"}</div></div><button class="pr ${eq?"eq":own?"own":""}" data-skin="${kind}:${it.id}" ${eq?"disabled":""}>${eq?"Kullanılıyor":own?"Kullan":"Satın al"}</button></div>`}).join("");
-  openInfoModal("Masa ve ıstaka",sec("table","Masa deseni")+sec("rack","Istaka"));
-  $("#eBody").onclick=async e=>{const b=e.target.closest("[data-skin]");if(!b)return;const [kind,id]=b.dataset.skin.split(":");const own=(wallet.owned?.[kind]||[]).includes(id);
+  openInfoModal("Masa ve ıstaka",sec("table","Masa deseni")+sec("rack","Istaka")+(catalog?.skins?.tile?sec("tile","Okey taşları"):""));
+  $("#eBody").onclick=async e=>{const b=e.target.closest("[data-skin]");if(!b)return;const [kind,id]=b.dataset.skin.split(":");const own=(wallet.owned?.[kind]||[]).includes(id)||((catalog?.skins?.[kind]||[]).find(x=>x.id===id)||{}).price===0;
     const it=catalog.skins[kind].find(x=>x.id===id);
     if(it.vip&&!isVipU(me)){openVip();return}
     if(it.vip){b.disabled=true;try{const r=await callApi("/api/wallet",{action:"equip",kind,id});applyWallet({...r.wallet});openSkins();toast("Değiştirildi")}catch(err){toast("İşlem yapılamadı");b.disabled=false}return}
@@ -2103,8 +2109,10 @@ function pickStake(cb){
   const bal=wallet?.balance||0,ti=tierIdx(bal),tiers=catalog?.tiers||[{name:"Çaylak Salonu",icon:"🌱",min:0,stakes:[0]}];
   const rk=Math.round((catalog?.rake??0.05)*100);
   const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open||v>bal?"disabled":""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
-  openInfoModal("Masa ücreti",`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html}`);
-  $("#eBody").onclick=e=>{const b=e.target.closest("[data-stake]");if(!b||b.disabled)return;const v=+b.dataset.stake;
+  const spd=`<div class="fl">Okey tur süresi</div><div class="seg" id="tsSeg">${[[0,"Normal · 45 sn"],[30,"Hızlı · 30 sn"],[15,"Şimşek · 15 sn"]].map(([v,l])=>`<button data-ts="${v}" class="${(window.__turnSec||0)===v?"on":""}">${l}</button>`).join("")}</div>`;
+  openInfoModal("Masa ücreti",spd+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html}`);
+  $("#eBody").onclick=e=>{const ts=e.target.closest("[data-ts]");if(ts){window.__turnSec=+ts.dataset.ts;$("#tsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===ts));return}
+    const b=e.target.closest("[data-stake]");if(!b||b.disabled)return;const v=+b.dataset.stake;
     if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb));return}
     closeE();cb(v)};
 }
@@ -2135,7 +2143,7 @@ $("#gpick").addEventListener("click",async e=>{
   const conv=cur,type=it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
   pickStake(async stake=>{
     toast("Masa kuruluyor…",2500);
-    const r=await gameApi({action:"create",type,conv,stake},type);
+    const r=await gameApi({action:"create",type,conv,stake,turnSec:window.__turnSec||0},type);
     if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
     await sendContent(conv,{t:"game",gid:r.id,kind:type,stake});
     openGame(r.id);
@@ -2185,10 +2193,10 @@ function openGame(id){
     renderGame();
   },()=>{}));
   game.poke=setInterval(()=>{const d=game&&game.data;if(!d)return;
-    {const tb=$("#gTimer");if(d.status==="play"&&!(d.seats[d.turn]||{}).bot){const lim=d.type==="pool"?60000:45000,left=Math.max(0,lim-(Date.now()-(d.lastMoveAt||0)));tb.style.display="";tb.firstElementChild.style.width=(100*left/lim)+"%";tb.classList.toggle("low",left<10000)}else tb.style.display="none"}
+    {const tb=$("#gTimer");if(d.status==="play"&&!(d.seats[d.turn]||{}).bot){const lim=d.type==="pool"?60000:d.turnSec?d.turnSec*1000:45000,left=Math.max(0,lim-(Date.now()-(d.lastMoveAt||0)));tb.style.display="";tb.firstElementChild.style.width=(100*left/lim)+"%";tb.classList.toggle("low",left<10000)}else tb.style.display="none"}
     if(d.status==="lobby"&&d.public){const left=Math.ceil((20000-(Date.now()-(d.at||0)))/1000);const el=$("#pubCount");if(el)el.textContent=left>0?`${left} sn içinde dolmazsa bilgisayar oturur`:"Başlıyor…";
       if(left<=0&&mySeatIdx(d)>=0&&!game.poking){game.poking=true;gameApi({action:"poke",id}).finally(()=>{if(game)game.poking=false})}return}
-    if(d.status!=="play")return;const s=d.seats[d.turn];if(s&&!s.bot&&s.uid!==me&&Date.now()-(d.lastMoveAt||0)>(d.type==="pool"?62000:47000)&&Date.now()-(game.lastPoke||0)>9000){game.lastPoke=Date.now();gameApi({action:"poke",id})}},1000);
+    if(d.status!=="play")return;const s=d.seats[d.turn];if(s&&!s.bot&&s.uid!==me&&Date.now()-(d.lastMoveAt||0)>(d.type==="pool"?62000:d.turnSec?d.turnSec*1000+2000:47000)&&Date.now()-(game.lastPoke||0)>9000){game.lastPoke=Date.now();gameApi({action:"poke",id})}},1000);
 }
 function closeGame(silent){
   if(!game)return;
@@ -2203,7 +2211,7 @@ function mySeatIdx(d){return(d.seats||[]).findIndex(s=>s&&!s.bot&&s.uid===me)}
 function renderGame(){
   if(!game||!game.data)return;
   const d=game.data,my=mySeatIdx(d);
-  const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack");
+  const gs=$("#gamescr");gs.className="gamescr show felt-"+mySkin("table")+" rack-"+mySkin("rack")+" tile-"+(mySkin("tile")||"klasik");
   if(d.type==="pool"){gs.classList.add("pool");if(d.status==="play"||d.status==="over")askLandscape();return renderPool(d,my)}
   if(d.type==="pisti"){gs.classList.add("pistig");return renderPisti(d,my)}
   if(d.type==="tavla"){gs.classList.add("tavlag");return renderTavla(d,my)}
@@ -2237,7 +2245,7 @@ function renderGame(){
     ${canDiscard?`<div class="ofinish" id="gDropFinish">🏁<span>Bitirmek için<br>taşı buraya at</span></div>`:""}</div>`;
   if(d.status==="over"){
     const w=d.winner;
-    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
+    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
   html+='</div>';
   $("#gTable").innerHTML=html;
@@ -2282,6 +2290,11 @@ function renderLobby(d,my){
   if(d.public&&d.status==="lobby"){const lb=$("#gTable .lobby");if(lb&&!$("#gInvite")){const b=document.createElement("button");b.id="gInvite";b.className="ghostbtn";b.textContent="🔗 Davet bağlantısı";lb.appendChild(b);
     b.onclick=()=>{const u=`${location.origin}/?g=${game.id}`,t=`TR'de ${gk(d.type)[1]} masama gel: ${u}`;if(navigator.share)navigator.share({text:t,url:u}).catch(()=>{});else{navigator.clipboard?.writeText(u);toast("Bağlantı kopyalandı")}}}}
 }
+function rateHTML(d){const my=mySeatIdx(d);if(my<0)return"";const opp=d.seats.filter((x,i)=>x&&!x.bot&&i!==my);if(!opp.length)return"";
+  return`<div class="rateb">${opp.map(x=>`<div><span>${esc(seatName(x))}</span><button data-rate="${esc(x.uid)}:1">👍</button><button data-rate="${esc(x.uid)}:-1">👎</button><button data-rrep="${esc(x.uid)}">🚩</button></div>`).join("")}</div>`}
+document.addEventListener("click",async e=>{const r=e.target.closest("[data-rate]");if(r&&game){const [to,v]=r.dataset.rate.split(":");r.parentElement.querySelectorAll("button").forEach(b=>b.disabled=true);
+    try{await callApi("/api/wallet",{action:"rate",gid:game.id,to,v:+v});toast("Teşekkürler, değerlendirmen kaydedildi")}catch(err){toast(err.status===409?"Zaten değerlendirdin":"Kaydedilemedi")}return}
+  const rp=e.target.closest("[data-rrep]");if(rp&&game){openReport(rp.dataset.rrep,"game:"+game.id)}});
 function postResult(d){
   try{if(!d||d.status!=="over"||!d.conv||d.host!==me)return;const k="tr-gres-"+game.id+"-"+(d.round||1);if(localStorage.getItem(k))return;localStorage.setItem(k,"1");
     const w=d.winner;const wn=w==null?"":(d.seats[w]&&!d.seats[w].bot?(d.seats[w].uid===me?(users[me]?.nick||"Ben"):realName(d.seats[w].uid)):seatName(d.seats[w]));
@@ -2869,7 +2882,9 @@ $("#notifX").onclick=()=>hideNotifBar(true);
 function notifMenu(){
   if(!notifSupported()){openModal({title:"Bildirimler",text:"Bu cihaz ya da tarayıcı bildirimleri desteklemiyor.",input:false,cancel:false});return}
   const p=Notification.permission;
-  if(p==="granted"){setupPush(false).then(ok=>toast(ok?"Bildirimler açık ✓":"Bildirim kaydı yapılamadı"));return}
+  if(p==="granted"){setupPush(false);getDoc(doc(fs,"private",me,"data","push")).then(s=>{const x=s.exists()?s.data():{};
+    openInfoModal("🔔 Bildirim ayarları",[["noDm","Birebir mesajlar"],["noGroup","Grup mesajları (senden bahsedilirse yine gelir)"],["noCall","Gelen aramalar"]].map(([k,l])=>`<label class="tgl"><span><b>${l}</b></span><input type="checkbox" data-np="${k}" ${x[k]?"":"checked"}></label>`).join("")+'<p class="isub">Belirli bir sohbeti sessize almak için sohbete uzun bas.</p>');
+    $("#eBody").onchange=e=>{const k=e.target.dataset.np;if(k)setDoc(doc(fs,"private",me,"data","push"),{[k]:!e.target.checked},{merge:true}).catch(()=>toast("Kaydedilemedi"))}}).catch(()=>{});return}
   if(p==="denied"){openModal({title:"Bildirimler kapalı",text:"Bildirim izni daha önce reddedilmiş. Telefonda <b>Ayarlar → Uygulamalar → TR Mesaj → Bildirimler</b>'den açabilirsin. Bilgisayarda adres çubuğundaki kilit simgesinden izin verebilirsin.",input:false,cancel:false});return}
   setupPush(true).then(ok=>toast(ok?"Bildirimler açıldı 🔔":"Bildirim izni verilmedi")).catch(()=>toast("Bildirimler açılamadı"));
 }

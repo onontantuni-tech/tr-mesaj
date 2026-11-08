@@ -55,7 +55,7 @@ export default async (req) => {
       if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
-        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl),
+        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl), turnSec: [15, 30].includes(Number(b.turnSec)) ? Number(b.turnSec) : 0,
         seats: [{ uid, bot: false }, null, null, null],
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0, 0, 0], v: 1,
       });
@@ -182,7 +182,7 @@ export default async (req) => {
       // Uzun süre oynamayanın yerine otomatik hamle
       if (act === "poke") {
         const cur = st.seats[st.turn];
-        if (cur.bot || Date.now() - (st.lastMoveAt || 0) < IDLE_MS) return { status: 200, body: { ok: true, idle: false } };
+        if (cur.bot || Date.now() - (st.lastMoveAt || 0) < (st.turnSec ? st.turnSec * 1000 : IDLE_MS)) return { status: 200, body: { ok: true, idle: false } };
         autoMove(st, secret, hands, st.turn);
         runBots(st, secret, hands);
         saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);

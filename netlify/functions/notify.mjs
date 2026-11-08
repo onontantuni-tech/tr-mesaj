@@ -52,6 +52,7 @@ export default async (req) => {
       // sessize alınmış sohbet (grupta adı geçtiyse yine bildirilir)
       const mu = pr.exists && pr.data().mute ? +pr.data().mute[conv] || 0 : 0;
       if (mu > Date.now() && !mentioned) return;
+      if (ps.exists && ((m.gid && ps.data().noGroup && !mentioned) || (!m.gid && ps.data().noDm))) return;
       const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
       if (!tokens.length) return;
       const res = await messaging.sendEachForMulticast({
@@ -86,6 +87,7 @@ async function notifyCall(uid, id) {
   const c = snap.data();
   if (c.from !== uid || c.state !== "ringing") return json(403, { error: "owner" });
   const ps = await db.doc(`private/${c.to}/data/push`).get();
+  if (ps.exists && ps.data().noCall) return json(200, { ok: true, sent: 0, off: true });
   const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
   if (!tokens.length) return json(200, { ok: true, sent: 0 });
   const sender = await db.doc(`users/${uid}`).get();

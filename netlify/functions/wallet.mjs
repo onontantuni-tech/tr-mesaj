@@ -15,7 +15,15 @@ export default async (req) => {
   const act = String(b?.action || "me");
   const ref = db.doc(`wallets/${uid}`);
   let migrate = false;
-  let giftOk = false;
+  let giftOk = false, rateOk = false;
+  if (act === "rate") {
+    const gid = String(b?.gid || ""), to = String(b?.to || "");
+    if (/^[A-Za-z0-9]{10,40}$/.test(gid)) {
+      const gs = await db.doc(`games/${gid}`).get();
+      const seated = gs.exists ? (gs.data().seats || []).filter((x) => x && !x.bot).map((x) => x.uid) : [];
+      rateOk = seated.includes(uid) && seated.includes(to) && to !== uid;
+    }
+  }
   if (act === "gift") {
     const to = String(b?.to || "");
     giftOk = /^[A-Za-z0-9]{10,40}$/.test(to) && (await areFriends(db, uid, to));
@@ -76,6 +84,7 @@ export default async (req) => {
           const { month } = E.trDate();
           invW.refMonth = invW.refMonthKey === month ? (invW.refMonth || 0) + 1 : 1;
           invW.refMonthKey = month;
+          tx.set(db.doc(`lb_ref/${month}/u/${w.refBy}`), { n: FieldValue.increment(1) }, { merge: true });
           tx.set(invRef, invW);
         }
       }
@@ -134,7 +143,7 @@ export default async (req) => {
       }
       // Günlük görev ödülü
       if (act === "task") {
-        const t = E.todayTasks(w), task = E.TASKS.find((x) => x.id === b.id);
+        const t = E.todayTasks(w), task = E.tasksFor(t).find((x) => x.id === b.id);
         if (!task) return { status: 400, body: { error: "task" } };
         if (!task.need(t) || (t.claimed || []).includes(task.id)) return { status: 409, body: { error: "no", wallet: view(w) } };
         E.credit(tx, db, uid, w, task.prize, `Görev: ${task.text}`);
@@ -211,6 +220,17 @@ export default async (req) => {
         }
         w.club = null;
       }
+      // Oyun sonrası rakibi değerlendirme (👍/👎): oyun başına rakip başına bir kez
+      if (act === "rate") {
+        const gid = String(b.gid || ""), to = String(b.to || ""), v = b.v === 1 ? 1 : b.v === -1 ? -1 : 0;
+        if (!/^[A-Za-z0-9]{10,40}$/.test(gid) || !/^[A-Za-z0-9]{10,40}$/.test(to) || to === uid || !v) return { status: 400, body: { error: "rate" } };
+        if (!rateOk) return { status: 403, body: { error: "seat" } };
+        const key = gid + "_" + to;
+        if ((w.rated || []).includes(key)) return { status: 409, body: { error: "done" } };
+        w.rated = [...(w.rated || []).slice(-199), key];
+        tx.set(db.doc(`ratings/${to}`), { [v > 0 ? "up" : "down"]: FieldValue.increment(1) }, { merge: true });
+        gift = { rated: v };
+      }
       // Harcama iadesi (dünkü harcamaya göre)
       if (act === "cashback") {
         const v = E.spendView(w);
@@ -244,7 +264,7 @@ export default async (req) => {
       }
 
       if (act === "buySkin" || act === "equip") {
-        const kind = b.kind === "rack" ? "rack" : "table";
+        const kind = b.kind === "rack" ? "rack" : b.kind === "tile" ? "tile" : "table";
         const item = E.SKINS[kind].find((x) => x.id === b.id);
         if (!item) return { status: 400, body: { error: "item" } };
         if (item.vip) {
@@ -255,6 +275,7 @@ export default async (req) => {
         }
         w.owned = w.owned || { table: ["yesil"], rack: ["ceviz"] };
         w.owned[kind] = w.owned[kind] || [];
+        if (item.price === 0 && !w.owned[kind].includes(item.id)) w.owned[kind].push(item.id);
         if (act === "buySkin" && !w.owned[kind].includes(item.id)) {
           if ((w.balance || 0) < item.price) return { status: 402, body: { error: "balance" } };
           E.credit(tx, db, uid, w, -item.price, `Desen: ${item.name}`);
@@ -298,13 +319,13 @@ function view(w) {
     wins: w.wins || 0, games: w.games || 0, owned: w.owned, skin: w.skin, vipUntil: w.vipUntil || 0, adult: !!w.adult, ageSet: !!w.birthYear,
     streak: w.streak || 0, lastDaily: w.lastDaily || "", today: E.trDate().day, yesterday: E.trDate(Date.now() - 86400000).day,
     chestAt: w.chestAt || 0, chestEvery: E.CHEST.every, rescueDay: w.rescueDay || "", spinDay: w.spinDay || "", winStreak: w.winStreak || 0,
-    tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
+    tasks: (() => { const t = E.todayTasks(w); return E.tasksFor(t).map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
     ach: w.ach || [], achStats: { wins: w.wins || 0, games: w.games || 0, maxStreak: w.maxStreak || 0, tw: w.tw || {}, marsN: w.marsN || 0, giftsSent: w.giftsSent || 0 },
     club: w.club || null, vipLeft: w.vipLeft || 0, cb: E.spendView(w),
     tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, cashback: E.CASHBACK, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, titles: E.TITLES.map(({ id, name, icon }) => ({ id, name, icon })), refPrizes: E.REF_PRIZES, cashback: E.CASHBACK, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
   };
 }
 

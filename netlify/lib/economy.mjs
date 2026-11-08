@@ -53,6 +53,12 @@ export const SKINS = {
     { id: "vip_sedef", name: "Sedef kakma", price: 0, vip: true },
     { id: "vip_elmas", name: "Elmas", price: 0, vip: true },
   ],
+  tile: [
+    { id: "klasik", name: "Klasik", price: 0 },
+    { id: "fildisi", name: "Fildişi", price: 40000 },
+    { id: "mermer", name: "Mermer", price: 80000 },
+    { id: "sedef", name: "Sedef", price: 0, vip: true },
+  ],
 };
 
 // Seviye: XP eşiği, seviye arttıkça bir sonrakine daha çok XP gerekir
@@ -131,6 +137,7 @@ export const WHEEL = [
   { amount: 10000, w: 8 }, { amount: 25000, w: 4 }, { amount: 50000, w: 2 }, { amount: 100000, w: 1 },
 ];
 // Arkadaşını çağır: davet edilen ilk oyununu bitirince davet edene verilir
+export const REF_PRIZES = [300000, 200000, 100000]; // ayın en çok davet edenleri
 export const REFERRAL_BONUS = 100000;
 
 // VIP: 30 gün. Jetonla alınır (Play Store'da parayla da satılabilir).
@@ -201,6 +208,13 @@ export const TASKS = [
   { id: "pistiW3", text: "Piştide 3 galibiyet", need: (t) => (t.w?.pisti || 0) >= 3, goal: (t) => [t.w?.pisti || 0, 3], prize: 20000 },
   { id: "tavlaW3", text: "Tavlada 3 galibiyet", need: (t) => (t.w?.tavla || 0) >= 3, goal: (t) => [t.w?.tavla || 0, 3], prize: 20000 },
 ];
+// Günün meydan okuması: her gün sırayla bir oyunda 2 galibiyet, büyük ödül
+const CH_TYPES = [["okey", "Okey"], ["pool", "Bilardo"], ["pisti", "Pişti"], ["tavla", "Tavla"]];
+export function challengeFor(day) {
+  const n = Number(String(day).slice(-3)) || 0, [type, name] = CH_TYPES[n % 4];
+  return { id: "ch_" + type, text: `🔥 Günün meydan okuması: ${name}'de 2 galibiyet`, need: (t) => (t.w?.[type] || 0) >= 2, goal: (t) => [t.w?.[type] || 0, 2], prize: 30000 };
+}
+export const tasksFor = (t) => [challengeFor(t.day), ...TASKS];
 export function todayTasks(w) {
   const day = trDate().day;
   return w.td && w.td.day === day ? w.td : { day, played: 0, won: 0, okey: 0, pool: 0, claimed: [] };
@@ -234,7 +248,22 @@ export const ACH = [
   { id: "all4", icon: "🌟", name: "Çok yönlü", desc: "Dört oyunun hepsinde kazan", prize: 20000, t: (w) => ["okey", "pool", "pisti", "tavla"].every((k) => (w.tw?.[k] || 0) >= 1) },
   { id: "gift1", icon: "🎁", name: "Gönlü zengin", desc: "Bir arkadaşına hediye gönder", prize: 1000, t: (w) => (w.giftsSent || 0) >= 1 },
 ];
+// Ünvanlar: oyun başına galibiyet sayısına göre (profilde görünür)
+export const TITLES = [
+  { id: "okeyAga", name: "Okey Ağası", icon: "🀄", t: (w) => (w.tw?.okey || 0) >= 50 },
+  { id: "bilardoUsta", name: "Bilardo Ustası", icon: "🎱", t: (w) => (w.tw?.pool || 0) >= 50 },
+  { id: "pistiKral", name: "Pişti Kralı", icon: "🃏", t: (w) => (w.tw?.pisti || 0) >= 50 },
+  { id: "tavlaUstad", name: "Tavla Üstadı", icon: "🎲", t: (w) => (w.tw?.tavla || 0) >= 50 },
+  { id: "efsane", name: "Kahvehane Efsanesi", icon: "🏛️", t: (w) => (w.wins || 0) >= 500 },
+];
+export function checkTitles(tx, db, uid, wl) {
+  const t = TITLES.filter((x) => x.t(wl)).map((x) => x.id);
+  if (t.length === (wl.titles || []).length) return;
+  wl.titles = t;
+  tx.set(db.doc(`badges/${uid}`), { titles: t }, { merge: true });
+}
 export function checkAch(tx, db, uid, wl) {
+  checkTitles(tx, db, uid, wl);
   const have = new Set(wl.ach || []);
   const fresh = ACH.filter((a) => !have.has(a.id) && a.t(wl));
   if (!fresh.length) return [];
