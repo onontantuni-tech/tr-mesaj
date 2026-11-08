@@ -1,11 +1,12 @@
 // Yönetim paneli: kullanıcıyı TR ID ile bul, bakiyesini gör, jeton yükle/düş.
-// Yöneticiler TR ID ile tanımlanır (ADMIN_CODES ortam değişkeni, varsayılan 794985).
+// Yöneticiler TR ID ile tanımlanır (794985, 423816 ve ADMIN_CODES ortam değişkeni).
 // TR ID → uid eşlemesi "codes" koleksiyonundan gelir; bu belgeler sadece bir kez oluşturulabilir, sonradan değiştirilemez.
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
 import { FOREVER, REPORT_REASONS } from "../lib/moderation.mjs";
 
-const ADMIN_CODES = (process.env.ADMIN_CODES || "794985").split(",").map((x) => x.trim()).filter(Boolean);
+// uygulama sahibinin hesapları her zaman yönetici
+const ADMIN_CODES = [...new Set(["794985", "423816", ...(process.env.ADMIN_CODES || "").split(",")].map((x) => x.trim()).filter(Boolean))];
 
 async function isAdmin(db, uid) {
   const snaps = await Promise.all(ADMIN_CODES.map((c) => db.doc(`codes/${c}`).get()));

@@ -229,9 +229,12 @@ export default async (req) => {
         const t = Number(b.tile);
         const idx = hand.indexOf(t);
         if (idx < 0) return { status: 400, body: { error: "tile" } };
-        if (act === "finish") {
-          const rest = hand.filter((_, i) => i !== idx);
-          const kind = O.winKind(rest, okey);
+        const rest0 = hand.filter((_, i) => i !== idx);
+        // el bitiyorsa atılan taş otomatik olarak bitiriş sayılır
+        const autoWin = act === "discard" ? O.winKind(rest0, okey) : false;
+        if (act === "finish" || autoWin) {
+          const rest = rest0;
+          const kind = autoWin || O.winKind(rest, okey);
           if (!kind) return { status: 200, body: { ok: false, error: "nowin" } };
           const firstMove = !(st.discards[mySeat] || []).length;
           hand.splice(idx, 1);

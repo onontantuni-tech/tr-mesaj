@@ -3,9 +3,9 @@
 // bu yüzden aynı başlangıçtan her cihazda birebir aynı sonuç çıkar (tekrar animasyonu için).
 
 export const W = 1000, H = 500, R = 14;
-export const MAXV = 40;            // en sert vuruşta beyaz topun adım başına hızı
-const SUB = 4;                     // her adımda alt adım
-const FRICTION = 0.988, ROLL = 0.018, STOP = 0.05;
+export const MAXV = 50;            // en sert vuruşta beyaz topun adım başına hızı
+const SUB = 5;                     // her adımda alt adım
+const FRICTION = 0.99, ROLL = 0.016, STOP = 0.05;
 const E_BALL = 0.95, E_WALL = 0.78;
 export const POCKETS = [[0, 0, 36], [W / 2, -8, 28], [W, 0, 36], [0, H, 36], [W / 2, H + 8, 28], [W, H, 36]];
 const MOUTH_C = 36, MOUTH_M = 26;

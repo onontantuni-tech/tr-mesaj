@@ -2186,10 +2186,11 @@ async function adminLookup(){
   const w=r.wallet;
   $("#adOut").innerHTML=`<div class="pk" style="display:block"><b>${esc(r.user.name||"İsimsiz")}</b> · TR ID ${fmtCode(r.user.code)}<div style="margin-top:6px;font-size:20px;font-weight:800"><span class="coin"></span> ${w?fmtCoin(w.balance):"Cüzdan yok"}</div>${w?`<div class="isub">Seviye ${w.level} · ${w.wins} galibiyet · ${w.games} oyun</div>`:""}</div>
     <div class="pk" style="display:block;margin-top:8px">${r.ban?`<b style="color:#E53935">${banLabel(r.ban.until)}</b><div class="isub">${esc(r.ban.reason)}</div><div class="row2" style="margin-top:6px"><button id="adUnban" style="background:#0E7C3A">Askıyı kaldır</button></div>`:`<div class="isub">Askıya al / yasakla</div>${banBtns("u")}`}</div>
-    <input id="adAmt" inputmode="numeric" placeholder="Miktar (örn. 100000)"><input id="adWhy" maxlength="80" placeholder="Açıklama (isteğe bağlı)">
+    <input id="adAmt" inputmode="numeric" placeholder="Miktar (örn. 100000)"><div class="row2" id="adQuick">${[10000,100000,1000000,10000000].map(v=>`<button data-q="${v}" style="background:#555">${fmtCoin(v)}</button>`).join("")}</div><input id="adWhy" maxlength="80" placeholder="Açıklama (isteğe bağlı)">
     <div class="row2"><button id="adAdd">+ Yükle</button><button id="adSub" class="neg">− Düş</button></div><div class="row2"><button id="adVip" style="background:#6b21a8">👑 30 gün VIP ver (300.000 jeton, günde 10.000)</button></div><div id="adConfirm" style="margin-top:8px"></div>
     <div class="fl" style="margin-top:12px">Yönetici notları</div>${(r.notes||[]).map(n=>`<div class="isub">• ${esc(n.text)} <i>(${new Date(n.at).toLocaleDateString("tr-TR")})</i></div>`).join("")}<div class="row2"><input id="adNote" maxlength="1000" placeholder="İç not ekle (kullanıcı görmez)"><button id="adNoteGo" style="background:#555;flex:0 0 auto">Ekle</button></div>
     <div class="fl" style="margin-top:12px">Son hareketler</div>${(r.history||[]).map(h=>`<div class="hist"><span>${esc(h.reason)}</span><span class="isub">${new Date(h.at).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span><span class="d" style="color:${h.delta>0?"#0E7C3A":"#E53935"}">${h.delta>0?"+":""}${fmtCoin(h.delta)}</span></div>`).join("")||'<div class="isub">Hareket yok</div>'}`;
+  $("#adQuick").onclick=e=>{const b=e.target.closest("[data-q]");if(b)$("#adAmt").value=b.dataset.q};
   $("#adNoteGo").onclick=async()=>{const t=$("#adNote").value.trim();if(!t)return;try{await callApi("/api/admin",{action:"note",code,text:t});toast("Not eklendi");adminLookup()}catch(e){toast("Eklenemedi")}};
   const go=async sign=>{const a=Math.abs(parseInt($("#adAmt").value.replace(/\D/g,""),10));if(!a){toast("Miktar yaz");return}
     const why=$("#adWhy")?.value||"";
@@ -2347,12 +2348,13 @@ function renderGame(){
     else if(i===leftSeat)html+=`<div class="odisc od-left ${canDraw&&pileOf(i).length?"take":""}" id="gLeftDisc"><div class="stk">${stack(pileOf(i))}</div><span>${canDraw&&pileOf(i).length?"Dokun, al":"Soldan"}</span></div>`;
     else html+=`<div class="odisc od-${p}"><div class="stk">${stack(pileOf(i))}</div></div>`;
   });
+  const flp=d.status==="play"&&game.flipR!==d.round?" flip":"";if(d.status==="play")game.flipR=d.round;
   html+=`<div class="ocenter"><div class="odeck ${canDraw?"take":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":"Deste"}</span></div>
-    <div class="oind"><div class="indt">${tileHTML(d.indicator,null,{sm:true})}</div><span>Gösterge</span></div>
-    <div class="oind"><div class="indt">${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><span>Okey</span></div>
-    ${d.canak?`<div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak</span></div>`:""}
+    <div class="oind"><div class="indt${flp}">${tileHTML(d.indicator,null,{sm:true})}</div><span>Gösterge</span></div>
+    <div class="oind"><div class="indt${flp} f2">${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><span>Okey</span></div>
     ${(()=>{if(my<0||d.status!=="play"||(d.shown||[]).includes(my)||((d.discards||{})[my]||[]).length)return"";const hs=game.hand||[];const tw=hs.some(t=>t!==d.indicator&&!tIsFake(t)&&tColor(t)===tColor(d.indicator)&&tNum(t)===tNum(d.indicator));return tw?`<button class="oshow" id="gShow">👁️ Göstergeyi göster (+1)</button>`:""})()}
-    ${canDiscard?`<div class="ofinish" id="gDropFinish">🏁<span>Bitirmek için<br>taşı buraya at</span></div>`:""}</div>`;
+    </div>`;
+  if(d.canak)html+=`<div class="ocanakbox"><div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak</span></div></div>`;
   if(d.status==="over"){
     const w=d.winner;
     html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}${d.payout.canak?` · çanağa: ${fmtCoin(d.payout.canak)}`:""}${d.payout.canakWin?` · 🍯 çanak kazancı: ${fmtCoin(d.payout.canakWin)}`:""}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
@@ -2364,7 +2366,7 @@ function renderGame(){
   if(d.status==="play"){
     if(my<0)msg="İzliyorsun";
     else if(canDraw)msg="Sıra sende: desteden çek ya da soldan gelen taşı al";
-    else if(canDiscard)msg=game.sel!=null?"“At” ile at, el bitiyorsa “Bitir”":"Atmak istediğin taşa dokun";
+    else if(canDiscard)msg="Atacağın taşı sağ alttaki yere kaydır · el bitiyorsa otomatik biter";
     else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
   }
   $("#gMsg").innerHTML=msg;
@@ -2376,8 +2378,6 @@ function renderGame(){
   const tier=(from)=>`<div class="tier">${Array.from({length:SLOTS/2},(_,k)=>slot(from+k)).join("")}</div>`;
   $("#gRack").innerHTML=my>=0?`<div class="rackwood">${tier(0)}${tier(SLOTS/2)}</div>`:"";
   $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";$("#pCtrl").style.display="none";
-  $("#gDiscard").disabled=!(canDiscard&&game.sel!=null)||game.busy;
-  $("#gFinish").disabled=!(canDiscard&&game.sel!=null)||game.busy;
   game.canDraw=canDraw;
   const gsh=$("#gShow");if(gsh)gsh.onclick=()=>gameMove({action:"show"});
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
@@ -2586,7 +2586,7 @@ const pRank=c=>c%13+1,pSuit=c=>Math.floor(c/13);
 function cardHTML(c,{cls="",back=false}={}){
   if(back||c==null)return`<div class="pcard back ${cls}"></div>`;
   const su=pSuit(c),r=P_RANKS[pRank(c)],red=su===1||su===2;
-  return`<div class="pcard ${red?"red":""} ${cls}" data-c="${c}"><span class="tl">${r}<br>${P_SUITS[su]}</span><span class="mid">${pRank(c)>10?r:P_SUITS[su]}</span><span class="br">${r}<br>${P_SUITS[su]}</span></div>`}
+  return`<div class="pcard ${red?"red":""} ${cls}" data-c="${c}"><span class="tl">${r}<br>${P_SUITS[su]}</span><span class="mid${pRank(c)>10?" face":""}">${pRank(c)>10?r+"<small style='font-size:.55em'>"+P_SUITS[su]+"</small>":P_SUITS[su]}</span><span class="br">${r}<br>${P_SUITS[su]}</span></div>`}
 function renderPisti(d,my){
   $("#gTitleTxt").textContent="Pişti";
   $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
@@ -2597,8 +2597,8 @@ function renderPisti(d,my){
   const hc=d.handCounts||[0,0],tk=d.takenN||[0,0],pi=d.pisti||[0,0];
   const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>🂠 ${tk[i]} kart${pi[i]?` · <em>${pi[i]/10>=1?"PİŞTİ "+pi[i]:""}</em>`:""} · ${(d.scores||[])[i]||0}🏆</span></div></div>`;
   const opp=`<div class="phand opp">${Array.from({length:hc[op]||0},()=>cardHTML(null,{back:true})).join("")}</div>`;
-  const pileN=d.pileN||0;
-  const stack=pileN?`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${cardHTML(d.top,{cls:"st1 "+(d.last&&d.last.card===d.top&&!d.last.captured?"land":"")})}`:`<div class="pempty">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ!":"Alındı"):"Yer boş"}</div>`;
+  const pileN=d.pileN||0;const lk=d.last?d.last.at+"-"+d.last.seat:"";const pNew=lk&&game.pLastK!==lk;game.pLastK=lk;
+  const stack=pileN?`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${cardHTML(d.top,{cls:"st1 "+(d.last&&d.last.card===d.top&&!d.last.captured?(pNew&&d.last.seat!==me2?"land opl":"land"):"")})}`:`<div class="pempty ${pNew&&d.last&&d.last.seat!==me2?"late":""}">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ!":"Alındı"):"Yer boş"}</div>`;
   const deck=d.deckN?`<div class="pdeck"><div class="pcard back"></div><span>${d.deckN}</span></div>`:`<div class="pdeck empty"><span>Deste bitti</span></div>`;
   const mine=(game.cards||[]).slice().sort((a,b)=>(pSuit(a)-pSuit(b))||(pRank(a)-pRank(b)));
   const hand=`<div class="phand me ${isMy?"can":""}">${mine.map(c=>cardHTML(c,{cls:"mine"})).join("")}</div>`;
@@ -2613,7 +2613,7 @@ function renderPisti(d,my){
       ${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div></div>`}
   $("#gTable").innerHTML=`<div class="ptable">${side(op,true)}${opp}<div class="pcenter">${deck}<div class="ppile">${stack}</div></div>${flash}<div class="plog">${esc(d.status==="play"?(isMy?"Sıra sende · bir kart seç":d.turn===my?"…":esc(seatName(d.seats[d.turn]))+" düşünüyor…"):"")}${d.log&&d.status==="play"?`<small>${esc(d.log)}</small>`:""}</div>${hand}${side(me2,false)}${over}</div>`;
   const hb=$(".phand.me");if(hb)hb.onclick=e=>{const c=e.target.closest(".pcard[data-c]");if(!c||!isMy)return;const v=+c.dataset.c;
-    c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),120)};
+    c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),320)};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 /* ---------- Kızma Birader ---------- */
@@ -2627,19 +2627,21 @@ function renderKizma(d,my){
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
-  const isMy=d.status==="play"&&d.turn===my&&!game.busy,mv=isMy&&d.die?kzMoves(d.kz,my,d.die):[],mk=new Set(mv.map(m=>m.k));
+  // zar elle atılır: sıra sende olunca "Zar at" düğmesine bas (sonuç sunucuda belirlenir)
+  const kdk=d.seq+"-"+d.turn,needRoll=d.status==="play"&&d.turn===my&&!!d.die&&game.kzRolled!==kdk;
+  const isMy=d.status==="play"&&d.turn===my&&!game.busy&&!needRoll,mv=isMy&&d.die?kzMoves(d.kz,my,d.die):[],mk=new Set(mv.map(m=>m.k));
   const cell={};const put=(rc,h)=>{cell[rc[0]+"_"+rc[1]]=(cell[rc[0]+"_"+rc[1]]||"")+h};
   for(let p=0;p<4;p++){const P=d.kz.pos[p]||d.kz.pos[String(p)]||[];P.forEach((r,k)=>{const rc=r===-1?KZ_HOME[p][k]:r>=40?KZ_FIN[p][r-40]:KZ_PATH[(p*10+r)%40];
     put(rc,`<i class="kzp ${p===my&&mk.has(k)?"can":""}" style="--c:${KZ_COL[p]}" ${p===my&&mk.has(k)?`data-kzk="${k}"`:""}></i>`)})}
   const kind={};KZ_PATH.forEach((rc,i)=>{kind[rc[0]+"_"+rc[1]]=i%10===0?"st s"+(i/10):"tr"});KZ_FIN.forEach((f,p)=>f.forEach(rc=>kind[rc[0]+"_"+rc[1]]="fin f"+p));KZ_HOME.forEach((h,p)=>h.forEach(rc=>kind[rc[0]+"_"+rc[1]]="home h"+p));
   let grid="";for(let r=0;r<11;r++)for(let c=0;c<11;c++){const k=r+"_"+c;grid+=`<div class="kzc ${kind[k]||"x"}">${cell[k]||""}</div>`}
   const PIP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
-  const die=d.die?`<span class="die ${game.kzSeq!==d.seq?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${PIP[d.die].includes(k)?"on":""}"></i>`).join("")}</span>`:"";game.kzSeq=d.seq;
+  const die=needRoll?`<button class="kzroll" id="kzRoll">🎲 Zar at</button>`:d.die?`<span class="die ${game.kzSeq!==d.seq||game.kzJust?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${PIP[d.die].includes(k)?"on":""}"></i>`).join("")}</span>`:"";if(!needRoll){game.kzSeq=d.seq;game.kzJust=false}
   const sides=d.seats.map((s,i)=>`<div class="kzs ${d.status==="play"&&d.turn===i?"turn":""}" style="--c:${KZ_COL[i]}"><i></i>${esc(seatName(s))}</div>`).join("");
   let over="";if(d.status==="over"){const w=d.winner;over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton</div>`):""}${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni oyun</button>`:""}</div>`}
-  $("#gTable").innerHTML=`<div class="kztable"><div class="kzside">${sides}</div><div class="kzboard">${grid}</div><div class="kzctl">${die}<div class="thint">${d.status!=="play"?"":isMy?(mv.length?"Oynatacağın piyonu seç":"…"):esc(seatName(d.seats[d.turn]))+" oynuyor…"}<small>${esc(d.log||"")}</small></div></div>${over}</div>`;
+  $("#gTable").innerHTML=`<div class="kztable"><div class="kzside">${sides}</div><div class="kzboard">${grid}</div><div class="kzctl">${die}<div class="thint">${d.status!=="play"?"":needRoll?"Sıra sende · zarı at":isMy?(mv.length?"Parlayan piyonlardan birini seç":"…"):esc(seatName(d.seats[d.turn]))+" oynuyor…"}<small>${esc(d.log||"")}</small></div></div>${over}</div>`;
   $("#gTable .kzboard").onclick=e=>{const b=e.target.closest("[data-kzk]");if(!b||!isMy)return;gameMove({action:"move",k:+b.dataset.kzk})};
-  if(isMy&&mv.length===1&&!game.busy){const only=mv[0];clearTimeout(game.kzAuto);game.kzAuto=setTimeout(()=>{if(game&&game.data===d)gameMove({action:"move",k:only.k})},900)}
+  const kr=$("#kzRoll");if(kr)kr.onclick=()=>{game.kzRolled=kdk;game.kzJust=true;sfx("tile");renderGame()};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 /* ---------- Batak ---------- */
@@ -2659,10 +2661,17 @@ function renderBatak(d,my){
   const me4=my>=0?my:0,pos=i=>["bottom","right","top","left"][(i-me4+4)%4],isMy=d.status==="play"&&d.turn===my&&!game.busy;
   const hc=d.handCounts||[0,0,0,0],tk=d.tricks||[0,0,0,0],bids=d.bids||[];
   const seatBox=i=>`<div class="bkseat bk-${pos(i)} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div><b>${esc(seatName(d.seats[i]))}${d.bidder===i?" 🎯":""}</b><span>${d.phase==="bid"?(bids[i]==null?"…":bids[i]?bids[i]+" dedi":"pas"):`${tk[i]} el`}${pos(i)!=="bottom"?` · 🂠 ${hc[i]}`:""} · ${(d.scores||[])[i]||0}p</span></div></div>`;
-  const showTrick=(d.trick&&d.trick.length)?d.trick:(d.lastTrick&&Date.now()-(d.lastTrick.at||0)<1600?d.lastTrick.cards:[]);
-  const center=`<div class="bkcenter">${showTrick.map(t=>`<div class="bkc bkc-${pos(t.p)}">${cardHTML(t.c)}</div>`).join("")}${d.trump!=null?`<div class="bktrump ${d.trump===1||d.trump===2?"red":""}">${BK_S[d.trump]}<small>koz</small></div>`:""}</div>`;
+  // kartlar tek tek, gerçekçi hızda düşer; biten el bir süre masada kalır
+  const ltK=d.lastTrick?"l"+d.lastTrick.at:"";
+  if(ltK&&game.bkLtK!==ltK){const seen=game.bkLtK===undefined?d.lastTrick.cards.length:(game.bkSeenK&&game.bkSeenK[0]==="t"?game.bkSeenN:0);game.bkLtK=ltK;game.bkLtSeen=seen;game.bkLtUntil=Date.now()+1900+Math.max(0,d.lastTrick.cards.length-seen)*650}
+  const inLast=!!d.lastTrick&&Date.now()<(game.bkLtUntil||0);
+  const showTrick=inLast?d.lastTrick.cards:(d.trick||[]);
+  const tkey=inLast?ltK:"t"+d.round+"-"+(d.tricks||[]).reduce((a,b)=>a+b,0);
+  const seenN=inLast?(game.bkSeenK===tkey?game.bkSeenN:game.bkLtSeen):(game.bkSeenK===tkey?game.bkSeenN:0);
+  game.bkSeenK=tkey;game.bkSeenN=showTrick.length;
+  const center=`<div class="bkcenter">${showTrick.map((t,i)=>`<div class="bkc bkc-${pos(t.p)}">${cardHTML(t.c,{cls:i>=seenN?"fly":""}).replace('class="pcard','style="animation-delay:'+(Math.max(0,i-seenN)*0.65)+'s" class="pcard')}</div>`).join("")}${d.trump!=null?`<div class="bktrump ${d.trump===1||d.trump===2?"red":""}">${BK_S[d.trump]}<small>koz</small></div>`:""}</div>`;
   const mine=(game.cards||[]).slice().sort((a,b)=>(Math.floor(a/13)-Math.floor(b/13))||(bkVal(a)-bkVal(b)));
-  const legal=isMy&&d.phase==="play"?new Set(bkLegal(mine,d.trick||[],d.trump,d.broken)):new Set();
+  const legal=isMy&&d.phase==="play"&&!inLast?new Set(bkLegal(mine,d.trick||[],d.trump,d.broken)):new Set();
   const hand=`<div class="bkhand">${mine.map(c=>cardHTML(c,{cls:legal.has(c)?"ok":isMy&&d.phase==="play"?"no":""})).join("")}</div>`;
   let ctrl="";
   if(isMy&&d.phase==="bid"){const min=Math.max(4,(d.bid||0)+1);ctrl=`<div class="bkctl"><b>İhale${d.bid?` (en yüksek: ${d.bid})`:""}</b><div>${Array.from({length:Math.max(0,14-min)},(_,k)=>`<button data-bid="${min+k}">${min+k}</button>`).join("")}<button data-bid="0" class="pas">Pas</button></div></div>`}
@@ -2677,9 +2686,9 @@ function renderBatak(d,my){
   $("#gTable").innerHTML=`<div class="bktable">${d.seats.map((_,i)=>seatBox(i)).join("")}${center}<div class="bkmsg">${msg}<small>${esc(d.log||"")}</small></div>${ctrl}${hand}${over}</div>`;
   const bt=$("#gTable .bktable");bt.onclick=e=>{const b=e.target.closest("[data-bid]");if(b){gameMove({action:"bid",v:+b.dataset.bid});return}
     const t=e.target.closest("[data-trump]");if(t){gameMove({action:"trump",suit:+t.dataset.trump});return}
-    const c=e.target.closest(".bkhand .pcard[data-c]");if(c&&legal.has(+c.dataset.c)){const v=+c.dataset.c;c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),100)}};
+    const c=e.target.closest(".bkhand .pcard[data-c]");if(c&&legal.has(+c.dataset.c)){const v=+c.dataset.c;c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),300)}};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
-  if(d.lastTrick&&!(d.trick&&d.trick.length)&&Date.now()-(d.lastTrick.at||0)<1600){clearTimeout(game.bkT);game.bkT=setTimeout(()=>{if(game&&game.data===d)renderGame()},1650)}
+  if(inLast){clearTimeout(game.bkT);game.bkT=setTimeout(()=>{if(game&&game.data===d)renderGame()},game.bkLtUntil-Date.now()+50)}
 }
 /* ---------- Tavla ---------- */
 function tvLegal(d,my){const key=JSON.stringify([d.seq,d.dice]);if(game.tvKey!==key){game.tvKey=key;game.tvSeqs=d.dice?TV.sequences(TV.rel(d.tv,my),d.dice):[[]]}return game.tvSeqs}
@@ -2806,7 +2815,7 @@ function playShots(list,done){
     const frames=[];P.simulate(sh.before,{x:sh.dx,y:sh.dy},sh.power,bs=>frames.push(bs));
     let k=0;const d=game.data;
     $("#gMsg").innerHTML=`${esc(seatName(d.seats[sh.seat]))} vurdu…`;
-    const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=2;
+    const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=3;
       if(k<frames.length+2)game.raf=requestAnimationFrame(tick);
       else{if(sh.foul)$("#gMsg").innerHTML=`Faul: ${esc(sh.reason)}`;setTimeout(next,list.length?450:150)}};
     game.pview=sh.before;drawPool();setTimeout(()=>{game.raf=requestAnimationFrame(tick)},250);
@@ -2882,13 +2891,23 @@ function ballSprite(i,px){
   const k=i+"_"+px;if(ballSprites[k])return ballSprites[k];
   const cv=document.createElement("canvas");cv.width=cv.height=px;const c=cv.getContext("2d");const r=px/2;const col=BALL_COL[i>8?i-8:i];
   c.save();c.beginPath();c.arc(r,r,r-.5,0,7);c.clip();
-  c.fillStyle=i>8||i===0?"#f7f4ea":col;c.fillRect(0,0,px,px);
-  if(i>8){c.fillStyle=col;c.beginPath();c.ellipse(r,r,r*1.05,r*.56,0,0,7);c.fill()}
-  if(i>0){c.fillStyle="#fbfaf5";c.beginPath();c.arc(r,r,r*.44,0,7);c.fill();c.fillStyle="#111";c.font=`800 ${Math.round(r*(i>9?.52:.6))}px Arial`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(i),r,r+r*.03)}
-  if(i===0){c.fillStyle="rgba(200,0,0,.55)";c.beginPath();c.arc(r,r,r*.12,0,7);c.fill()}
-  const sh=c.createRadialGradient(r*.65,r*.6,r*.1,r,r,r*1.05);sh.addColorStop(0,"rgba(255,255,255,0)");sh.addColorStop(.7,"rgba(0,0,0,.12)");sh.addColorStop(1,"rgba(0,0,0,.55)");c.fillStyle=sh;c.fillRect(0,0,px,px);
-  const hl=c.createRadialGradient(r*.62,r*.55,0,r*.62,r*.55,r*.45);hl.addColorStop(0,"rgba(255,255,255,.95)");hl.addColorStop(.35,"rgba(255,255,255,.35)");hl.addColorStop(1,"rgba(255,255,255,0)");c.fillStyle=hl;c.fillRect(0,0,px,px);
+  // canlı renk + hafif iç degrade
+  const base=c.createRadialGradient(r*.7,r*.6,r*.1,r,r,r);base.addColorStop(0,i>8||i===0?"#ffffff":col);base.addColorStop(1,i>8||i===0?"#e9e4d6":col);
+  c.fillStyle=base;c.fillRect(0,0,px,px);
+  if(i>8){c.fillStyle=col;c.beginPath();c.ellipse(r,r,r*1.05,r*.58,0,0,7);c.fill()}
+  if(i>0){c.fillStyle="#fffef8";c.beginPath();c.arc(r,r,r*.42,0,7);c.fill();c.fillStyle="#141414";c.font=`800 ${Math.round(r*(i>9?.5:.58))}px system-ui,Arial`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(i),r,r+r*.04)}
+  if(i===0){c.fillStyle="rgba(214,30,30,.7)";for(const [dx,dy] of [[0,0],[.55,.3],[-.5,-.35]]){c.beginPath();c.arc(r+dx*r,r+dy*r,r*.09,0,7);c.fill()}}
   c.restore();ballSprites[k]=cv;return cv;
+}
+// sabit ışık: gölge + parlama (top dönse de ışık yerinde kalır)
+function ballShade(px){
+  const k="sh_"+px;if(ballSprites[k])return ballSprites[k];
+  const cv=document.createElement("canvas");cv.width=cv.height=px;const c=cv.getContext("2d");const r=px/2;
+  c.beginPath();c.arc(r,r,r-.5,0,7);c.clip();
+  const sh=c.createRadialGradient(r*.62,r*.55,r*.15,r,r,r*1.02);sh.addColorStop(0,"rgba(255,255,255,0)");sh.addColorStop(.62,"rgba(0,0,0,.08)");sh.addColorStop(.88,"rgba(0,0,0,.38)");sh.addColorStop(1,"rgba(0,0,0,.62)");c.fillStyle=sh;c.fillRect(0,0,px,px);
+  const hl=c.createRadialGradient(r*.6,r*.52,0,r*.6,r*.52,r*.42);hl.addColorStop(0,"rgba(255,255,255,1)");hl.addColorStop(.25,"rgba(255,255,255,.55)");hl.addColorStop(1,"rgba(255,255,255,0)");c.fillStyle=hl;c.fillRect(0,0,px,px);
+  const rim=c.createRadialGradient(r*1.35,r*1.4,0,r*1.35,r*1.4,r*.7);rim.addColorStop(0,"rgba(255,255,255,.28)");rim.addColorStop(1,"rgba(255,255,255,0)");c.fillStyle=rim;c.fillRect(0,0,px,px);
+  ballSprites[k]=cv;return cv;
 }
 function drawPool(){
   if(!game||!game.data)return;const L=poolLayout();if(!L)return;const {cv}=L;const c=cv.getContext("2d");
@@ -2921,7 +2940,10 @@ function drawPool(){
     c.fillStyle="rgba(255,255,255,.85)";c.font="bold 16px Arial";c.textAlign="center";c.save();c.translate(game.place.x,game.place.y-R-16);if(L.rot)c.rotate(-Math.PI/2);c.fillText("✋",0,0);c.restore()}
   // toplar
   const px=Math.max(8,Math.round(2*R*L.s*L.dpr));
-  for(const b of bs){const sp=ballSprite(b.i,px);c.save();c.translate(b.x,b.y);if(L.rot)c.rotate(-Math.PI/2);c.drawImage(sp,-R,-R,2*R,2*R);c.restore()}
+  // toplar yuvarlanır: gidilen yola göre döner
+  game.brot=game.brot||{};const shp=ballShade(px);
+  for(const b of bs){const sp=ballSprite(b.i,px);const o=game.brot[b.i]||(game.brot[b.i]={x:b.x,y:b.y,a:0});const dl=Math.hypot(b.x-o.x,b.y-o.y);if(dl>0&&dl<200)o.a+=dl/R*(((b.x-o.x)+(b.y-o.y))>=0?1:-1);o.x=b.x;o.y=b.y;
+    c.save();c.translate(b.x,b.y);c.save();c.rotate(o.a);c.drawImage(sp,-R,-R,2*R,2*R);c.restore();if(L.rot)c.rotate(-Math.PI/2);c.drawImage(shp,-R,-R,2*R,2*R);c.restore()}
   // ıstaka
   if(myTurn&&cue&&game.aim)drawCue(c,cue,ux,uy,game.pull||0);
 }
@@ -2987,8 +3009,6 @@ for(const [id,dir] of [["pRotL",-1],["pRotR",1]]){let t=null;const b=$("#"+id);
   b.addEventListener("pointerdown",e=>{e.preventDefault();tick();t=setInterval(tick,40)});["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>clearInterval(t)))}
 window.addEventListener("resize",()=>{if(game&&game.data&&game.data.type==="pool"){game.pstatic=null;drawPool()}});
 
-$("#gDiscard").onclick=()=>{if(game&&game.sel!=null)discardTile(game.sel)};
-$("#gFinish").onclick=()=>{if(game&&game.sel!=null)gameMove({action:"finish",tile:game.sel})};
 function sortRack(mode){
   if(!game||!game.data||!game.data.indicator)return;const ok=tOkey(game.data.indicator);
   const key=t=>tIsWild(t,ok)?[9,99]:tIsFake(t)?[ok.c,ok.n]:[tColor(t),tNum(t)];
