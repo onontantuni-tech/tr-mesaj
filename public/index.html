@@ -9,6 +9,11 @@
 <link rel="icon" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
 <title>TR</title>
+<meta property="og:title" content="TR — şifreli mesajlaşma, Okey, Tavla, Bilardo">
+<meta property="og:description" content="Uçtan uca şifreli mesajlaşma, arama ve arkadaşlarınla Okey, Tavla, Pişti, Bilardo. Ücretsiz.">
+<meta property="og:image" content="https://tr-mesaj.vercel.app/icons/icon-512.png">
+<meta property="og:url" content="https://tr-mesaj.vercel.app/">
+<meta name="twitter:card" content="summary">
 <style>
 :root{
   --brand:#D81E2A; --brand-dark:#A3121C;
@@ -342,6 +347,14 @@ body.dark .poll button[data-vote]{background:rgba(255,255,255,.06);border-color:
 video.vnote,.mload.vnote{width:200px;height:200px;border-radius:50%;object-fit:cover;display:block;background:#000;cursor:pointer}.mload.vnote{display:grid;place-items:center;font-size:40px;color:#fff}
 video.vnote.big{width:240px;height:240px;margin:0 auto 8px;transform:scaleX(-1)}
 .meter{height:12px;border-radius:6px;background:var(--bg);overflow:hidden}.meter i{display:block;height:100%;width:0;background:#22c55e;transition:width .08s}
+.lockscr{position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#D7261E,#7a0a10);display:none;align-items:center;justify-content:center;color:#fff}.lockscr.show{display:flex}
+.lbox{text-align:center}.lbox b{display:block;font-size:20px;margin:6px 0 14px}.ldots{display:flex;gap:12px;justify-content:center;margin-bottom:18px}.ldots i{width:14px;height:14px;border-radius:50%;border:2px solid #fff}.ldots i.on{background:#fff}
+.lpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}.lpad button{height:72px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:26px;font-weight:700;cursor:pointer}.lockscr .isub{color:#ffd;margin-top:10px;min-height:18px}
+.tcard{width:230px;border-radius:14px;padding:18px 14px;text-align:center;color:#fff;white-space:normal;box-shadow:inset 0 0 0 2px rgba(255,255,255,.3)}.tcard .te{font-size:46px}.tcard b{display:block;font-size:18px;margin-top:6px;font-family:Georgia,serif}.tcard span{font-size:13px;opacity:.9}
+.stkr{font-size:15px;font-weight:900;display:flex;flex-direction:column;align-items:center;padding:4px 8px;transform:rotate(-4deg)}.stkr .se{font-size:64px;line-height:1}.stkr .st{background:#fff;color:#D7261E;border:3px solid #D7261E;border-radius:12px;padding:2px 10px;margin-top:-6px;box-shadow:0 3px 0 rgba(0,0,0,.2)}
+.b.stkb{background:transparent!important;box-shadow:none!important}
+.stkgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stkgrid button{background:var(--bg);border:0;border-radius:12px;padding:6px;cursor:pointer}
+.safen{font-family:ui-monospace,monospace;font-size:15px;letter-spacing:1px;text-align:center;line-height:1.7;background:var(--bg);border-radius:12px;padding:10px}
 .pubpisti{background:linear-gradient(135deg,#9b1b2a,#4a0a12)!important;color:#fff!important}
 .ptable .overbox{z-index:4;background:rgba(0,0,0,.88)}
 .pubpisti small{display:block;font-size:12px;opacity:.85}
@@ -833,6 +846,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="findcontacts">Rehberden bul</button>
       <button data-act="starred">Yıldızlı mesajlar</button>
       <button data-act="notes">Kaydedilen mesajlar</button>
+      <button data-act="lock">Uygulama kilidi (PIN)</button>
       <button data-act="settings">Ayarlar (yazı, tema, duvar kâğıdı)</button>
       <button data-act="privacy2">Gizlilik ayarları</button>
       <button data-act="sound">Oyun sesleri aç/kapat</button>
@@ -878,6 +892,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="recbar" id="recbar">
       <button class="ibtn" id="recCancel" aria-label="Kaydı sil"><svg viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
       <div class="recinfo"><span class="recdot"></span><span id="recTime">0:00</span><span class="rechint">Kaydediliyor…</span></div>
+      <button class="ibtn" id="recPrev" aria-label="Dinle" style="color:var(--brand);font-size:20px">▶</button>
       <button class="send" id="recSend" aria-label="Sesli mesajı gönder"><svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></button>
     </div>
   </section>
@@ -1003,6 +1018,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="cs-bottom" id="csActive">
       <button class="cbtn dim" id="csMute" aria-label="Mikrofonu kapat"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-1.7z"/></svg><span>Sessiz</span></button>
       <button class="cbtn dim" id="csCam" aria-label="Kamera"><svg viewBox="0 0 24 24"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg><span>Kamera</span></button>
+      <button class="cbtn dim" id="csScreen" aria-label="Ekran paylaş">🖥️</button>
       <button class="cbtn dim" id="csPip" aria-label="Küçük pencere">⧉</button>
       <button class="cbtn dim" id="csFlip" aria-label="Kamerayı çevir"><svg viewBox="0 0 24 24"><path d="M20 5h-3.2L15 3H9L7.2 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-8 13a5 5 0 0 1-4.9-4H5l3-3 3 3H9.1a3 3 0 0 0 5.4 1.2l1.4 1.4A5 5 0 0 1 12 18zm4-5-3-3h1.9a3 3 0 0 0-5.4-1.2L8.1 7.4A5 5 0 0 1 16.9 10H19l-3 3z"/></svg><span>Çevir</span></button>
       <button class="cbtn red" id="csHang" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.96.96 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.3 11.3 0 0 0-2.67-1.85.99.99 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg><span>Kapat</span></button>
@@ -1035,5 +1051,6 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 </div>
 
 <script src="/app.js" defer></script>
+<div id="lockscr" class="lockscr"><div class="lbox"><div style="font-size:44px">🔒</div><b>TR kilitli</b><div class="ldots" id="lDots"></div><div class="lpad" id="lPad"></div><div class="isub" id="lErr"></div></div></div>
 </body>
 </html>

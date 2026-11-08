@@ -329,6 +329,35 @@ function dailyBanner(){const el=$("#dailyBar");if(!el)return;if(!wallet||tabNow!
   if(dailyAvailable()){el.className="dailybar show";el.innerHTML=`🎁 <b>Günün ödülü hazır!</b><span>Al ›</span>`;el.onclick=()=>openDaily()}
   else{const ms=new Date(new Date(Date.now()+3*3600e3).toISOString().slice(0,10)+"T00:00:00Z").getTime()+86400e3-3*3600e3-Date.now();el.className="dailybar show soft";el.innerHTML=`🎁 Yeni günlük ödüle <b>${fmtWait(ms)}</b>`;el.onclick=()=>openDaily()}}
 setInterval(dailyBanner,60000);
+/* ---------- tebrik kartları ve TR çıkartmaları ---------- */
+const CARDS={bayram:["🌙","Bayramınız kutlu olsun","Nice güzel bayramlara","linear-gradient(135deg,#0E7C3A,#064e24)"],yilbasi:["🎄","Mutlu yıllar","Yeni yıl sağlık ve mutluluk getirsin","linear-gradient(135deg,#1d4ed8,#0b2a6b)"],dogum:["🎂","İyi ki doğdun","Nice mutlu yıllara","linear-gradient(135deg,#db2777,#7c1d4b)"],gecmis:["💐","Geçmiş olsun","Acil şifalar dilerim","linear-gradient(135deg,#7c3aed,#3b1a75)"],tebrik:["🎉","Tebrikler","Başarılarının devamını dilerim","linear-gradient(135deg,#ea580c,#7c2d12)"],cuma:["🕌","Hayırlı cumalar","Dualarınız kabul olsun","linear-gradient(135deg,#0f766e,#064e3b)"],anne:["🌷","Anneler Günün kutlu olsun","Seni çok seviyorum","linear-gradient(135deg,#e11d48,#831843)"],sevgi:["❤️","Seni seviyorum","","linear-gradient(135deg,#D7261E,#7a0a10)"]};
+const STK={eyv:["🤝","Eyvallah"],cay:["🫖","Çay?"],hadi:["🏃","Hadi bakalım"],maşallah:["🧿","Maşallah"],kolay:["💪","Kolay gelsin"],ayıp:["🙈","Ayıp ayıp"],sağol:["🙏","Sağ ol"],okey:["🀄","Okey attım!"],mars:["🎲","Mars oldun"],kahve:["☕","Bir kahve?"],gül:["😂","Güldürme"],tamam:["👌","Tamamdır"]};
+function openCards(conv){openInfoModal("💌 Tebrik kartı",`<div class="stkgrid">${Object.entries(CARDS).map(([k,c])=>`<button data-card="${k}"><div class="tcard" style="background:${c[3]};width:auto;padding:8px 4px"><div class="te" style="font-size:28px">${c[0]}</div><span>${c[1]}</span></div></button>`).join("")}</div>`);
+  $("#eBody").onclick=e=>{const b=e.target.closest("[data-card]");if(!b)return;closeE();sendContent(conv,{t:"card",k:b.dataset.card})}}
+function openStickers(conv){openInfoModal("🧿 TR çıkartmaları",`<div class="stkgrid">${Object.entries(STK).map(([k,v])=>`<button data-stk="${k}"><div class="stkr" style="transform:none"><span class="se" style="font-size:40px">${v[0]}</span><span class="st" style="font-size:12px">${v[1]}</span></div></button>`).join("")}</div>`);
+  $("#eBody").onclick=e=>{const b=e.target.closest("[data-stk]");if(!b)return;closeE();sendContent(conv,{t:"stk",k:b.dataset.stk})}}
+/* ---------- güvenlik numarası: iki tarafın açık anahtarlarından ---------- */
+async function safetyNumber(peer){const a=users[me]?.pub,b=users[peer]?.pub;if(!a||!b)return null;
+  const parts=[me+":"+a.x+a.y,peer+":"+b.x+b.y].sort().join("|");const h=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(parts)));
+  let out="";for(let i=0;i<12;i++){out+=String(((h[i*2]<<8)|h[i*2+1])%100000).padStart(5,"0")+(i%4===3?"\n":" ")}return out.trim()}
+async function showSafety(peer){const n=await safetyNumber(peer);if(!n){toast("Anahtar hazır değil");return}
+  openInfoModal("🔐 Güvenlik numarası",`<p class="isub">${esc(realName(peer))} ile aynı numarayı görüyorsanız konuşmanız uçtan uca şifreli ve araya kimse girmemiş demektir. Yüz yüzeyken karşılaştırın ya da QR'ı okutun.</p><div class="safen">${esc(n).replace(/\n/g,"<br>")}</div><div class="qrbox">${qrSVG("TRSAFE:"+n.replace(/\s/g,""))}</div>`)}
+/* ---------- uygulama kilidi ve sohbet kilidi (PIN, cihazda saklanır) ---------- */
+async function pinHash(p){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("tr-pin:"+(me||"")+":"+p));return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const pinSet=()=>!!localStorage.getItem("tr-pin");
+const lockedChats=()=>{try{return JSON.parse(localStorage.getItem("tr-lockc")||"[]")}catch(e){return[]}};
+let unlockedChats=new Set(),lastHide=0;
+function askPin(title,cb){let v="";const dots=()=>{$("#lDots").innerHTML=Array.from({length:4},(_,i)=>`<i class="${i<v.length?"on":""}"></i>`).join("")};
+  $("#lockscr .lbox b").textContent=title;$("#lErr").textContent="";$("#lPad").innerHTML=[1,2,3,4,5,6,7,8,9,"✕",0,"⌫"].map(k=>`<button data-k="${k}">${k}</button>`).join("");dots();$("#lockscr").classList.add("show");
+  $("#lPad").onclick=async e=>{const b=e.target.closest("[data-k]");if(!b)return;const k=b.dataset.k;if(k==="✕"){if(title!=="TR kilitli"){$("#lockscr").classList.remove("show")}return}if(k==="⌫"){v=v.slice(0,-1);dots();return}
+    v+=k;dots();if(v.length===4){const ok=await cb(v);if(ok)$("#lockscr").classList.remove("show");else{$("#lErr").textContent="Yanlış PIN";v="";dots();try{navigator.vibrate&&navigator.vibrate(120)}catch(_){}}}}}
+async function checkPin(v){return (await pinHash(v))===localStorage.getItem("tr-pin")}
+function lockApp(){if(pinSet())askPin("TR kilitli",checkPin)}
+document.addEventListener("visibilitychange",()=>{if(document.hidden)lastHide=Date.now();else if(pinSet()&&Date.now()-lastHide>60000&&lastHide){unlockedChats=new Set();lockApp()}});
+function openLockSettings(){openInfoModal("🔒 Uygulama kilidi",`<p class="isub">PIN sadece bu cihazda saklanır. Uygulama 1 dakikadan uzun arka planda kalınca PIN sorar. Kilitli sohbetler de bu PIN ile açılır.</p>
+  <div class="row2"><button id="pinSet" style="background:var(--brand)">${pinSet()?"PIN'i değiştir":"PIN belirle"}</button>${pinSet()?'<button id="pinOff" style="background:#555">Kilidi kapat</button>':""}</div>`);
+  $("#pinSet").onclick=()=>{closeE();askPin("Yeni PIN (4 hane)",async v=>{const first=v;setTimeout(()=>askPin("PIN'i tekrar gir",async w=>{if(w!==first){toast("PIN'ler uyuşmadı");return true}localStorage.setItem("tr-pin",await pinHash(w));toast("🔒 Uygulama kilidi açıldı");return true}),50);return true})};
+  if($("#pinOff"))$("#pinOff").onclick=()=>{closeE();askPin("Mevcut PIN",async v=>{if(!(await checkPin(v)))return false;localStorage.removeItem("tr-pin");localStorage.removeItem("tr-lockc");toast("Kilit kapatıldı");return true})}}
 /* ---------- bağlantılar ---------- */
 function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
 function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
@@ -392,7 +421,7 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="card")return"💌 "+((CARDS[c.k]||[])[1]||"Kart");if(c.t==="stk")return"🧿 "+((STK[c.k]||[])[1]||"Çıkartma");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 /* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
@@ -490,6 +519,8 @@ function bubbleBody(m,c){
   }
   if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
   if(c.t==="poll"||c.t==="event")return pollHTML(m,c);
+  if(c.t==="card"){const C=CARDS[c.k];if(C)return`<div class="tcard" style="background:${C[3]}"><div class="te">${C[0]}</div><b>${esc(C[1])}</b><span>${esc(C[2])}</span></div>`}
+  if(c.t==="stk"){const S=STK[c.k];if(S)return`<div class="stkr"><span class="se">${S[0]}</span><span class="st">${esc(S[1])}</span></div>`}
   if(c.t==="file")return`<div class="fcard" data-file="${esc(m.id)}"><span class="fi">📄</span><div><b>${esc(String(c.name||"belge").slice(0,80))}</b><span>${fmtSize(+c.size||0)} · dokun, indir</span></div></div>`;
   if(c.t==="loc"){const la=+c.lat,ln=+c.lng;if(isFinite(la)&&isFinite(ln))return`<a class="loccard" href="https://www.openstreetmap.org/?mlat=${la.toFixed(5)}&mlon=${ln.toFixed(5)}#map=17/${la.toFixed(5)}/${ln.toFixed(5)}" target="_blank" rel="noopener noreferrer"><span class="lp">📍</span><div><b>Konum</b><span>${la.toFixed(4)}, ${ln.toFixed(4)} · haritada aç</span></div></a>`}
   if(c.t==="vnote"){if(c._local)return`<video class="vnote" src="${esc(c._local)}" playsinline loop muted autoplay></video>`;return`<div class="mload vnote" data-media="${esc(m.id)}">🎥</div>`}
@@ -526,7 +557,7 @@ function renderMsgs(){
     const rx=m.rx?Object.values(m.rx).filter(x=>RX.includes(x)):[];
     const rxh=rx.length?`<div class="rxs">${[...new Set(rx)].map(x=>x+(rx.filter(y=>y===x).length>1?rx.filter(y=>y===x).length:"")).join(" ")}</div>`:"";
     const star=prefs.star.includes(m.id)?"⭐ ":"";
-    html+=`<div class="b ${mine?"out":"in"} ${m.pending?"pending":""} ${rx.length?"hasrx":""}" data-mid="${esc(m.id)}">${who}${extra}${rq}${bubbleBody(m,c)}<span class="s">${star}${m.ed?"düzenlendi · ":""}${hm(m.at)}${mine?tick(m):""}</span>${rxh}</div><div class="clear"></div>`;
+    html+=`<div class="b ${mine?"out":"in"} ${c&&c.t==="stk"?"stkb":""} ${m.pending?"pending":""} ${rx.length?"hasrx":""}" data-mid="${esc(m.id)}">${who}${extra}${rq}${bubbleBody(m,c)}<span class="s">${star}${m.ed?"düzenlendi · ":""}${hm(m.at)}${mine?tick(m):""}</span>${rxh}</div><div class="clear"></div>`;
     prevFrom=m.from});
   const pm=prefs.pinMsg[cur]&&raw.find(m=>m.id===prefs.pinMsg[cur]);
   if(pm)html=`<div class="pinbar" data-jump="${esc(pm.id)}">📌 <span>${esc(previewText(contentOf(pm)).slice(0,90))}</span><button data-unpin="1" aria-label="Sabitlemeyi kaldır">✕</button></div>`+html;
@@ -997,8 +1028,10 @@ function openInfo(){
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
     const bl=isBlocked(cur);
-    $("#iActs").innerHTML=`<button id="iShareC">👤 Kişiyi paylaş</button><button id="iTtl">⏱️ Kaybolan: ${esc(ttlLabel(convTTL(cur)))}</button>`+(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
-    {const pc=cur;$("#iTtl").onclick=()=>{closeInfo();openTTL(pc)};$("#iShareC").onclick=()=>{closeInfo();shareContact(pc)}}
+    $("#iActs").innerHTML=`<button id="iSafe">🔐 Güvenlik numarası</button><button id="iLockC">${lockedChats().includes(cur)?"🔓 Sohbet kilidini kaldır":"🔒 Sohbeti kilitle"}</button><button id="iShareC">👤 Kişiyi paylaş</button><button id="iTtl">⏱️ Kaybolan: ${esc(ttlLabel(convTTL(cur)))}</button>`+(isFriend(cur)?`<button id="iGift">🎁 Hediye gönder</button>`:"")+(isFriend(cur)?`<button class="danger" id="iUnf">Arkadaşlıktan çıkar</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iBlock">${bl?"Engeli kaldır":"Engelle"}</button><button class="danger" id="iRep">Şikâyet et</button><button class="pri" id="iClose">Kapat</button>`;
+    {const pc=cur;$("#iSafe").onclick=()=>{closeInfo();showSafety(pc)};
+      $("#iLockC").onclick=()=>{closeInfo();if(!pinSet()){toast("Önce Menü → Uygulama kilidi'nden PIN belirle",3500);return}const L=lockedChats();localStorage.setItem("tr-lockc",JSON.stringify(L.includes(pc)?L.filter(x=>x!==pc):[...L,pc]));toast(L.includes(pc)?"Sohbet kilidi kaldırıldı":"🔒 Sohbet kilitlendi")};
+      $("#iTtl").onclick=()=>{closeInfo();openTTL(pc)};$("#iShareC").onclick=()=>{closeInfo();shareContact(pc)}}
     if($("#iGift")){const peer=cur;$("#iGift").onclick=()=>{closeInfo();openGift(peer)}}
     {const pc=cur;$("#iMedia").onclick=()=>{closeInfo();openGallery(pc)};$("#iExport").onclick=()=>{closeInfo();exportChat(pc)}}
     {const peer=cur;$("#iBlock").onclick=()=>{closeInfo();bl?unblockUser(peer):confirmBlock(peer)};$("#iRep").onclick=()=>{closeInfo();openReport(peer,peer)}}
@@ -1015,6 +1048,7 @@ $("#chatTitle").onclick=openInfo;$("#cAvWrap").onclick=openInfo;
 
 /* ---------- navigation ---------- */
 function openChat(c){
+  if(lockedChats().includes(c)&&pinSet()&&!unlockedChats.has(c)){askPin("Kilitli sohbet",async v=>{if(!(await checkPin(v)))return false;unlockedChats.add(c);setTimeout(()=>openChat(c),50);return true});return}
   if(cur&&cur!==c)saveDraft();
   cur=c;lastRenderedCount=-1;replyTo=null;renderReplyBar();msgQuery="";$("#csearch").classList.remove("show");
   {let d="";try{d=JSON.parse(localStorage.getItem("tr-drafts")||"{}")[c]||""}catch(e){}$("#msgInput").value=d}
@@ -1111,6 +1145,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="delacct")askDeleteAccount();
   if(a==="starred")openStarred();
   if(a==="settings")openSettings();
+  if(a==="lock")openLockSettings();
   if(a==="notes")openNotes();
   if(a==="broadcast")openBroadcast();
   if(a==="feedback")openFeedback();
@@ -1248,7 +1283,7 @@ $("#composer").onsubmit=async e=>{e.preventDefault();
 /* ---------- fotoğraf ---------- */
 $("#photoBtn").onclick=()=>$("#photoInput").click();
 const fmtSize=n=>n>1048576?(n/1048576).toFixed(1).replace(".",",")+" MB":Math.max(1,Math.round(n/1024))+" KB";
-$("#attBtn").onclick=()=>{if(!cur)return;$("#msheet").innerHTML=`<button data-att="album">🖼️ Fotoğraflar (10'a kadar)</button><button data-att="once">① Tek seferlik fotoğraf</button><button data-att="file">📄 Belge</button><button data-att="loc">📍 Konum</button><button data-att="vnote">🎥 Yuvarlak video mesaj</button>${isGroupConv(cur)?'<button data-att="poll">📊 Anket</button><button data-att="event">📅 Etkinlik</button>':""}`;
+$("#attBtn").onclick=()=>{if(!cur)return;$("#msheet").innerHTML=`<button data-att="album">🖼️ Fotoğraflar (10'a kadar)</button><button data-att="once">① Tek seferlik fotoğraf</button><button data-att="file">📄 Belge</button><button data-att="loc">📍 Konum</button><button data-att="vnote">🎥 Yuvarlak video mesaj</button><button data-att="stk">🧿 TR çıkartması</button><button data-att="card">💌 Tebrik kartı</button>${isGroupConv(cur)?'<button data-att="poll">📊 Anket</button><button data-att="event">📅 Etkinlik</button>':""}`;
   sheetFor=null;$("#msheet").dataset.conv="";overlay.classList.add("show");$("#msheet").classList.add("show")};
 $("#msheet").addEventListener("click",e=>{const b=e.target.closest("[data-att]");if(!b)return;e.stopPropagation();closeSheet();const a=b.dataset.att,conv=cur;
   if(a==="album")$("#photoInput").click();
@@ -1258,6 +1293,7 @@ $("#msheet").addEventListener("click",e=>{const b=e.target.closest("[data-att]")
   if(a==="loc"){if(!navigator.geolocation){toast("Konum desteklenmiyor");return}toast("Konum alınıyor…",1500);
     navigator.geolocation.getCurrentPosition(p=>{openModal({title:"Konumu gönder",text:"Şu anki konumun bu sohbete gönderilsin mi?",input:false,ok:"Gönder"},()=>sendContent(conv,{t:"loc",lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy||0)}))},()=>toast("Konum alınamadı, izin vermen gerekiyor",3000),{enableHighAccuracy:true,timeout:15000})}
   if(a==="vnote")recordVideoNote(conv);
+  if(a==="stk")openStickers(conv);if(a==="card")openCards(conv);
 },true);
 $("#fileInput").onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!cur)return;
   if(f.size>CHUNK*16){toast("Belge en fazla 9 MB olabilir",3000);return}const conv=cur;
@@ -1332,6 +1368,8 @@ async function startRec(){
     if(dur<1){toast("Kayıt çok kısa");return}
     const type=(mr.mimeType||mime||"audio/webm").split(";")[0];
     const blob=new Blob(chunks,{type});
+    if(r.send==="preview"){const u=URL.createObjectURL(blob);openInfoModal("🎤 Sesli mesaj",`<audio controls src="${u}" style="width:100%"></audio><div class="row2"><button id="vpSend" style="background:var(--brand)">Gönder</button><button id="vpDel" style="background:#555">Sil</button></div>`);
+      $("#vpSend").onclick=()=>{closeE();sendContent(r.conv,{t:"voice",dur},{blob,mime:type})};$("#vpDel").onclick=()=>{closeE();URL.revokeObjectURL(u)};return}
     await sendContent(r.conv,{t:"voice",dur},{blob,mime:type});
   };
   mr.start(1000);
@@ -1341,6 +1379,7 @@ async function startRec(){
 function stopRec(send){if(!rec)return;rec.send=send;try{rec.mr.stop()}catch(e){}}
 $("#recCancel").onclick=()=>stopRec(false);
 $("#recSend").onclick=()=>stopRec(true);
+$("#recPrev").onclick=()=>stopRec("preview");
 
 /* ---------- giriş / çıkış ---------- */
 const provider=new GoogleAuthProvider();
@@ -1384,7 +1423,7 @@ onAuthStateChanged(auth,async u=>{
   meUser=u;me=u.uid;
   $("#login").classList.remove("show");$("#splash").classList.add("show");
   try{await initKeys()}catch(e){$("#splash").classList.remove("show");banner("Bağlantı kurulamadı. İnternetini kontrol edip sayfayı yenile.");return}
-  ready=true;$("#splash").classList.remove("show");
+  ready=true;$("#splash").classList.remove("show");lockApp();
   try{const s=await getDoc(doc(fs,"users",me));if(s.exists())users[me]=cleanUser(s.data())}catch(e){}
   const mineU=users[me];
   if(!mineU||!mineU.first||!mineU.last||!myPhone||!mineU.code)askProfile(true);
@@ -1489,7 +1528,7 @@ function updateCallUI(){
   $("#callscr").classList.toggle("inc",c.phase==="ringing");
   $("#csIncoming").classList.toggle("show",c.phase==="ringing");
   $("#csActive").classList.toggle("show",c.phase!=="ringing"&&c.phase!=="ended");
-  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";$("#csPip").style.display=c.video&&document.pictureInPictureEnabled?"":"none";
+  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";$("#csScreen").style.display=c.video&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia?"":"none";$("#csPip").style.display=c.video&&document.pictureInPictureEnabled?"":"none";
 }
 async function getMedia(video,facing="user"){
   return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:facing,width:{ideal:640},height:{ideal:480}}:false});
@@ -1587,6 +1626,9 @@ async function endCall(state){
 }
 $("#csAccept").onclick=acceptCall;
 $("#csDecline").onclick=declineCall;
+$("#csScreen").onclick=async()=>{const c=call;if(!c||!c.video||!c.pc)return;const sender=c.pc.getSenders().find(s=>s.track&&s.track.kind==="video");if(!sender)return;
+  if(c.sharing){const cam=c.stream.getVideoTracks()[0];if(cam)await sender.replaceTrack(cam);c.sharing.getTracks().forEach(t=>t.stop());c.sharing=null;toast("Ekran paylaşımı bitti");return}
+  try{const ds=await navigator.mediaDevices.getDisplayMedia({video:true});const tr=ds.getVideoTracks()[0];await sender.replaceTrack(tr);c.sharing=ds;toast("🖥️ Ekranın paylaşılıyor");tr.onended=async()=>{if(call&&call.sharing){const cam=call.stream.getVideoTracks()[0];if(cam)await sender.replaceTrack(cam);call.sharing=null}}}catch(e){toast("Ekran paylaşılamadı")}};
 $("#csPip").onclick=async()=>{const v=$("#remoteVideo");try{if(document.pictureInPictureElement)await document.exitPictureInPicture();else if(v&&document.pictureInPictureEnabled)await v.requestPictureInPicture();else toast("Küçük pencere bu cihazda desteklenmiyor")}catch(e){toast("Küçük pencere açılamadı")}};
 $("#csDeclineMsg").onclick=()=>{const c=call;if(!c)return;const peer=c.peer;
   openInfoModal("💬 Mesajla reddet",["Şu an konuşamıyorum, sonra ararım.","Toplantıdayım, mesaj atar mısın?","Yoldayım, birazdan dönerim.","Müsait değilim 🙏"].map((t,i)=>`<div class="pk" data-q="${i}" style="cursor:pointer">${esc(t)}</div>`).join(""));
@@ -2837,7 +2879,10 @@ let deepAdd=null;try{const a=new URLSearchParams(location.search).get("add");if(
 try{const j=new URLSearchParams(location.search).get("j");if(j&&/^[A-Za-z0-9]{10,40}\.[A-Za-z0-9]{8,32}$/.test(j))deepJoin=j}catch(e){}
 try{deepGame=new URLSearchParams(location.search).get("g");if(deepGame&&!/^[A-Za-z0-9]{10,40}$/.test(deepGame))deepGame=null}catch(e){}
 try{pendingCallId=new URLSearchParams(location.search).get("call");deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
+let goParam=null,shareText=null;try{const q=new URLSearchParams(location.search);goParam=q.get("go");const st=[q.get("st"),q.get("sx"),q.get("su")].filter(Boolean).join(" ").trim();if(st)shareText=st.slice(0,2000)}catch(e){}
 function openPendingDeepLink(){
+  if(ready&&goParam){const g=goParam;goParam=null;if(g==="okey"||g==="tavla"){const t=document.querySelector('[data-tab="games"]');t&&t.click();setTimeout(()=>openPublic(g),400)}else if(g==="add")askAdd()}
+  if(ready&&shareText){const t=shareText;shareText=null;pickFriends("📤 Kime gönderelim?","Gönder",async sel=>{for(const to of sel.slice(0,20))await sendContent(to,{t:"text",text:t});toast("Gönderildi")},{extra:`<div class="pk" style="display:block;white-space:pre-wrap">${esc(t.slice(0,300))}</div>`})}
   if(deepGame&&ready){const g=deepGame;deepGame=null;openGame(g)}
   if(deepAdd&&ready){const a=deepAdd;deepAdd=null;if(a!==users[me]?.code)openModal({title:"Arkadaş ekle",text:`TR ID ${fmtCode(a)} kişisine arkadaşlık isteği gönderilsin mi?`,input:false,ok:"İstek gönder"},()=>addById(a))}
   if(deepJoin&&ready){const [gid,tok]=deepJoin.split(".");deepJoin=null;
