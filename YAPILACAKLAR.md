@@ -35,6 +35,13 @@ Son güncelleme: 6 Kasım 2026
 - Oyun sunucuları tek Vercel fonksiyonunda (api/play.mjs) — Hobby planı 12 fonksiyon sınırı, şu an 9
 - Firestore kuralları her adımda yayınlandı
 
+## 8 Kasım akşamı — 1. paket (yayında, tr-v31)
+Okey düzeltmeleri (akıllı per/seri dizme, yeşil grup çizgisi, tek dokunuş/sürükle taş çekme).
+Ayarlar: yazı boyutu (131), tema (186), duvar kâğıdı (22), sesli mesaj hızı (102), veri tasarrufu (62, 133), titreşim (7), solak modu (179), bildirimde içerik gizleme (216), yüksek kalite fotoğraf (149), kelime filtresi (197), cihaz testi (191).
+Mesajlaşma: bağlantı kartı (103), tek seferlik fotoğraf (52), kaydedilen mesajlar (81), mesajla reddet (152), anket (47), etkinlik (163), hatırlatıcı (164), sadece yöneticiler yazsın + yönetici atama + grup davet bağlantısı (48), QR ile ekleme (128), @kullanıcı adı (130), kişi kartı (205), toplu mesaj (82), belge (20), konum (19), yuvarlak video (78), çoklu fotoğraf (148), aramada küçük pencere (151).
+Oyun/sosyal: izleyici modu (5), masa davet bağlantısı (141), alkış (200), çay ısmarlama (66), sohbete sonuç kartı (204), aranızdaki skor (212), haftanın oyuncusu (68), rövanş isteği (4).
+Uygulama: tanıtım turu (190), duyuru/bakım bandı (90, 28), hata raporu (171), görüş + sıradaki oyun oylaması (112), puan isteme (176), yeni sürüm uyarısı (173), günün ödülü bandı (41), seni özledik hediyesi (138), yönetim paneline hata/görüş istatistiği (113).
+
 ## Kullanıcının yapacakları (bekleyen)
 1. Yeni Firestore kurallarını (firestore-kurallari.txt) Firebase Konsolu → Firestore → Kurallar sekmesine yapıştırıp Yayınla
 2. Vercel kurulumu: GitHub ile giriş → tr-mesaj'ı içe aktar → ortam değişkenleri (FIREBASE_SERVICE_ACCOUNT, CF_TURN_KEY_ID, CF_TURN_API_TOKEN, CRON_SECRET) → Deploy → adresi Claude'a gönder
