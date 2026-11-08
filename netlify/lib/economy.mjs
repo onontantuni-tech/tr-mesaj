@@ -134,7 +134,19 @@ export const WHEEL = [
 export const REFERRAL_BONUS = 100000;
 
 // VIP: 30 gün. Jetonla alınır (Play Store'da parayla da satılabilir).
-export const VIP = { price: 250000, days: 30 };
+// VIP: Play Store'dan 499 TL. 30 gün VIP + toplam 300.000 jeton, her gün 10.000 olarak yüklenir.
+export const VIP = { priceTL: 499, days: 30, coins: 300000, daily: 10000 };
+export function grantVip(w, now = Date.now()) {
+  w.vipUntil = Math.max(now, w.vipUntil || 0) + VIP.days * 86400000;
+  w.vipLeft = (w.vipLeft || 0) + VIP.days;
+}
+// VIP günlük jeton: günde bir kez, kalan gün sayısı kadar
+export function vipDrip(tx, db, uid, w, today) {
+  if (!(w.vipLeft > 0) || w.vipDay === today) return 0;
+  w.vipLeft -= 1; w.vipDay = today;
+  credit(tx, db, uid, w, VIP.daily, `VIP günlük jeton (${VIP.days - w.vipLeft}/${VIP.days})`);
+  return VIP.daily;
+}
 export const isVip = (w, now = Date.now()) => (w?.vipUntil || 0) > now;
 
 export function newWallet() {

@@ -92,7 +92,7 @@ export default async (req) => {
       }
 
       // Saatlik sandık: 4 saatte bir (VIP iki kat)
-      let gift = null, club = null;
+      let gift = null, club = null, vipCoins = 0;
       if (act === "chest") {
         const wait = E.CHEST.every - (Date.now() - (w.chestAt || 0));
         if (wait > 0) return { status: 409, body: { error: "wait", wait, wallet: view(w) } };
@@ -225,12 +225,8 @@ export default async (req) => {
         gift = { id: it.id };
       }
       if (act === "buyVip") {
-        if (!w.adult) return { status: 403, body: { error: "age" } };
-        if ((w.balance || 0) < E.VIP.price) return { status: 402, body: { error: "balance" } };
-        E.credit(tx, db, uid, w, -E.VIP.price, `VIP üyelik (${E.VIP.days} gün)`);
-        const now = Date.now();
-        w.vipUntil = Math.max(now, w.vipUntil || 0) + E.VIP.days * 86400000;
-        tx.set(db.doc(`badges/${uid}`), { vipUntil: w.vipUntil }, { merge: true });
+        // Gerçek para ödemesi Play Store faturalandırması bağlanınca açılacak
+        return { status: 402, body: { error: "billing" } };
       }
 
       if (act === "views") {
@@ -268,9 +264,9 @@ export default async (req) => {
           if (it && it.vip) w.skin[k] = k === "table" ? "yesil" : "ceviz";
         }
       }
-      if (act === "me") E.checkAch(tx, db, uid, w);
+      if (act === "me") { E.checkAch(tx, db, uid, w); vipCoins = E.vipDrip(tx, db, uid, w, E.trDate().day); }
       tx.set(ref, w);
-      return { status: 200, body: { wallet: view(w), welcomed, daily, gift, club, back } };
+      return { status: 200, body: { wallet: view(w), welcomed, daily, gift, club, back, vipCoins } };
     });
     return json(res.status, res.body);
   } catch (e) {
@@ -296,7 +292,7 @@ function view(w) {
     tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
     ach: w.ach || [], achStats: { wins: w.wins || 0, games: w.games || 0, maxStreak: w.maxStreak || 0, tw: w.tw || {}, marsN: w.marsN || 0, giftsSent: w.giftsSent || 0 },
-    club: w.club || null,
+    club: w.club || null, vipLeft: w.vipLeft || 0,
     tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
     catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },

@@ -1619,6 +1619,7 @@ function levelFromXp(xp){let lvl=1,need=200,acc=0;while(xp>=acc+need&&lvl<50){ac
 function trDay(ms=Date.now()){const d=new Date(ms+3*3600*1000);return{day:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}`,month:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}`}}
 async function initWallet(){
   try{const r=await callApi("/api/wallet",{action:"me"});catalog=r.wallet.catalog;applyWallet(r.wallet);
+    if(r.vipCoins)setTimeout(()=>toast(`👑 VIP günlük jetonun yüklendi: +${fmtCoin(r.vipCoins)}`,4000),2500);
     if(r.back)setTimeout(()=>openInfoModal("💛 Seni özledik!",`<div style="text-align:center;font-size:15px"><div style="font-size:44px">🤗</div>Tekrar hoş geldin! Sana <b>${fmtCoin(r.back)}</b> jeton hediye ettik.</div>`),1200);
     if(r.welcomed)setTimeout(showTour,9000);
     if(!r.welcomed&&dailyAvailable())setTimeout(()=>{if(!document.querySelector(".modal.show"))openDaily()},1800);
@@ -1767,20 +1768,17 @@ function openPublic(type){
 
 /* ---------- VIP ---------- */
 function openVip(){
-  const v=catalog?.vip||{price:250000,days:30},on=isVipU(me);
-  const perks=[["👑","Adının yanında VIP tacı","Sohbetlerde, masada ve sıralamada herkes görür"],["🎨","VIP masa ve ıstaka desenleri","Kraliyet moru, beyaz mermer, altın işlemeli, sedef, elmas"],["👀","Profilimi kimler gördü","Son 30 günde profiline bakanların listesi"]];
-  openInfoModal("👑 TR VIP",`<div class="vipcard"><div class="vt">${on?"VIP üyeliğin aktif":"VIP ol, farkını göster"}</div><div class="vs">${on?esc(new Date(vipU[me]).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"}))+" tarihine kadar":v.days+" gün · "+fmtCoin(v.price)+" jeton"}</div></div>
+  const v=catalog?.vip||{priceTL:499,days:30,coins:300000,daily:10000},on=isVipU(me);
+  const perks=[["🪙",`${fmtCoin(v.coins)} jeton hediye`,`${v.days} gün boyunca her gün ${fmtCoin(v.daily)} jeton hesabına yüklenir`],["👑","Adının yanında VIP tacı","Sohbetlerde, masada ve sıralamada herkes görür"],["🎨","VIP masa ve ıstaka desenleri","Kraliyet moru, beyaz mermer, altın işlemeli, sedef, elmas"],["👀","Profilimi kimler gördü","Son 30 günde profiline bakanların listesi"]];
+  openInfoModal("👑 TR VIP",`<div class="vipcard"><div class="vt">${on?"VIP üyeliğin aktif":"VIP ol, farkını göster"}</div><div class="vs">${on?esc(new Date(vipU[me]).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"}))+" tarihine kadar"+(wallet?.vipLeft?` · ${wallet.vipLeft} günlük jeton kaldı`:""):v.days+" gün · "+v.priceTL+" TL"}</div></div>
     ${perks.map(p=>`<div class="pk"><span style="font-size:26px">${p[0]}</span><div><b style="font-size:15px">${p[1]}</b><div class="isub">${p[2]}</div></div></div>`).join("")}
-    <div class="row2" style="margin-top:10px"><button id="vipBuy" class="vipbuy">${on?"30 gün uzat":"VIP ol"} · ${fmtCoin(v.price)} <span class="coin"></span></button></div>
+    <div class="row2" style="margin-top:10px"><button id="vipBuy" class="vipbuy">${on?"30 gün uzat":"VIP ol"} · ${v.priceTL} TL</button></div>
+    <p class="isub" style="text-align:center">Ödeme Google Play üzerinden alınır.</p>
     <div class="row2"><button id="vipViews" class="neg" style="background:var(--bg);color:var(--text)">👀 Profilimi kimler gördü</button></div>`);
   $("#vipViews").onclick=openViews;
-  $("#vipBuy").onclick=async()=>{
+  $("#vipBuy").onclick=()=>{
     if(!wallet?.adult){closeE();if(wallet?.ageSet)toast("VIP 18 yaş üstüne açık",3000);else askAge(openVip);return}
-    if((wallet?.balance||0)<v.price){toast("Yeterli jetonun yok");return}
-    $("#vipBuy").disabled=true;
-    try{const r=await callApi("/api/wallet",{action:"buyVip"});applyWallet({...r.wallet});catalog=r.wallet.catalog;vipU[me]=r.wallet.vipUntil;renderAll();openVip();toast("👑 VIP oldun!",3000)}
-    catch(e){toast(e.status===402?"Yeterli jetonun yok":"İşlem yapılamadı");$("#vipBuy").disabled=false}
-  };
+    toast("Ödeme, TR Play Store'da yayınlanınca Google Play üzerinden açılacak.",3500)};
 }
 async function openViews(){
   openInfoModal("👀 Profilimi kimler gördü",'<div class="empty">Yükleniyor…</div>');
@@ -2036,7 +2034,7 @@ async function adminLookup(){
   $("#adOut").innerHTML=`<div class="pk" style="display:block"><b>${esc(r.user.name||"İsimsiz")}</b> · TR ID ${fmtCode(r.user.code)}<div style="margin-top:6px;font-size:20px;font-weight:800"><span class="coin"></span> ${w?fmtCoin(w.balance):"Cüzdan yok"}</div>${w?`<div class="isub">Seviye ${w.level} · ${w.wins} galibiyet · ${w.games} oyun</div>`:""}</div>
     <div class="pk" style="display:block;margin-top:8px">${r.ban?`<b style="color:#E53935">${banLabel(r.ban.until)}</b><div class="isub">${esc(r.ban.reason)}</div><div class="row2" style="margin-top:6px"><button id="adUnban" style="background:#0E7C3A">Askıyı kaldır</button></div>`:`<div class="isub">Askıya al / yasakla</div>${banBtns("u")}`}</div>
     <input id="adAmt" inputmode="numeric" placeholder="Miktar (örn. 100000)"><input id="adWhy" maxlength="80" placeholder="Açıklama (isteğe bağlı)">
-    <div class="row2"><button id="adAdd">+ Yükle</button><button id="adSub" class="neg">− Düş</button></div><div id="adConfirm" style="margin-top:8px"></div>
+    <div class="row2"><button id="adAdd">+ Yükle</button><button id="adSub" class="neg">− Düş</button></div><div class="row2"><button id="adVip" style="background:#6b21a8">👑 30 gün VIP ver (300.000 jeton, günde 10.000)</button></div><div id="adConfirm" style="margin-top:8px"></div>
     <div class="fl" style="margin-top:12px">Son hareketler</div>${(r.history||[]).map(h=>`<div class="hist"><span>${esc(h.reason)}</span><span class="isub">${new Date(h.at).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span><span class="d" style="color:${h.delta>0?"#0E7C3A":"#E53935"}">${h.delta>0?"+":""}${fmtCoin(h.delta)}</span></div>`).join("")||'<div class="isub">Hareket yok</div>'}`;
   const go=async sign=>{const a=Math.abs(parseInt($("#adAmt").value.replace(/\D/g,""),10));if(!a){toast("Miktar yaz");return}
     const why=$("#adWhy")?.value||"";
@@ -2044,6 +2042,7 @@ async function adminLookup(){
     $("#adNo").onclick=()=>{$("#adConfirm").innerHTML=""};
     $("#adYes").onclick=async()=>{$("#adYes").disabled=true;try{const x=await callApi("/api/admin",{action:"adjust",code,amount:sign*a,reason:why});toast("Yeni bakiye: "+fmtCoin(x.balance));adminLookup()}catch(e){toast("İşlem yapılamadı");$("#adYes").disabled=false}}};
   $("#adAdd").onclick=()=>go(1);$("#adSub").onclick=()=>go(-1);
+  $("#adVip").onclick=()=>openModal({title:"VIP ver",text:"Bu kullanıcıya 30 gün VIP verilsin mi? Her gün 10.000 jeton yüklenecek.",input:false,ok:"Ver"},async()=>{try{await callApi("/api/admin",{action:"grantVip",code});toast("VIP verildi 👑")}catch(e){toast("Olmadı")}});
   if($("#adUnban"))$("#adUnban").onclick=async()=>{try{await callApi("/api/admin",{action:"unban",code});toast("Askı kaldırıldı");adminLookup()}catch(e){toast("Yapılamadı")}};
   $("#adOut").onclick=async e=>{const b=e.target.closest("[data-ban]");if(!b)return;const days=+b.dataset.ban.split(":")[1];
     if(!confirm(days?`${r.user.name||"Bu hesap"} ${days} gün askıya alınsın mı?`:`${r.user.name||"Bu hesap"} kalıcı olarak yasaklansın mı?`))return;
@@ -2132,6 +2131,8 @@ function openGame(id){
     if(game.pendingOut!=null&&!tiles.includes(game.pendingOut))game.pendingOut=null;
     syncSlots(tiles);game.newTiles=new Set(tiles.filter(t=>!prevSet.has(t)&&prevSet.size));
     if(game.sel!=null&&!tiles.includes(game.sel))game.sel=null;
+    // yeni el dağıtılınca taşlar otomatik dizilsin (per/seri)
+    const rd=game.data&&game.data.round;if(tiles.length>=14&&game.data&&game.data.indicator!=null&&game.autoRound!==rd&&(!prevSet.size||tiles.filter(t=>!prevSet.has(t)).length>2)){game.autoRound=rd;setTimeout(()=>{if(game&&game.hand&&game.hand.length)sortRack("run")},50)}
     renderGame();
   },()=>{}));
   game.poke=setInterval(()=>{const d=game&&game.data;if(!d)return;
@@ -2187,7 +2188,7 @@ function renderGame(){
     ${canDiscard?`<div class="ofinish" id="gDropFinish">🏁<span>Bitirmek için<br>taşı buraya at</span></div>`:""}</div>`;
   if(d.status==="over"){
     const w=d.winner;
-    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?`<div class="wh">${[...d.winHand].sort((a,b)=>(tIsWild(a,ok)-tIsWild(b,ok))||(tIsFake(a)?ok.c*100+ok.n:tColor(a)*100+tNum(a))-(tIsFake(b)?ok.c*100+ok.n:tColor(b)*100+tNum(b))).map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`:""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
+    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
   html+='</div>';
   $("#gTable").innerHTML=html;
@@ -2213,6 +2214,14 @@ function renderGame(){
   game.canDraw=canDraw;
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
+// bitirilen eli gruplarına ayırıp küçük bir ıstaka üzerinde göster
+function winHandHTML(d,ok){
+  const okv={c:ok.c,n:ok.n},h=[...d.winHand];let groups;
+  if(d.winKind==="cift"){const k=t=>OK.valueOf(t,okv)==="W"?"W":JSON.stringify(OK.valueOf(t,okv));const by={};h.forEach(t=>(by[k(t)]=by[k(t)]||[]).push(t));
+    const w=by.W||[];delete by.W;groups=[];const singles=[];Object.values(by).forEach(g=>{while(g.length>=2)groups.push(g.splice(0,2));if(g.length)singles.push(g[0])});singles.forEach(t=>groups.push([t,w.shift()].filter(x=>x!=null)));while(w.length)groups.push(w.splice(0,2))}
+  else{const r=OK.arrange(h,okv);groups=r.rest.length?[...r.groups,r.rest]:r.groups}
+  const who=d.winner!=null?seatName(d.seats[d.winner]):"";
+  return`<div class="whwrap"><div class="whlbl">${esc(who)} · ${d.winKind==="cift"?"çiftten bitti":"seriden bitti"}</div><div class="wh">${groups.map(g=>`<div class="whg">${g.map(t=>tileHTML(t,ok,{sm:true})).join("")}</div>`).join("")}</div></div>`}
 function renderLobby(d,my){
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#gMsg").textContent="";$("#pCtrl").style.display="none";game.pbuilt=false;
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}

@@ -490,7 +490,10 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .lobby button{background:#E0A800;color:#222;font-weight:700;border-radius:24px;padding:12px 26px;font-size:16px}
 .lobby button.sec{background:rgba(255,255,255,.18);color:#fff}
 .overbox{position:absolute;left:10px;right:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.72);border-radius:16px;padding:16px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
-.overbox .wh{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:100%}
+.whwrap{width:100%;max-width:720px}.whlbl{font-size:12px;opacity:.8;margin-bottom:4px}
+.overbox .wh{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 14px;width:100%;padding:10px 10px 12px;border-radius:12px;background:linear-gradient(#b07a45,#8a5a2b);box-shadow:inset 0 -6px 0 rgba(0,0,0,.25),0 4px 12px rgba(0,0,0,.4)}
+.overbox .whg{display:flex;gap:2px}.overbox .wh .tile.sm{width:34px;height:47px;font-size:19px;padding-top:5px}
+.gamescr.okeyg .overbox{position:fixed;z-index:60;max-height:94vh;overflow:auto;background:rgba(10,30,18,.96);left:50%;right:auto;width:min(92%,760px);transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.15);box-shadow:0 10px 40px rgba(0,0,0,.6)}
 .overbox .sc{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;font-size:13px}
 .overbox button{background:#E0A800;color:#222;font-weight:700;border-radius:22px;padding:10px 22px}
 .chat-top #vcallBtn,.chat-top #acallBtn{color:#fff}
@@ -723,7 +726,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   .gamescr.okeyg .dstack{width:40px;height:53px}.gamescr.okeyg .odeck b{top:15px}
   .gamescr.okeyg .odisc>span,.gamescr.okeyg .odeck>span,.gamescr.okeyg .oind>span{font-size:9.5px}
   .gamescr.okeyg .ofinish{width:54px;height:54px}
-  .gamescr.okeyg .overbox{max-height:90%;overflow:auto}
+  .gamescr.okeyg .overbox{max-height:94vh;overflow:auto}
 }
 
 /* ===== Masa sohbeti ===== */

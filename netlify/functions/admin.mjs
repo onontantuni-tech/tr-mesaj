@@ -106,6 +106,20 @@ export default async (req) => {
     });
   }
 
+  // Elle VIP verme (Play Store ödemesi bağlanana kadar ya da destek için)
+  if (act === "grantVip") {
+    const until = await db.runTransaction(async (tx) => {
+      const ref = db.doc(`wallets/${target}`);
+      const s = await tx.get(ref);
+      const w = s.exists ? s.data() : E.newWallet();
+      E.grantVip(w);
+      tx.set(db.collection("ledger").doc(), { uid: target, delta: 0, reason: `VIP verildi (${E.VIP.days} gün)`, by: uid, at: Date.now(), after: w.balance || 0 });
+      tx.set(ref, w);
+      tx.set(db.doc(`badges/${target}`), { vipUntil: w.vipUntil }, { merge: true });
+      return w.vipUntil;
+    });
+    return json(200, { ok: true, vipUntil: until });
+  }
   if (act === "adjust") {
     const amount = Math.trunc(Number(b.amount));
     if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 100000000) return json(400, { error: "amount" });
