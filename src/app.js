@@ -312,7 +312,8 @@ function showTour(){if(localStorage.getItem("tr-tour"))return;localStorage.setIt
   let i=0;const draw=()=>{openInfoModal("",`<div class="tour"><div class="ti">${P[i][0]}</div><b>${P[i][1]}</b><p>${P[i][2]}</p><div class="dots">${P.map((_,k)=>`<i class="${k===i?"on":""}"></i>`).join("")}</div><div class="row2"><button id="tNext" style="background:var(--brand)">${i<P.length-1?"İleri":"Başla"}</button></div></div>`);
     $("#tNext").onclick=()=>{i++;if(i<P.length)draw();else closeE()}};draw()}
 let noticeShown="";
-onSnapshot(doc(fs,"config","app"),s=>{const n=s.exists()?s.data().notice:null;const bar=$("#noticeBar");if(!bar)return;
+onSnapshot(doc(fs,"config","app"),s=>{const n=s.exists()?s.data().notice:null;
+  {const ev=s.exists()?s.data().event:null;window.__event=ev&&ev.until>Date.now()?ev:null;const eb=$("#eventBar");if(eb){if(window.__event){eb.className="dailybar show evt";eb.innerHTML=`🎉 <b>${esc(window.__event.name)}</b> etkinliği: günlük hediye <b>x${window.__event.mul}</b><span>${fmtWait(window.__event.until-Date.now())}</span>`;eb.onclick=()=>openDaily()}else eb.classList.remove("show")}}const bar=$("#noticeBar");if(!bar)return;
   if(!n||!n.text||localStorage.getItem("tr-notice-x")===String(n.at)){bar.classList.remove("show");return}
   bar.className="noticebar show "+(n.kind==="maint"?"maint":"");bar.innerHTML=`<span>${n.kind==="maint"?"🛠️":"📢"} ${esc(n.text)}</span><button aria-label="Kapat">✕</button>`;
   bar.querySelector("button").onclick=()=>{localStorage.setItem("tr-notice-x",String(n.at));bar.classList.remove("show")}},()=>{});
@@ -361,6 +362,14 @@ function openLockSettings(){openInfoModal("🔒 Uygulama kilidi",`<p class="isub
   <div class="row2"><button id="pinSet" style="background:var(--brand)">${pinSet()?"PIN'i değiştir":"PIN belirle"}</button>${pinSet()?'<button id="pinOff" style="background:#555">Kilidi kapat</button>':""}</div>`);
   $("#pinSet").onclick=()=>{closeE();askPin("Yeni PIN (4 hane)",async v=>{const first=v;setTimeout(()=>askPin("PIN'i tekrar gir",async w=>{if(w!==first){toast("PIN'ler uyuşmadı");return true}localStorage.setItem("tr-pin",await pinHash(w));toast("🔒 Uygulama kilidi açıldı");return true}),50);return true})};
   if($("#pinOff"))$("#pinOff").onclick=()=>{closeE();askPin("Mevcut PIN",async v=>{if(!(await checkPin(v)))return false;localStorage.removeItem("tr-pin");localStorage.removeItem("tr-lockc");toast("Kilit kapatıldı");return true})}}
+/* ---------- sohbete özel bildirim sesi (uygulama açıkken) ---------- */
+const TONES=[["Klasik",[880,1320]],["Damla",[1200,900,600]],["Zil",[1568,1568,2093]],["Kuş",[2000,2400,2000,2600]],["Sessiz",[]]];
+const tonesMap=()=>{try{return JSON.parse(localStorage.getItem("tr-tones")||"{}")}catch(e){return{}}};
+function playTone(i){const t=TONES[i]||TONES[0];if(!t[1].length)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const now=actx.currentTime;t[1].forEach((f,k)=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;g.gain.setValueAtTime(.1,now+k*.11);g.gain.exponentialRampToValueAtTime(.001,now+k*.11+.12);o.connect(g).connect(actx.destination);o.start(now+k*.11);o.stop(now+k*.11+.13)})}catch(e){}}
+let seenMsgIds=null;
+function notifyIncoming(){const ids=new Set(raw.map(m=>m.id));if(!seenMsgIds){seenMsgIds=ids;return}
+  const fresh=raw.filter(m=>!seenMsgIds.has(m.id)&&m.from!==me&&Date.now()-m.at<60000);seenMsgIds=ids;
+  if(!fresh.length||document.hidden)return;const m=fresh[fresh.length-1],c=convOfMsg(m);if(c===cur||(prefs.mute[c]||0)>Date.now())return;playTone(tonesMap()[c]||0)}
 /* ---------- bağlantılar ---------- */
 function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
 function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
@@ -713,12 +722,15 @@ function openChatSheet(c){
     ${muted?'<button data-ca="unmute">🔔 Sesi aç</button>':'<button data-ca="m8">🔕 8 saat sessize al</button><button data-ca="m168">🔕 1 hafta sessize al</button><button data-ca="minf">🔕 Her zaman sessiz</button>'}
     <button data-ca="arch">${prefs.arch.includes(c)?"📤 Arşivden çıkar":"🗄️ Arşivle"}</button>
     <button data-ca="read">✔️ Okundu say</button>
+    <button data-ca="tone">🔔 Bildirim sesi: ${esc((TONES[(tonesMap()[c])||0]||TONES[0])[0])}</button>
     <button data-ca="ttl">⏱️ Kaybolan mesajlar · ${esc(ttlLabel(convTTL(c)))}</button>`;
   sheetFor=null;$("#msheet").dataset.conv=c;overlay.classList.add("show");$("#msheet").classList.add("show");
 }
 $("#msheet").addEventListener("click",e=>{
   const b=e.target.closest("[data-ca]");if(!b)return;const c=$("#msheet").dataset.conv,a=b.dataset.ca;closeSheet();
   if(a==="ttl"){openTTL(c);return}
+  if(a==="tone"){openInfoModal("🔔 Bildirim sesi",TONES.map((t,i)=>`<div class="pk" data-tone="${i}" style="cursor:pointer"><b style="flex:1">${t[0]}</b>${(tonesMap()[c]||0)===i?"✅":""}</div>`).join("")+'<p class="isub">Uygulama açıkken bu sohbetten mesaj gelince çalar.</p>');
+    $("#eBody").onclick=e=>{const r=e.target.closest("[data-tone]");if(!r)return;const m=tonesMap();m[c]=+r.dataset.tone;localStorage.setItem("tr-tones",JSON.stringify(m));playTone(+r.dataset.tone);closeE()};return}
   const tog=(k)=>prefs[k].includes(c)?prefs[k].filter(x=>x!==c):[...prefs[k],c].slice(-200);
   if(a==="pin"){if(!prefs.pin.includes(c)&&prefs.pin.length>=3){toast("En fazla 3 sohbet sabitlenebilir");return}savePrefs({pin:tog("pin")})}
   if(a==="fav")savePrefs({fav:tog("fav")});
@@ -1474,7 +1486,7 @@ onAuthStateChanged(auth,async u=>{
     raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null,pv:x.pv&&typeof x.pv==="object"?x.pv:null,ck:x.ck&&typeof x.ck==="object"?x.ck:null}})
       .filter(m=>m.iv&&m.ct&&m.from&&(m.gid||(m.to&&m.from!==m.to&&(m.from===me||m.to===me))));
     raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to);if(ctSeen[m.id]&&ctSeen[m.id]!==m.ct)delete plain[m.id];ctSeen[m.id]=m.ct});
-    pending=pending.filter(p=>!raw.find(m=>m.id===p.id));
+    pending=pending.filter(p=>!raw.find(m=>m.id===p.id));notifyIncoming();
     banner("");
     if(cur)markRead(cur);
     decryptAll();renderAll();
@@ -1685,7 +1697,7 @@ async function initWallet(){
   unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin,vipUntil:+x.vipUntil||0,adult:!!x.adult,ageSet:!!x.birthYear})},()=>{}));
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);window.__isMod=!!(r&&r.mod);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
-function applyWallet(w){wallet=w;setTimeout(renderBell,0);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
+function applyWallet(w){wallet=w;setTimeout(renderBell,0);setTimeout(weeklySummary,6000);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
 function mySkin(kind){const def=kind==="table"?"yesil":kind==="tile"?"klasik":"ceviz";const id=wallet?.skin?.[kind]||def;if((id.startsWith("vip_")||id==="sedef")&&!isVipU(me))return def;return id}
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
@@ -1894,6 +1906,7 @@ function renderGamesTab(){
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
     <button data-g="cb"><span>💸</span>Harcama iadesi${wallet.cb&&wallet.cb.amount&&!wallet.cb.claimed?'<i class="dot"></i>':""}</button>
     <button data-g="kelime"><span>🔤</span>Kelimece (günlük)</button>
+    <button data-g="cafe" style="grid-column:span 2"><span>☕</span>Kahvehane · bütün açık masalar</button>
     <button data-g="quiz"><span>🧠</span>Bilgi yarışması</button>
     <button data-g="cal"><span>📅</span>Etkinlik takvimi</button>
     <button data-g="redeem"><span>🎟️</span>Hediye kodu</button>
@@ -1913,7 +1926,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");if(g==="pub-kizma")openPublic("kizma");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="quiz")openQuiz();if(g==="cal")openCalendar();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="quiz")openQuiz();if(g==="cafe")openCafe();if(g==="cal")openCalendar();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -2004,6 +2017,14 @@ async function openQuiz(answers){let r;try{r=await callApi("/api/wallet",answers
     $("#qzGo").onclick=()=>{if(sel.filter(x=>x!=null).length<r.qs.length){toast("Bütün soruları cevapla");return}openQuiz(sel)}}}
 function openCalendar(){const T=catalog?.tour||{start:20,end:23,fee:100000};
   openInfoModal("📅 Etkinlik takvimi",[["🎁","Her gün 00:00","Günlük giriş hediyesi, Kelimece, bilgi yarışması ve görevler yenilenir"],["🧰","Her 4 saatte","Bedava sandık"],["🏟️",`Her akşam ${T.start}:00–${T.end}:00`,`Akşam turnuvası (katılım ${fmtCoin(T.fee)} jeton)`],["🏆","Her gün 00:01","Günlük sıralama ödülleri"],["🥇","Her pazartesi 00:01","Haftalık lig kapanışı, yükselme ve düşme"],["👑","Her ayın 1'i","Aylık sıralama ve ayın davet şampiyonları ödülleri"],["💸","Her gün","Dünkü harcamaya göre iade"]].map(x=>`<div class="pk"><span style="font-size:24px">${x[0]}</span><div><b>${x[1]}</b><div class="isub">${x[2]}</div></div></div>`).join(""))}
+function openCafe(){openInfoModal("☕ Kahvehane · bütün açık masalar",'<div id="cafeL"><div class="isub">Yükleniyor…</div></div>');
+  Promise.all([getDocs(query(collection(fs,"games"),where("public","==",true),where("status","==","lobby"),limit(60))),getDocs(query(collection(fs,"games"),where("public","==",true),where("status","==","play"),limit(60)))]).then(([a,b])=>{
+    const rows=[...a.docs,...b.docs].map(d=>({id:d.id,...d.data()})).filter(g=>Date.now()-(g.updatedAt||g.at||0)<10*60e3);rows.forEach(g=>g.seats.forEach(x=>x&&x.uid&&watchUser(x.uid)));
+    const el=$("#cafeL");if(!el)return;el.innerHTML=rows.length?rows.map(g=>{const t=g.type||"okey",n=g.seats.filter(Boolean).length;return`<div class="pk pubrow" data-cafe="${g.id}" style="cursor:pointer"><span style="font-size:26px">${gk(t)[0]}</span><div style="flex:1"><b>${gk(t)[1]}</b> · ${g.stake?fmtCoin(g.stake)+" jeton":"ücretsiz"}<div class="isub">${g.status==="lobby"?`${n}/${g.seats.length} kişi · oturulabilir`:"oynanıyor · izle"}</div></div><span>${g.status==="lobby"?"Otur ›":"İzle ›"}</span></div>`}).join(""):'<div class="isub">Şu an açık masa yok. Oyun sekmesinden bir masa aç!</div>';
+    el.onclick=e=>{const r=e.target.closest("[data-cafe]");if(!r)return;closeE();openGame(r.dataset.cafe)}}).catch(()=>{const el=$("#cafeL");if(el)el.innerHTML='<div class="isub">Yüklenemedi</div>'})}
+function weeklySummary(){try{const wk=wallet&&wallet.week;if(!wk||localStorage.getItem("tr-wsum")===wk)return;const first=!localStorage.getItem("tr-wsum");localStorage.setItem("tr-wsum",wk);if(first)return;
+  loadHistory().then(h=>{const from=Date.now()-7*86400e3,lw=h.filter(x=>x.at>from-86400e3*0&&x.at<Date.now());const n=lw.length,wn=lw.filter(x=>x.won).length;if(!n)return;
+    const ll=wallet.lastLeague;openInfoModal("📬 Haftalık özetin",`<div class="recg"><div><b>${n}</b><span>oyun</span></div><div><b>${wn}</b><span>galibiyet</span></div><div><b>%${Math.round(100*wn/n)}</b><span>kazanma oranı</span></div><div><b>${ll?(ll.rank+". / "+ll.of):"–"}</b><span>ligdeki sıran</span></div></div><p class="isub" style="text-align:center">Yeni hafta başladı, bol şans! 🍀</p>`)}).catch(()=>{})}catch(e){}}
 function openRedeem(){openModal({title:"🎟️ Hediye kodu",text:"Elindeki hediye kodunu yaz.",placeholder:"örn. BAYRAM2026",ok:"Kullan"},async v=>{
   try{const r=await callApi("/api/wallet",{action:"redeem",code:v});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`🎉 +${fmtCoin(r.gift.amount)} jeton`)}catch(e){toast(e.status===404?"Bu kod geçersiz":e.status===409?"Bu kodu zaten kullandın":e.status===410?"Bu kodun kullanım hakkı bitmiş":"Kullanılamadı",3000)}})}
 function openCity(){const C=catalog?.cities||[];const mo=new Date(Date.now()+3*3600e3).toISOString().slice(0,7).replace("-","");
@@ -2117,6 +2138,10 @@ function openAdmin(){
     <div class="row2"><button id="adCodeMk" style="background:#555">🎟️ Hediye kodu</button><button id="adAlerts" style="background:#555">🚨 Jeton alarmı</button></div>
     <div class="row2"><button id="adCsv" style="background:#555">📊 Kasa raporu (Excel)</button><button id="adMod" style="background:#555">🛡️ Moderatörler</button></div>`);
   if(window.__isMod){$("#adOut").insertAdjacentHTML("beforebegin",'<p class="isub">Moderatör olarak şikâyetleri inceleyebilir, en fazla 7 gün askıya alabilir ve not ekleyebilirsin.</p>');return}
+  $("#adOut").insertAdjacentHTML("beforebegin",`<div class="row2"><button id="adEvent" style="background:#555">🎉 Mevsimlik etkinlik</button><button id="adCafe" style="background:#555">☕ Bütün açık masalar</button></div>`);
+  $("#adEvent").onclick=()=>{$("#adOut").innerHTML=`<input id="evN" maxlength="40" placeholder="Etkinlik adı (ör. Ramazan Bayramı)"><input id="evM" inputmode="numeric" placeholder="Günlük hediye çarpanı (1-3)"><input id="evD" inputmode="numeric" placeholder="Kaç gün (0 = kapat)"><div class="row2"><button id="evGo2" style="background:var(--brand)">Kaydet</button></div>`;
+    $("#evGo2").onclick=async()=>{try{await callApi("/api/admin",{action:"event",name:$("#evN").value,mul:+$("#evM").value,days:+$("#evD").value});toast("Etkinlik güncellendi")}catch(e){toast("Olmadı")}}};
+  $("#adCafe").onclick=()=>{closeE();openCafe()};
   $("#adCodeMk").onclick=()=>{$("#adOut").innerHTML=`<input id="gcA" inputmode="numeric" placeholder="Jeton miktarı (örn. 50000)"><input id="gcU" inputmode="numeric" placeholder="Kaç kişi kullanabilir (örn. 100)"><input id="gcC" maxlength="16" placeholder="Kod (boş bırak, otomatik)"><div class="row2"><button id="gcGo" style="background:var(--brand)">Oluştur</button></div><div id="gcOut"></div>`;
     $("#gcGo").onclick=async()=>{try{const r=await callApi("/api/admin",{action:"mkcode",amount:+$("#gcA").value.replace(/\D/g,""),uses:+$("#gcU").value.replace(/\D/g,"")||1,code:$("#gcC").value});$("#gcOut").innerHTML=`<div class="idbox">${esc(r.code)}</div>`}catch(e){toast("Oluşturulamadı")}}};
   $("#adAlerts").onclick=async()=>{$("#adOut").innerHTML='<div class="isub">Yükleniyor…</div>';try{const r=await callApi("/api/admin",{action:"alerts"});const nm=u=>{const x=r.names[u]||{};return esc((x.name||"?")+" ("+fmtCode(x.code||"")+")")};

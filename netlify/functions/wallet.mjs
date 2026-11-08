@@ -17,7 +17,11 @@ export default async (req) => {
   const act = String(b?.action || "me");
   const ref = db.doc(`wallets/${uid}`);
   let migrate = false;
-  let giftOk = false, rateOk = false;
+  let giftOk = false, rateOk = false, evMul = 1, evName = "";
+  if (act === "daily") {
+    // Mevsimlik etkinlik (bayram, yılbaşı…): yöneticinin açtığı çarpan günlük hediyeye uygulanır
+    try { const c = await db.doc("config/app").get(); const ev = c.exists ? c.data().event : null; if (ev && ev.until > Date.now()) { evMul = Math.max(1, Math.min(3, Number(ev.mul) || 1)); evName = String(ev.name || "").slice(0, 40); } } catch {}
+  }
   if (act === "rate") {
     const gid = String(b?.gid || ""), to = String(b?.to || "");
     if (/^[A-Za-z0-9]{10,40}$/.test(gid)) {
@@ -160,8 +164,8 @@ export default async (req) => {
         const today = E.trDate().day, yesterday = E.trDate(Date.now() - 86400000).day;
         if (w.lastDaily === today) return { status: 409, body: { error: "claimed", wallet: view(w) } };
         const streak = w.lastDaily === yesterday ? ((w.streak || 0) % 30) + 1 : 1;
-        const amount = E.LOGIN_CALENDAR[streak - 1];
-        E.credit(tx, db, uid, w, amount, `Günlük giriş hediyesi (${streak}. gün)`);
+        const amount = Math.round(E.LOGIN_CALENDAR[streak - 1] * evMul);
+        E.credit(tx, db, uid, w, amount, `Günlük giriş hediyesi (${streak}. gün)${evMul > 1 ? ` · ${evName} x${evMul}` : ""}`);
         w.streak = streak;
         w.lastDaily = today;
         daily = { day: streak, amount, vip: 0 };

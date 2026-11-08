@@ -75,6 +75,13 @@ export default async (req) => {
     await db.doc("config/app").set({ notice: text ? { text, kind, at: Date.now() } : null }, { merge: true });
     return json(200, { ok: true });
   }
+  // Mevsimlik etkinlik: günlük hediye çarpanı (1–3) ve süre (gün)
+  if (act === "event") {
+    const mul = Math.max(1, Math.min(3, Number(b.mul) || 1)), days = Math.max(0, Math.min(30, Number(b.days) || 0));
+    const ev = days ? { name: String(b.name || "Etkinlik").slice(0, 40), mul, until: Date.now() + days * 86400000 } : null;
+    await db.doc("config/app").set({ event: ev }, { merge: true });
+    return json(200, { ok: true, event: ev });
+  }
   if (act === "stats") {
     const day = Date.now() - 86400000;
     const [errs, fb] = await Promise.all([
