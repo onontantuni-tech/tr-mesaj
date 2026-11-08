@@ -19,6 +19,16 @@ Son güncelleme: 6 Kasım 2026
 - Mesajlaşma: yanıtla/ilet/sil (mesaj tarafı), 104 düzenle, 15 tepki, 203 çift dokunuş ❤️, 16 çevrimiçi/yazıyor, 17 son görülme, 170 gizlilik ayarları (kısmen: son görülme), 125 okundu kapatma, 49 sohbet içi arama, 121 mesaj sabitleme, 122 yıldızlı, 123 arşiv, 124 sessize alma (sunucu bildirimi de susturur), 126 @bahsetme, 129 dışa aktarma, 192 filtre sekmeleri, 193 favoriler, 195 taslak, 196 medya galerisi, sohbet sabitleme
 - Oyun: 2 saatlik sandık (4 saat, VIP 2 kat), 3 jeton desteği, günlük çark, görevler, 42 seri bonusu (jetonlu masada 3 galibiyet = 5.000), 8 oyun geçmişi, 212 rakiple skor, 7 ses/titreşim, 177 sıra çubuğu, 143 teselli XP (zaten vardı), 4 rövanş ("Yeni oyun" zaten vardı)
 
+## 8 Kasım 2026'da yapılanlar (yayında: tr-mesaj.vercel.app)
+- Vercel'e taşındı, mobil giriş döngüsü düzeltildi (/__/auth vekili)
+- Okey v2 (yatay masa, sürükle-bırak, otomatik dizme) ve Bilardo v3 (gerçekçi masa, güç çubuğu, ince nişan)
+- Masa sohbeti (hazır cümleler + baloncuklar) — Okey ve Bilardo
+- Profil fotoğrafı (44), hakkında yazısı, profil sayfası (43)
+- Bildirim merkezi 🔔 (201)
+- Haftalık lig: Bronz/Gümüş/Altın/Elmas, %20 yükselme/düşme, lig ödülleri (1)
+- Akşam turnuvası 20:00–23:00, katılım 10.000, havuz %5 kasa, ilk 3'e %50/%30/%20
+- Firestore kuralları her adımda yayınlandı
+
 ## Kullanıcının yapacakları (bekleyen)
 1. Yeni Firestore kurallarını (firestore-kurallari.txt) Firebase Konsolu → Firestore → Kurallar sekmesine yapıştırıp Yayınla
 2. Vercel kurulumu: GitHub ile giriş → tr-mesaj'ı içe aktar → ortam değişkenleri (FIREBASE_SERVICE_ACCOUNT, CF_TURN_KEY_ID, CF_TURN_API_TOKEN, CRON_SECRET) → Deploy → adresi Claude'a gönder
