@@ -282,6 +282,24 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 .slot.okg{position:relative}.slot.okg::after{content:"";position:absolute;left:6%;right:6%;bottom:-4px;height:4px;background:#22c55e;border-radius:2px;box-shadow:0 0 6px #22c55e}
 .tile.ghost.back{background:linear-gradient(135deg,#b3121f,#7a0a10);border:2px solid #fff;border-radius:6px}
 #gPile,#gLeftDisc{touch-action:none}
+.b{font-size:var(--msgfs,15px)}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.seg button{flex:1 0 auto;background:var(--bg);border:2px solid transparent;border-radius:12px;padding:8px 10px;font-weight:600;color:var(--text);cursor:pointer}
+.seg button.on{border-color:var(--brand);color:var(--brand)}.seg.col button i{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--c);margin-right:6px;vertical-align:-1px}
+.tgl{display:flex;align-items:center;gap:10px;padding:10px 2px;border-top:1px solid var(--line,#eee)}.tgl span{flex:1}.tgl small{display:block;color:var(--muted);font-size:12px}.tgl input{width:22px!important;height:22px;flex:none}
+body.wall-duz .msgs{background-image:none}
+body.wall-cini .msgs{background-color:#e8f1f5;background-image:radial-gradient(circle at 50% 50%,rgba(29,78,216,.12) 2px,transparent 3px),repeating-linear-gradient(45deg,rgba(29,78,216,.06) 0 2px,transparent 2px 22px),repeating-linear-gradient(-45deg,rgba(29,78,216,.06) 0 2px,transparent 2px 22px);background-size:22px 22px,auto,auto}
+body.wall-gece .msgs{background-color:#0f172a;background-image:radial-gradient(rgba(255,255,255,.35) 1px,transparent 1px);background-size:34px 34px}
+body.wall-kahve .msgs{background-color:#efe2cf;background-image:radial-gradient(rgba(120,72,30,.12) 2px,transparent 2px);background-size:26px 26px}
+body.wall-ay .msgs{background-color:#fbe9e9;background-image:radial-gradient(circle at 30% 50%,rgba(215,38,30,.10) 6px,transparent 7px),radial-gradient(circle at 36% 50%,#fbe9e9 5px,transparent 6px);background-size:40px 40px}
+body.dark.wall-cini .msgs,body.dark.wall-kahve .msgs,body.dark.wall-ay .msgs{background-color:#0B0D10}
+.oncemsg{padding:10px 14px;border:2px dashed var(--brand);border-radius:12px;font-weight:700;color:var(--brand);cursor:pointer}.oncemsg.dim{opacity:.55;cursor:default}
+.lcard{display:flex;align-items:center;gap:8px;margin-top:6px;padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.05);text-decoration:none;color:inherit;white-space:normal}
+.lcard .lci{font-style:normal;font-size:18px}.lcard b{display:block;font-size:13px}.lcard small{display:block;font-size:11.5px;opacity:.7;word-break:break-all}
+.mload.tap{cursor:pointer}
+.pk.note{align-items:flex-start}.lnk{background:none;border:0;color:#DC2626;font-size:16px;cursor:pointer}
+.cbtn.msg{background:#555;font-size:22px}
+body.lefty .gamescr.okeyg .g-actions{order:-1}
+@media (orientation:landscape) and (max-height:560px){body.lefty .gamescr.show.okeyg{grid-template-columns:92px 1fr}body.lefty .gamescr.okeyg .g-rack{grid-column:2}body.lefty .gamescr.okeyg .g-actions{grid-column:1}}
 .pubpisti{background:linear-gradient(135deg,#9b1b2a,#4a0a12)!important;color:#fff!important}
 .ptable .overbox{z-index:4;background:rgba(0,0,0,.88)}
 .pubpisti small{display:block;font-size:12px;opacity:.85}
@@ -766,6 +784,8 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="newgroup">Yeni grup</button>
       <button data-act="findcontacts">Rehberden bul</button>
       <button data-act="starred">Yıldızlı mesajlar</button>
+      <button data-act="notes">Kaydedilen mesajlar</button>
+      <button data-act="settings">Ayarlar (yazı, tema, duvar kâğıdı)</button>
       <button data-act="privacy2">Gizlilik ayarları</button>
       <button data-act="sound">Oyun sesleri aç/kapat</button>
       <button data-act="notif">Bildirimler</button>
@@ -925,6 +945,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <p class="cs-lock">🔒 Uçtan uca şifreli</p>
     </div>
     <div class="cs-bottom" id="csIncoming">
+      <button class="cbtn msg" id="csDeclineMsg" aria-label="Mesajla reddet">💬</button>
       <button class="cbtn red" id="csDecline" aria-label="Reddet"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.96.96 0 0 1 0-1.36C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.72c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.3 11.3 0 0 0-2.67-1.85.99.99 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg><span>Reddet</span></button>
       <button class="cbtn green" id="csAccept" aria-label="Cevapla"><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span>Cevapla</span></button>
     </div>

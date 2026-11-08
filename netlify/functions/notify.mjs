@@ -56,7 +56,7 @@ export default async (req) => {
       if (!tokens.length) return;
       const res = await messaging.sendEachForMulticast({
         tokens,
-        data: { title, body: mentioned ? `${senderName} senden bahsetti` : text, conv, url: `${SITE}/?c=${encodeURIComponent(conv)}` },
+        data: ps.data().hide ? { title: "TR", body: "Yeni mesaj", conv, url: `${SITE}/` } : { title, body: mentioned ? `${senderName} senden bahsetti` : text, conv, url: `${SITE}/?c=${encodeURIComponent(conv)}` },
         webpush: { headers: { Urgency: "high", TTL: "86400" } },
         android: { priority: "high" },
       });

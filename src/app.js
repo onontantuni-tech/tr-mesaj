@@ -50,7 +50,7 @@ let friends={};
 let vipU={};const bdg={};   // uid -> {ach:[], gifts:{}} (badges/{uid})
 
 let blocked={};
-let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all"};
+let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all",oncev:[]};
 const readsHidden={},ctSeen={};
 let chatFilter="all",msgQuery="",replyTo=null;
 let hidMsgs=new Set();try{hidMsgs=new Set(JSON.parse(localStorage.getItem("tr-hid")||"[]"))}catch(e){}
@@ -215,10 +215,51 @@ function hydrateMedia(){
       if(!url){el.innerHTML='<span>🔒 Medya açılamadı</span>';return}
       const c=plain[id]||{};
       if(c.t==="img"){const img=new Image();img.className="media";img.alt="Fotoğraf";img.src=url;if(c.w&&c.h)img.style.aspectRatio=c.w+"/"+c.h;img.onclick=()=>openViewer(url);el.replaceWith(img)}
-      else if(c.t==="voice"){const a=document.createElement("audio");a.controls=true;a.preload="metadata";a.src=url;el.replaceWith(a)}
+      else if(c.t==="voice"){const a=document.createElement("audio");a.controls=true;a.preload="metadata";a.src=url;a.playbackRate=SET.vspeed||1;a.onplay=()=>{a.playbackRate=SET.vspeed||1};el.replaceWith(a)}
     });
   });
 }
+
+/* ---------- görünüm ve sohbet ayarları (cihazda saklanır) ---------- */
+const SET_DEF={fs:16,theme:"kirmizi",wall:"nokta",left:false,vspeed:1,autoImg:true,vib:true,hidePush:false};
+let SET={...SET_DEF};try{SET={...SET_DEF,...JSON.parse(localStorage.getItem("tr-set")||"{}")}}catch(e){}
+const THEMES={kirmizi:["#D7261E","Kırmızı"],lacivert:["#1d4ed8","Lacivert"],yesil:["#0E7C3A","Yeşil"],mor:["#7c3aed","Mor"],turuncu:["#ea580c","Turuncu"],siyah:["#27272a","Siyah"]};
+const WALLS={nokta:"Noktalı",duz:"Düz",cini:"Çini",gece:"Gece",kahve:"Kahve",ay:"Ay yıldız"};
+function applySet(){const b=document.body;b.style.setProperty("--msgfs",SET.fs+"px");
+  const th=THEMES[SET.theme]||THEMES.kirmizi;b.style.setProperty("--brand",th[0]);b.style.setProperty("--brand2",th[0]);
+  Object.keys(WALLS).forEach(k=>b.classList.toggle("wall-"+k,SET.wall===k));b.classList.toggle("lefty",!!SET.left);
+  document.querySelectorAll("audio").forEach(a=>{a.playbackRate=SET.vspeed||1});
+  const mt=document.querySelector('meta[name="theme-color"]');if(mt)mt.content=th[0]}
+function saveSet(p){SET={...SET,...p};try{localStorage.setItem("tr-set",JSON.stringify(SET))}catch(e){}applySet()}
+applySet();
+function openSettings(){
+  const seg=(k,opts)=>`<div class="seg" data-k="${k}">${opts.map(([v,l])=>`<button data-v="${v}" class="${String(SET[k])===String(v)?"on":""}">${l}</button>`).join("")}</div>`;
+  const tog=(k,l,d)=>`<label class="tgl"><span><b>${l}</b>${d?`<small>${d}</small>`:""}</span><input type="checkbox" data-t="${k}" ${SET[k]?"checked":""}></label>`;
+  openInfoModal("⚙️ Ayarlar",`<div class="fl">Yazı boyutu</div>${seg("fs",[[14,"Küçük"],[16,"Normal"],[18,"Büyük"],[21,"Çok büyük"]])}
+    <div class="fl">Tema rengi</div><div class="seg col" data-k="theme">${Object.entries(THEMES).map(([k,[c,l]])=>`<button data-v="${k}" class="${SET.theme===k?"on":""}" style="--c:${c}"><i></i>${l}</button>`).join("")}</div>
+    <div class="fl">Sohbet duvar kâğıdı</div>${seg("wall",Object.entries(WALLS))}
+    <div class="fl">Sesli mesaj hızı</div>${seg("vspeed",[[1,"1x"],[1.5,"1,5x"],[2,"2x"]])}
+    ${tog("autoImg","Fotoğrafları otomatik indir","Kapalıyken fotoğraflar dokununca iner (düşük internet / veri tasarrufu)")}
+    ${tog("vib","Titreşim","Oyunda sıra gelince ve mesajda")}
+    ${tog("left","Solak modu","Oyun butonları sola geçer")}
+    ${tog("hidePush","Bildirimde içerik gizle","Kilit ekranında sadece \"Yeni mesaj\" yazar")}`);
+  $("#eBody").onclick=e=>{const b=e.target.closest(".seg button");if(!b)return;const k=b.closest(".seg").dataset.k;let v=b.dataset.v;if(k==="fs"||k==="vspeed")v=+v;saveSet({[k]:v});
+    b.closest(".seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));if(cur)renderMsgs()};
+  $("#eBody").onchange=e=>{const t=e.target.dataset.t;if(!t)return;saveSet({[t]:e.target.checked});if(t==="hidePush")setDoc(doc(fs,"private",me,"data","push"),{hide:e.target.checked},{merge:true}).catch(()=>{})};
+}
+/* ---------- kaydedilen mesajlar (kendine not) ---------- */
+async function loadNotes(){try{const s=await getDoc(doc(fs,"private",me,"data","notes"));return s.exists()&&Array.isArray(s.data().items)?s.data().items:[]}catch(e){return[]}}
+async function addNote(text){const items=await loadNotes();items.unshift({t:String(text).slice(0,4000),at:Date.now()});await setDoc(doc(fs,"private",me,"data","notes"),{items:items.slice(0,300)});}
+async function openNotes(){const items=await loadNotes();
+  openInfoModal("📝 Kaydedilen mesajlar",`<div class="row2"><input id="nIn" maxlength="4000" placeholder="Kendine not yaz…"><button id="nAdd" style="background:var(--brand)">Ekle</button></div>
+    <div id="nList">${items.length?items.map((x,i)=>`<div class="pk note"><div style="flex:1;white-space:pre-wrap">${linkify(esc(x.t))}<div class="isub">${new Date(x.at).toLocaleString("tr-TR",{dateStyle:"short",timeStyle:"short"})}</div></div><button data-del="${i}" class="lnk">✕</button></div>`).join(""):'<div class="empty">Henüz kayıt yok. Mesajlara uzun basıp “Kaydet” diyebilir ya da buraya not yazabilirsin. Notlar sadece sende görünür.</div>'}</div>`);
+  $("#nAdd").onclick=async()=>{const v=$("#nIn").value.trim();if(!v)return;await addNote(v);openNotes()};
+  $("#nList").onclick=async e=>{const b=e.target.closest("[data-del]");if(!b)return;const it=await loadNotes();it.splice(+b.dataset.del,1);await setDoc(doc(fs,"private",me,"data","notes"),{items:it});openNotes()}}
+/* ---------- bağlantılar ---------- */
+function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
+function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
+  if(!/^https?:$/.test(u.protocol))return"";const host=u.hostname.replace(/^www\./,"");
+  return`<a class="lcard" href="${esc(u.href)}" target="_blank" rel="noopener noreferrer nofollow"><i class="lci">🔗</i><span><b>${esc(host)}</b><small>${esc((u.pathname+u.search).slice(0,60))}</small></span></a>`}
 
 /* ---------- helpers ---------- */
 function hash(s){let h=0;for(const c of s)h=(h*31+c.codePointAt(0))|0;return Math.abs(h)}
@@ -362,8 +403,13 @@ function renderChatHeader(){
 }
 function bubbleBody(m,c){
   if(!c)return(m.id in plain)?'<i style="opacity:.7">🔒 Bu mesaj çözülemedi</i>':'<i style="opacity:.6">🔒 …</i>';
+  if(c.t==="img"&&c.once){
+    if(m.from===me)return`<div class="oncemsg">① Tek seferlik fotoğraf</div>`;
+    if(prefs.oncev.includes(m.id))return`<div class="oncemsg dim">① Fotoğraf açıldı</div>`;
+    return`<div class="oncemsg" data-once="${esc(m.id)}">① Tek seferlik fotoğrafı aç</div>`}
   if(c.t==="img"){
     if(c._local)return`<img class="media" src="${esc(c._local)}" alt="Fotoğraf">`;
+    if(!SET.autoImg&&!mediaUrl[m.id])return`<div class="mload tap" data-tapmedia="${esc(m.id)}"${c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:""}>📷 Fotoğrafı indirmek için dokun</div>`;
     const ar=c.w&&c.h?` style="aspect-ratio:${+c.w}/${+c.h};height:auto"`:"";
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
@@ -374,8 +420,13 @@ function bubbleBody(m,c){
     if(c._local)return`<audio controls src="${esc(c._local)}"></audio>`;
     return`<div class="mload" style="height:44px" data-media="${esc(m.id)}">🎤 Yükleniyor… ${c.dur?fmtDur(c.dur):""}</div>`;
   }
-  return esc(c.text);
+  return linkify(esc(c.text))+linkCard(c.text);
 }
+$("#msgs").addEventListener("click",async e=>{
+  const tm=e.target.closest("[data-tapmedia]");if(tm){tm.dataset.media=tm.dataset.tapmedia;tm.removeAttribute("data-tapmedia");tm.textContent="📷 Yükleniyor…";hydrateMedia();return}
+  const on=e.target.closest("[data-once]");if(on){const id=on.dataset.once;on.textContent="Açılıyor…";const url=await loadMedia(id);if(!url){toast("Açılamadı");return}
+    savePrefs({oncev:[...prefs.oncev,id].slice(-300)});openViewer(url,{once:true})}
+});
 function renderMsgs(){
   if(!cur)return;
   const box=$("#msgs"),atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<120;
@@ -456,7 +507,7 @@ function openMsgSheet(id){
   sheetFor=id;const mine=m.from===me,isText=c.t==="text",canEdit=mine&&isText&&Date.now()-m.at<15*60e3;
   const myRx=m.rx&&m.rx[me];
   $("#msheet").innerHTML=`<div class="rxrow">${RX.map(x=>`<button data-rx="${x}" class="${myRx===x?"on":""}">${x}</button>`).join("")}</div>
-    <button data-ma="reply">↩️ Yanıtla</button><button data-ma="fwd">↪️ İlet</button>${isText?'<button data-ma="copy">📋 Kopyala</button>':""}
+    <button data-ma="reply">↩️ Yanıtla</button><button data-ma="fwd">↪️ İlet</button>${isText?'<button data-ma="copy">📋 Kopyala</button><button data-ma="note">📝 Kaydet (notlarım)</button>':""}
     ${canEdit?'<button data-ma="edit">✏️ Düzenle</button>':""}<button data-ma="star">${prefs.star.includes(id)?"☆ Yıldızı kaldır":"⭐ Yıldızla"}</button>
     <button data-ma="pin">${prefs.pinMsg[cur]===id?"📌 Sabitlemeyi kaldır":"📌 Sabitle"}</button>
     <button data-ma="delme">🗑️ Benden sil</button>${mine?'<button data-ma="delall" class="danger">🗑️ Herkesten sil</button>':""}
@@ -475,6 +526,7 @@ $("#msheet").addEventListener("click",async e=>{
   const r=e.target.closest("[data-rx]");if(r){closeSheet();react(id,r.dataset.rx);return}
   const b=e.target.closest("[data-ma]");if(!b)return;const a=b.dataset.ma;closeSheet();
   if(a==="reply"){replyTo={id,from:m.from,p:previewText(c).slice(0,120)};renderReplyBar();$("#msgInput").focus()}
+  if(a==="note"){try{await addNote(c.text||"");toast("Notlarına kaydedildi")}catch(err){toast("Kaydedilemedi")}}
   if(a==="copy"){try{await navigator.clipboard.writeText(c.text||"");toast("Kopyalandı")}catch(err){toast("Kopyalanamadı")}}
   if(a==="star"){const st=prefs.star.includes(id)?prefs.star.filter(x=>x!==id):[...prefs.star,id].slice(-300);savePrefs({star:st})}
   if(a==="pin"){const pm={...prefs.pinMsg};if(pm[cur]===id)delete pm[cur];else pm[cur]=id;savePrefs({pinMsg:pm})}
@@ -497,7 +549,7 @@ $("#msheet").addEventListener("click",async e=>{
   const box=$("#msgs");
   box.addEventListener("contextmenu",e=>{const b=e.target.closest(".b[data-mid]");if(!b)return;e.preventDefault();openMsgSheet(b.dataset.mid)});
   box.addEventListener("touchstart",e=>{const b=e.target.closest(".b[data-mid]");if(!b)return;lpx=e.touches[0].clientX;lpy=e.touches[0].clientY;
-    lp=setTimeout(()=>{lp=null;try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}openMsgSheet(b.dataset.mid)},480)},{passive:true});
+    lp=setTimeout(()=>{lp=null;try{SET.vib&&navigator.vibrate&&navigator.vibrate(15)}catch(_){}openMsgSheet(b.dataset.mid)},480)},{passive:true});
   box.addEventListener("touchmove",e=>{if(lp&&(Math.abs(e.touches[0].clientX-lpx)>8||Math.abs(e.touches[0].clientY-lpy)>8)){clearTimeout(lp);lp=null}},{passive:true});
   box.addEventListener("touchend",()=>{if(lp){clearTimeout(lp);lp=null}});
   box.addEventListener("click",e=>{
@@ -555,7 +607,7 @@ $("#msheet").addEventListener("click",e=>{
 });
 {let lp=null;const list=$("#pane-chats");
   list.addEventListener("contextmenu",e=>{const r=e.target.closest(".row[data-open]");if(!r)return;e.preventDefault();openChatSheet(r.dataset.open)});
-  list.addEventListener("touchstart",e=>{const r=e.target.closest(".row[data-open]");if(!r)return;lp=setTimeout(()=>{lp=null;suppressClick=true;try{navigator.vibrate&&navigator.vibrate(15)}catch(_){}openChatSheet(r.dataset.open)},520)},{passive:true});
+  list.addEventListener("touchstart",e=>{const r=e.target.closest(".row[data-open]");if(!r)return;lp=setTimeout(()=>{lp=null;suppressClick=true;try{SET.vib&&navigator.vibrate&&navigator.vibrate(15)}catch(_){}openChatSheet(r.dataset.open)},520)},{passive:true});
   ["touchmove","touchend"].forEach(t=>list.addEventListener(t,()=>{if(lp){clearTimeout(lp);lp=null}},{passive:true}));
 }
 let suppressClick=false;
@@ -936,6 +988,8 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="views")openViews();
   if(a==="delacct")askDeleteAccount();
   if(a==="starred")openStarred();
+  if(a==="settings")openSettings();
+  if(a==="notes")openNotes();
   if(a==="sound"){const m=localStorage.getItem("tr-mute")==="1";localStorage.setItem("tr-mute",m?"0":"1");toast(m?"🔊 Sesler açıldı":"🔇 Sesler kapatıldı");if(m)sfx("coin")}
   if(a==="privacy2")openPrivacy();
   if(a==="terms")window.open("/kosullar.html","_blank");
@@ -1069,6 +1123,8 @@ $("#composer").onsubmit=async e=>{e.preventDefault();
 
 /* ---------- fotoğraf ---------- */
 $("#photoBtn").onclick=()=>$("#photoInput").click();
+// uzun basınca: tek seferlik fotoğraf
+{let t=null;$("#photoBtn").addEventListener("pointerdown",()=>{t=setTimeout(()=>{t=null;window.__onceNext=true;toast("① Tek seferlik fotoğraf: bir kez açılabilir",2500);$("#photoInput").click()},550)});["pointerup","pointerleave","pointercancel"].forEach(ev=>$("#photoBtn").addEventListener(ev,()=>{if(t){clearTimeout(t);t=null}}))}
 $("#photoInput").onchange=async e=>{
   const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!cur)return;
   if(!f.type.startsWith("image/")){toast("Lütfen bir fotoğraf seç");return}
@@ -1077,7 +1133,8 @@ $("#photoInput").onchange=async e=>{
     toast("Fotoğraf hazırlanıyor…",1500);
     const {blob,w,h}=await compressImage(f,1600,0.82);
     if(blob.size>CHUNK*8){toast("Fotoğraf çok büyük");return}
-    await sendContent(conv,{t:"img"},{blob,mime:blob.type,meta:{w,h}});
+    const once=!!window.__onceNext;window.__onceNext=false;
+    await sendContent(conv,once?{t:"img",once:true}:{t:"img"},{blob,mime:blob.type,meta:{w,h}});
   }catch(err){toast("Fotoğraf açılamadı")}
 };
 async function compressImage(file,maxSide,q){
@@ -1180,7 +1237,7 @@ onAuthStateChanged(auth,async u=>{
 
   watchUser(me);
   unsubs.push(onSnapshot(doc(fs,"private",me,"data","prefs"),s=>{const x=s.exists()?s.data():{};
-    prefs={mute:x.mute&&typeof x.mute==="object"?x.mute:{},arch:Array.isArray(x.arch)?x.arch:[],pin:Array.isArray(x.pin)?x.pin:[],fav:Array.isArray(x.fav)?x.fav:[],star:Array.isArray(x.star)?x.star:[],pinMsg:x.pinMsg&&typeof x.pinMsg==="object"?x.pinMsg:{},noRead:!!x.noRead,vis:["all","friends","none"].includes(x.vis)?x.vis:"all"};
+    prefs={mute:x.mute&&typeof x.mute==="object"?x.mute:{},arch:Array.isArray(x.arch)?x.arch:[],pin:Array.isArray(x.pin)?x.pin:[],fav:Array.isArray(x.fav)?x.fav:[],star:Array.isArray(x.star)?x.star:[],pinMsg:x.pinMsg&&typeof x.pinMsg==="object"?x.pinMsg:{},noRead:!!x.noRead,vis:["all","friends","none"].includes(x.vis)?x.vis:"all",oncev:Array.isArray(x.oncev)?x.oncev.slice(-300):[]};
     renderAll();beat(true)},()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"blocks"),where("by","==",me)),s=>{
     const next={};s.docs.forEach(d=>{const t=d.data()?.target;if(typeof t==="string")next[t]=true});blocked=next;renderAll();
@@ -1371,6 +1428,10 @@ async function endCall(state){
 }
 $("#csAccept").onclick=acceptCall;
 $("#csDecline").onclick=declineCall;
+$("#csDeclineMsg").onclick=()=>{const c=call;if(!c)return;const peer=c.peer;
+  openInfoModal("💬 Mesajla reddet",["Şu an konuşamıyorum, sonra ararım.","Toplantıdayım, mesaj atar mısın?","Yoldayım, birazdan dönerim.","Müsait değilim 🙏"].map((t,i)=>`<div class="pk" data-q="${i}" style="cursor:pointer">${esc(t)}</div>`).join(""));
+  const Q=["Şu an konuşamıyorum, sonra ararım.","Toplantıdayım, mesaj atar mısın?","Yoldayım, birazdan dönerim.","Müsait değilim 🙏"];
+  $("#eBody").onclick=async e=>{const r=e.target.closest("[data-q]");if(!r)return;closeE();await declineCall();if(peer)sendContent(peer,{t:"text",text:Q[+r.dataset.q]})}};
 $("#csHang").onclick=()=>endCall(call&&call.phase==="dialing"?"missed":"ended");
 $("#csMute").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csMute").classList.toggle("on",!t.enabled)};
 $("#csCam").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csCam").classList.toggle("on",!t.enabled)};
@@ -1452,10 +1513,10 @@ function sfx(kind){
   try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const t=actx.currentTime;
     const tone=(f,d,type="sine",v=.12,at=0)=>{const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.value=f;g.gain.setValueAtTime(v,t+at);g.gain.exponentialRampToValueAtTime(.001,t+at+d);o.connect(g);g.connect(actx.destination);o.start(t+at);o.stop(t+at+d)};
     if(kind==="tile")tone(520,.06,"square",.05);
-    else if(kind==="turn"){tone(660,.12);tone(880,.16,"sine",.12,.12);try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
+    else if(kind==="turn"){tone(660,.12);tone(880,.16,"sine",.12,.12);try{SET.vib&&navigator.vibrate&&navigator.vibrate(60)}catch(e){}}
     else if(kind==="ball")tone(1200,.04,"triangle",.1);
     else if(kind==="coin"){tone(988,.08,"square",.06);tone(1319,.25,"square",.06,.08)}
-    else if(kind==="win"){[523,659,784,1047].forEach((f,i)=>tone(f,.2,"triangle",.12,i*.12));try{navigator.vibrate&&navigator.vibrate([80,60,120])}catch(e){}}
+    else if(kind==="win"){[523,659,784,1047].forEach((f,i)=>tone(f,.2,"triangle",.12,i*.12));try{SET.vib&&navigator.vibrate&&navigator.vibrate([80,60,120])}catch(e){}}
     else if(kind==="spin")for(let i=0;i<24;i++)tone(900,.02,"square",.03,i*.15*(1+i/30));
   }catch(e){}
 }
