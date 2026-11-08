@@ -5,6 +5,7 @@
 // Çağrı CRON_SECRET ile korunur (Vercel Cron bu başlığı kendisi gönderir).
 import { admin, json } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
+import { FieldValue } from "firebase-admin/firestore";
 
 async function payTop(db, kind, period, prizes) {
   const flag = db.doc(`rewards/${kind}_${period}`);
@@ -54,6 +55,40 @@ async function refundStale(db) {
   return { kind: "refund", games: n };
 }
 
+// Akşam turnuvası ödülleri (gece 00:01'de dünün turnuvası)
+async function settleTour(db, day) {
+  const flag = db.doc(`rewards/tour_${day}`);
+  if ((await flag.get()).exists) return { kind: "tour", day, skipped: true };
+  const q = await db.collection(`tour/${day}/p`).get();
+  const all = q.docs.map((d) => ({ uid: d.id, ...d.data() }));
+  const n = all.length;
+  const ranked = all.filter((x) => (x.points || 0) > 0).sort((a, b) => (b.points - a.points) || ((b.wins || 0) - (a.wins || 0)) || ((a.at || 0) - (b.at || 0)));
+  // Katılımcı sayısı 3'ün altındaysa ya da kimse puan almadıysa ücretler iade edilir
+  const refund = n < 3 || !ranked.length;
+  const gross = n * E.TOUR.fee, rake = refund ? 0 : Math.round(gross * E.RAKE), pool = gross - rake;
+  const paid = [];
+  const pay = async (uid, amount, label, rank) => db.runTransaction(async (tx) => {
+    const ref = db.doc(`wallets/${uid}`); const ws = await tx.get(ref); const w = ws.exists ? ws.data() : E.newWallet();
+    if (w.tourPaid === day) return;
+    w.tourPaid = day; w.lastTour = { day, rank, of: n, amount, refund };
+    if (amount) E.credit(tx, db, uid, w, amount, label);
+    tx.set(ref, w);
+  });
+  if (refund) { for (const p of all) { await pay(p.uid, E.TOUR.fee, `Akşam turnuvası iadesi (${day})`, 0); paid.push({ uid: p.uid, amount: E.TOUR.fee }); } }
+  else {
+    const shares = E.TOUR.split.slice(0, ranked.length); const tot = shares.reduce((a, x) => a + x, 0);
+    for (let i = 0; i < ranked.length; i++) {
+      const amt = i < shares.length ? Math.floor(pool * shares[i] / tot) : 0;
+      await pay(ranked[i].uid, amt, `Akşam turnuvası ${i + 1}.lik ödülü (${day})`, i + 1);
+      if (amt) paid.push({ uid: ranked[i].uid, rank: i + 1, amount: amt });
+    }
+    for (const p of all.filter((x) => !(x.points > 0))) await pay(p.uid, 0, "", 0);
+    await db.doc("house/stats").set({ net: FieldValue.increment(rake), rake: FieldValue.increment(rake) }, { merge: true });
+  }
+  await flag.set({ at: Date.now(), n, pool, rake, refund, paid });
+  return { kind: "tour", day, n, pool, refund };
+}
+
 // Haftalık lig kapanışı (pazartesi gecesi): ödüller, yükselme ve düşme
 async function settleLeague(db, wk) {
   const flag = db.doc(`rewards/league_${wk}`);
@@ -98,6 +133,7 @@ export default async (req) => {
   const y = E.trDate(Date.now() - 10 * 60 * 1000);
   const today = E.trDate();
   const out = [await payTop(db, "day", y.day, E.DAILY_PRIZES)];
+  out.push(await settleTour(db, y.day));
   if (today.dom === 1) out.push(await payTop(db, "month", y.month, E.MONTHLY_PRIZES));
   if (today.dow === 0) out.push(await settleLeague(db, E.weekId(Date.now() - 10 * 60 * 1000)));
   out.push(await refundStale(db));

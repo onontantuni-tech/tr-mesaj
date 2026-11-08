@@ -68,7 +68,7 @@ export const botSkillForLevel = (lvl) => (lvl >= 10 ? 2 : lvl >= 4 ? 1 : 0);
 export function trDate(ms = Date.now()) {
   const d = new Date(ms + 3 * 3600 * 1000);
   const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, "0"), day = String(d.getUTCDate()).padStart(2, "0");
-  return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate(), dow: (d.getUTCDay() + 6) % 7 };
+  return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate(), dow: (d.getUTCDay() + 6) % 7, hour: d.getUTCHours() };
 }
 
 // ---- Haftalık lig: Bronz → Gümüş → Altın → Elmas. Hafta pazartesi 00:00 (TR) başlar. ----
@@ -90,6 +90,15 @@ export function leaguePoints({ won, draw, stake, opp, points }) {
   if (!(stake > 0) && !(opp && opp.length)) return 0;
   if (draw) return 1;
   return won ? (points || 2) * (stake > 0 ? 2 : 1) : 1;
+}
+// ---- Akşam turnuvası: her gün 20:00–23:00 (TR). Katılım ücreti ödenir, pencere içindeki oyunlar puan getirir.
+// Ödül havuzu = katılım ücretleri (%5 kasa kesintisiyle); ilk 3'e %50 / %30 / %20.
+export const TOUR = { fee: 10000, start: 20, end: 23, joinUntil: 22, split: [0.5, 0.3, 0.2] };
+export function tourOpen(ms = Date.now()) { const h = trDate(ms).hour; return h >= TOUR.start && h < TOUR.end; }
+export function addTour(tx, db, uid, wl, pts, won) {
+  const d = trDate();
+  if (!pts || wl.tourDay !== d.day || !tourOpen()) return;
+  tx.set(db.doc(`tour/${d.day}/p/${uid}`), { points: FieldValue.increment(pts), wins: FieldValue.increment(won ? 1 : 0), games: FieldValue.increment(1) }, { merge: true });
 }
 export function addLeague(tx, db, uid, wl, pts, won) {
   if (!pts) return;
@@ -157,7 +166,9 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   if (won) wl.wins = (wl.wins || 0) + 1;
   wl.xp = (wl.xp || 0) + (won ? XP_WIN : XP_PLAY);
   addStats(tx, db, uid, won ? points || 2 : 0, won);
-  addLeague(tx, db, uid, wl, leaguePoints({ won, draw, stake, opp, points }), won);
+  const lp = leaguePoints({ won, draw, stake, opp, points });
+  addLeague(tx, db, uid, wl, lp, won);
+  addTour(tx, db, uid, wl, lp, won);
   // galibiyet serisi (sadece jetonlu masalarda; ücretsiz masada bilgisayarı yenip jeton toplanmasın)
   if (won && stake > 0) {
     wl.winStreak = (wl.winStreak || 0) + 1;

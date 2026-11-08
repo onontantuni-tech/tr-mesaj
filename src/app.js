@@ -1559,6 +1559,7 @@ function renderGamesTab(){
   <div class="gbtns">
     ${(wallet.balance||0)<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today?`<button data-g="rescue" class="hot" style="grid-column:span 2;background:#fff4d6"><span>🆘</span>Jetonun bitti mi? ${fmtCoin(catalog?.rescue?.amount||10000)} jeton desteği al<i class="dot"></i></button>`:""}
     ${(()=>{const L=(catalog?.leagues||[])[wallet.league||0];return L?`<button data-g="league" class="lgbtn lg${wallet.league||0}" style="grid-column:span 2"><span>${L.icon}</span>${esc(L.name)} ligi<small>Hafta bitimine ${fmtWait(weekLeft())} · ilk 3'e ${fmtCoin(L.prizes[0])} jetona kadar ödül</small></button>`:""})()}
+    ${catalog?.tour?`<button data-g="tour" class="tourbtn" style="grid-column:span 2"><span>🏟️</span>Akşam turnuvası<small>${esc(tourState().label)}</small></button>`:""}
     <button data-g="daily" class="${dailyAvailable()?"hot":""}"><span>🎁</span>Günlük hediye${dailyAvailable()?'<i class="dot"></i>':""}</button>
     <button data-g="spin" class="${wallet.spinDay!==wallet.today?"hot":""}"><span>🎡</span>Günlük çark${wallet.spinDay!==wallet.today?'<i class="dot"></i>':""}</button>
     <button data-g="chest" class="${chestLeft()<=0?"hot":""}"><span>🧰</span><span class="chestlbl" style="font-size:inherit">${chestLeft()<=0?"Sandık hazır!":"Sandık · "+fmtWait(chestLeft())}</span>${chestLeft()<=0?'<i class="dot"></i>':""}</button>
@@ -1579,7 +1580,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -1589,6 +1590,7 @@ function notifItems(){const it=[];
   if(wallet){
     if(dailyAvailable())it.push({ic:"🎁",t:"Günlük hediyen hazır",go:()=>openDaily(),at:0});
     if(chestLeft()<=0)it.push({ic:"🧰",t:"Sandığın hazır, açmayı unutma",go:()=>claimGift("chest"),at:0});
+    if(catalog?.tour){const ts=tourState();if(ts.phase==="live"&&(ts.joined||trHour()<catalog.tour.joinUntil))it.push({ic:"🏟️",t:ts.joined?"Akşam turnuvası başladı, puan toplamaya başla":"Akşam turnuvası başladı, hâlâ katılabilirsin",go:()=>openTour(),at:1})}
     const td=(wallet.tasks||[]).filter(t=>t.done&&!t.claimed).length;
     if(td)it.push({ic:"✅",t:`${td} görev tamamlandı, ödülünü al`,go:()=>openTasks(),at:0});
     if(wallet.balance!=null&&wallet.balance<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today)it.push({ic:"🛟",t:"Jetonun azaldı, kurtarma hediyesini alabilirsin",go:()=>claimGift("rescue"),at:0});
@@ -1622,6 +1624,36 @@ function openSkins(){
 }
 function weekLeft(){const d=new Date(Date.now()+3*3600e3);const dow=(d.getUTCDay()+6)%7;
   const end=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-dow+7)-3*3600e3;return end-Date.now()}
+function trHour(){return new Date(Date.now()+3*3600e3).getUTCHours()}
+function tourState(){const T=catalog.tour,h=trHour(),joined=wallet.tourDay===wallet.today;
+  if(h<T.start)return{phase:"pre",joined,label:joined?`Kaydın tamam · ${T.start}:00'de başlıyor`:`Bugün ${T.start}:00–${T.end}:00 · katılım ${fmtCoin(T.fee)} jeton`};
+  if(h<T.end)return{phase:"live",joined,label:joined?`Devam ediyor · ${T.end}:00'e kadar oyna, puan topla`:h<T.joinUntil?`Başladı! ${T.joinUntil}:00'ye kadar katılabilirsin`:`Son saat · yeni katılım kapandı`};
+  return{phase:"post",joined,label:`Bitti · yarın ${T.start}:00'de yenisi`}}
+let tourUnsub=null;
+function openTour(){
+  const T=catalog.tour,st=tourState(),day=wallet.today,lt=wallet.lastTour;
+  const last=lt&&lt.day!==day?`<div class="pk" style="display:block;margin-bottom:8px"><b>Son turnuvan:</b> ${lt.refund?"yeterli katılım olmadığı için ücretin iade edildi":lt.rank?`${lt.rank}. oldun (${lt.of} kişi)${lt.amount?` · +${fmtCoin(lt.amount)} jeton`:""}`:"puan alamadın"}</div>`:"";
+  const canJoin=!st.joined&&trHour()<T.joinUntil;
+  openInfoModal("🏟️ Akşam turnuvası",`${last}<div class="tourhead"><div><b>${T.start}:00 – ${T.end}:00</b><span>Her akşam</span></div><div><b id="tPool">…</b><span>Ödül havuzu</span></div><div><b id="tN">…</b><span>Katılımcı</span></div></div>
+    <div class="isub" style="margin:8px 0">Katılım ${fmtCoin(T.fee)} jeton. Turnuva saatinde oynadığın oyunlar puan getirir (arkadaşlarınla ya da jetonlu masalarda; galibiyet jetonlu masada 2 kat). Havuzun %${Math.round((catalog.rake||.05)*100)}'i kasaya kalır, kalanı ilk 3'e %50 / %30 / %20 dağıtılır. 3'ten az kişi katılırsa ücretler iade edilir. Ödüller gece 00:01'de yüklenir.</div>
+    ${canJoin?`<div class="row2"><button id="tJoin" style="background:var(--brand)">Katıl · ${fmtCoin(T.fee)} jeton</button></div>`:st.joined?`<div class="pk" style="justify-content:center">✅ Kayıtlısın${st.phase==="pre"?` · ${T.start}:00'de başlıyor`:st.phase==="live"?" · hadi oyna!":""}</div>`:""}
+    <div class="fl" style="margin-top:8px">Sıralama</div><div id="lbList"><div class="empty">Yükleniyor…</div></div>`);
+  if($("#tJoin"))$("#tJoin").onclick=async()=>{
+    if(!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu turnuva 18 yaş üstüne açık",3000);else askAge(openTour);return}
+    if((wallet.balance||0)<T.fee){toast("Yeterli jetonun yok");return}
+    $("#tJoin").disabled=true;
+    try{const r=await callApi("/api/wallet",{action:"tjoin"});applyWallet({...wallet,...r.wallet});toast("Turnuvaya katıldın 🎉");openTour()}
+    catch(e){$("#tJoin").disabled=false;toast(e.status===409?"Katılım şu an kapalı":"Katılınamadı")}};
+  if(tourUnsub)tourUnsub();if(lbUnsub)lbUnsub();
+  tourUnsub=onSnapshot(doc(fs,"tour",day),s=>{const n=s.exists()?(+s.data().n||0):0;const pool=Math.round(n*T.fee*(1-(catalog.rake||.05)));
+    if($("#tPool"))$("#tPool").textContent=fmtCoin(pool);if($("#tN"))$("#tN").textContent=n},()=>{});
+  lbUnsub=onSnapshot(query(collection(fs,"tour",day,"p"),orderBy("points","desc"),limit(100)),s=>{
+    const rows=s.docs.map(d=>({uid:d.id,...d.data()}));rows.forEach(r=>watchUser(r.uid));
+    const el=$("#lbList");if(!el)return;
+    el.innerHTML=rows.length?rows.map((r,i)=>`<div class="lbrow ${r.uid===me?"me":""}"><span class="rk">${(r.points||0)>0&&i<3?["🥇","🥈","🥉"][i]:i+1}</span>${avHTML(r.uid)}<span class="nm">${esc(r.uid===me?"Sen":realName(r.uid))}${vipMark(r.uid)}</span><span class="isub">${r.games||0} oyun</span><span class="pt">${fmtCoin(r.points||0)} p</span></div>`).join(""):'<div class="empty">Henüz katılan yok. İlk sen katıl!</div>';
+  },()=>{});
+}
+$("#eClose").addEventListener("click",()=>{if(tourUnsub){tourUnsub();tourUnsub=null}});
 function openLeague(){
   const Ls=catalog?.leagues||[],t=wallet.league||0,L=Ls[t];if(!L)return;
   const mv=Math.round((catalog.leagueMove||.2)*100),ll=wallet.lastLeague;

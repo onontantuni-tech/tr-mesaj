@@ -1,6 +1,7 @@
 // Cüzdan: bakiye, seviye, desenler. Hoş geldin hediyesi ilk girişte bir kez verilir.
 import { admin, json, requireUser } from "../lib/admin.mjs";
 import * as E from "../lib/economy.mjs";
+import { FieldValue } from "firebase-admin/firestore";
 import { migrateFriends } from "../lib/friends.mjs";
 
 export default async (req) => {
@@ -97,6 +98,18 @@ export default async (req) => {
         gift = { amount: E.RESCUE.amount };
       }
       // Günlük çark: sonuç sunucuda belirlenir
+      // Akşam turnuvasına katıl
+      if (act === "tjoin") {
+        const d = E.trDate();
+        if (w.tourDay === d.day) return { status: 409, body: { error: "joined", wallet: view(w) } };
+        if (d.hour >= E.TOUR.joinUntil) return { status: 409, body: { error: "closed", wallet: view(w) } };
+        if (!w.adult) return { status: 403, body: { error: "age" } };
+        if ((w.balance || 0) < E.TOUR.fee) return { status: 402, body: { error: "balance", wallet: view(w) } };
+        E.credit(tx, db, uid, w, -E.TOUR.fee, `Akşam turnuvası katılımı (${d.day})`);
+        w.tourDay = d.day;
+        tx.set(db.doc(`tour/${d.day}/p/${uid}`), { points: 0, wins: 0, games: 0, at: Date.now() }, { merge: true });
+        tx.set(db.doc(`tour/${d.day}`), { n: FieldValue.increment(1) }, { merge: true });
+      }
       if (act === "spin") {
         const today = E.trDate().day;
         if (w.spinDay === today) return { status: 409, body: { error: "spun", wallet: view(w) } };
@@ -216,8 +229,9 @@ function view(w) {
     chestAt: w.chestAt || 0, chestEvery: E.CHEST.every, rescueDay: w.rescueDay || "", spinDay: w.spinDay || "", winStreak: w.winStreak || 0,
     tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
+    tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR },
   };
 }
 
