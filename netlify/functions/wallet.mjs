@@ -211,6 +211,15 @@ export default async (req) => {
         }
         w.club = null;
       }
+      // Harcama iadesi (dünkü harcamaya göre)
+      if (act === "cashback") {
+        const v = E.spendView(w);
+        if (v.claimed) return { status: 409, body: { error: "claimed", wallet: view(w) } };
+        if (!v.amount) return { status: 409, body: { error: "none", wallet: view(w) } };
+        E.credit(tx, db, uid, w, v.amount, `Harcama iadesi (%${Math.round(v.rate * 100)})`);
+        w.cbDay = E.trDate().day;
+        gift = { amount: v.amount };
+      }
       // Sanal hediye (çay, gül, taç…): jetonla alınır, arkadaşın profiline eklenir. Jeton transferi değildir.
       if (act === "gift") {
         const it = E.GIFTS.find((x) => x.id === b.id);
@@ -292,10 +301,10 @@ function view(w) {
     tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
     league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
     ach: w.ach || [], achStats: { wins: w.wins || 0, games: w.games || 0, maxStreak: w.maxStreak || 0, tw: w.tw || {}, marsN: w.marsN || 0, giftsSent: w.giftsSent || 0 },
-    club: w.club || null, vipLeft: w.vipLeft || 0,
+    club: w.club || null, vipLeft: w.vipLeft || 0, cb: E.spendView(w),
     tourDay: w.tourDay || "", hour: E.trDate().hour, lastTour: w.lastTour || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE, tour: E.TOUR, club: E.CLUB, cashback: E.CASHBACK, gifts: E.GIFTS, ach: E.ACH.map(({ id, icon, name, desc, prize }) => ({ id, icon, name, desc, prize })) },
   };
 }
 

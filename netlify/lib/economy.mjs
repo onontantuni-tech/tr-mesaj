@@ -94,7 +94,7 @@ export function leaguePoints({ won, draw, stake, opp, points }) {
 }
 // ---- Akşam turnuvası: her gün 20:00–23:00 (TR). Katılım ücreti ödenir, pencere içindeki oyunlar puan getirir.
 // Ödül havuzu = katılım ücretleri (%5 kasa kesintisiyle); ilk 3'e %50 / %30 / %20.
-export const TOUR = { fee: 10000, start: 20, end: 23, joinUntil: 22, split: [0.5, 0.3, 0.2] };
+export const TOUR = { fee: 100000, start: 20, end: 23, joinUntil: 22, split: [0.5, 0.3, 0.2] };
 export function tourOpen(ms = Date.now()) { const h = trDate(ms).hour; return h >= TOUR.start && h < TOUR.end; }
 export function addTour(tx, db, uid, wl, pts, won) {
   const d = trDate();
@@ -154,7 +154,28 @@ export function newWallet() {
 }
 
 // İşlem (transaction) içinde bakiye değiştir ve deftere yaz
+// Günlük harcama iadesi: dünkü harcamaya göre, ertesi gün butonla alınır
+export const CASHBACK = [
+  { min: 10000000, rate: 0.05 },
+  { min: 1000000, rate: 0.01 },
+  { min: 100000, rate: 0.01 },
+];
+export const cashbackRate = (spent) => (CASHBACK.find((x) => spent >= x.min) || { rate: 0 }).rate;
+// harcama sayacı: oyun masası ücretleri, turnuva katılımı, hediyeler, kulüp (iadeler ve yönetici işlemleri hariç)
+function trackSpend(w, amount) {
+  const day = trDate().day;
+  if (!w.sp || w.sp.day !== day) { if (w.sp && w.sp.day) w.spPrev = { day: w.sp.day, amt: w.sp.amt || 0 }; w.sp = { day, amt: 0 }; }
+  w.sp.amt += amount;
+}
+export function spendView(w) {
+  const { day } = trDate(), y = trDate(Date.now() - 86400000).day;
+  const today = w.sp && w.sp.day === day ? w.sp.amt : 0;
+  const yd = w.sp && w.sp.day === y ? w.sp.amt : w.spPrev && w.spPrev.day === y ? w.spPrev.amt : 0;
+  return { today, yesterday: yd, rate: cashbackRate(yd), amount: Math.floor(yd * cashbackRate(yd)), claimed: w.cbDay === day };
+}
 export function credit(tx, db, uid, wallet, delta, reason, by = "system") {
+  if (delta < 0 && by === "system") trackSpend(wallet, -delta);
+  else if (delta > 0 && /iade/i.test(reason) && !/^Harcama iadesi/.test(reason) && wallet.sp) wallet.sp.amt = Math.max(0, (wallet.sp.amt || 0) - delta);
   wallet.balance = Math.max(0, (wallet.balance || 0) + delta);
   tx.set(db.collection("ledger").doc(), { uid, delta, reason, by, at: Date.now(), after: wallet.balance });
 }
@@ -175,6 +196,10 @@ export const TASKS = [
   { id: "okey1", text: "1 el Okey oyna", need: (t) => t.okey >= 1, goal: (t) => [t.okey, 1], prize: 2000 },
   { id: "pool1", text: "1 Bilardo oyna", need: (t) => t.pool >= 1, goal: (t) => [t.pool, 1], prize: 2000 },
   { id: "win3", text: "3 oyun kazan", need: (t) => t.won >= 3, goal: (t) => [t.won, 3], prize: 15000 },
+  { id: "okeyW3", text: "Okey'de 3 galibiyet", need: (t) => (t.w?.okey || 0) >= 3, goal: (t) => [t.w?.okey || 0, 3], prize: 20000 },
+  { id: "poolW3", text: "Bilardoda 3 galibiyet", need: (t) => (t.w?.pool || 0) >= 3, goal: (t) => [t.w?.pool || 0, 3], prize: 20000 },
+  { id: "pistiW3", text: "Piştide 3 galibiyet", need: (t) => (t.w?.pisti || 0) >= 3, goal: (t) => [t.w?.pisti || 0, 3], prize: 20000 },
+  { id: "tavlaW3", text: "Tavlada 3 galibiyet", need: (t) => (t.w?.tavla || 0) >= 3, goal: (t) => [t.w?.tavla || 0, 3], prize: 20000 },
 ];
 export function todayTasks(w) {
   const day = trDate().day;
@@ -239,6 +264,7 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   // günlük görevler
   const t = todayTasks(wl);
   t.played++; if (won) t.won++; if (type === "pool") t.pool++; else if (type === "okey") t.okey++;
+  if (won) t.w = { ...(t.w || {}), [type]: ((t.w || {})[type] || 0) + 1 };
   wl.td = t;
   // oyun geçmişi
   checkAch(tx, db, uid, wl);

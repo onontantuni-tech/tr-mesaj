@@ -1829,6 +1829,7 @@ function renderGamesTab(){
     <button data-g="store"><span>🪙</span>Jeton al</button>
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
+    <button data-g="cb"><span>💸</span>Harcama iadesi${wallet.cb&&wallet.cb.amount&&!wallet.cb.claimed?'<i class="dot"></i>':""}</button>
     <button data-g="club"><span>🏛️</span>${wallet.club?"Kulübüm":"Kulüpler"}</button>
     <button data-g="ach"><span>🏅</span>Başarımlar ${(wallet.ach||[]).length}/${(catalog?.ach||[]).length||16}</button>
     <button data-g="ledger"><span>📜</span>Jeton hareketlerim</button>
@@ -1843,7 +1844,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -1907,6 +1908,12 @@ function openClub(){
     el.innerHTML=rows.length?rows.map((r,i)=>info[i]?`<div class="lbrow ${r.id===wallet.club?"me":""}"><span class="rk">${i<3?["🥇","🥈","🥉"][i]:i+1}</span><span class="cli sm">${esc(info[i].icon||"☕")}</span><span class="nm">${esc(info[i].name)}</span><span class="isub">${(info[i].members||[]).length} üye</span><span class="pt">${fmtCoin(r.points||0)} p</span></div>`:"").join(""):'<div class="isub">Bu hafta henüz puan alan kulüp yok</div>'},()=>{}));
 }
 $("#eClose").addEventListener("click",stopClub);
+function openCashback(){const c=wallet.cb||{today:0,yesterday:0,rate:0,amount:0,claimed:false},T=catalog?.cashback||[{min:10000000,rate:.05},{min:1000000,rate:.01},{min:100000,rate:.01}];
+  openInfoModal("💸 Harcama iadesi",`<p class="isub">Masa ücretleri, turnuva katılımı ve hediyeler için harcadığın jetonun bir kısmı ertesi gün iade edilir.</p>
+    ${[...T].reverse().map(x=>`<div class="pk"><b style="flex:1">${fmtCoin(x.min)}+ jeton harcama</b><span>%${Math.round(x.rate*100)} iade</span></div>`).join("")}
+    <div class="pk" style="display:block"><div>Dün harcadığın: <b>${fmtCoin(c.yesterday)}</b></div><div>Bugün harcadığın: <b>${fmtCoin(c.today)}</b> <span class="isub">(yarın iade alınır)</span></div></div>
+    <div class="row2"><button id="cbGo" style="background:var(--brand)" ${!c.amount||c.claimed?"disabled":""}>${c.claimed?"Bugünkü iade alındı ✓":c.amount?`İadeni al · +${fmtCoin(c.amount)} jeton`:"Dün için iade yok"}</button></div>`);
+  $("#cbGo").onclick=async()=>{$("#cbGo").disabled=true;try{const r=await callApi("/api/wallet",{action:"cashback"});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`💸 +${fmtCoin(r.gift.amount)} jeton iade`);renderGamesTab();openCashback()}catch(e){toast("Alınamadı");$("#cbGo").disabled=false}}}
 function openAch(){
   const A=catalog?.ach||[],have=new Set(wallet?.ach||[]);
   openInfoModal("🏅 Başarımlar",`<p class="isub">${have.size}/${A.length} başarım · her biri bir kez jeton ödülü verir ve profilinde rozet olarak görünür.</p>`+A.map(a=>`<div class="pk ach ${have.has(a.id)?"on":""}"><span class="ai">${a.icon}</span><div style="flex:1"><b>${esc(a.name)}</b><div class="isub">${esc(a.desc)}</div></div><span class="isub">${have.has(a.id)?"✅":"+"+fmtCoin(a.prize)}</span></div>`).join(""));
@@ -2453,7 +2460,14 @@ function renderTavla(d,my){
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
-  const me2=my>=0?my:0,op=1-me2,isMy=d.status==="play"&&d.turn===my&&!game.busy;
+  const me2=my>=0?my:0,op=1-me2;
+  // zar: otomatik ya da elle atılır (sonuç sunucuda belirlenir, burada gösterilir)
+  const tmode=localStorage.getItem("tr-tvmode")||"auto",dkey=d.seq+"-"+d.turn;
+  let needRoll=false,animDice=false;
+  if(d.status==="play"&&d.dice){
+    if(d.turn===my){if(game.tvRolled!==dkey){if(tmode==="auto"){game.tvRolled=dkey;animDice=true}else needRoll=true}}
+    else if(game.tvSeen!==dkey){game.tvSeen=dkey;animDice=true}}
+  const isMy=d.status==="play"&&d.turn===my&&!game.busy&&!needRoll;
   game.tvPath=game.tvPath||[];
   let r=TV.rel(d.tv,me2);for(const m of game.tvPath)r=TV.applyRel(r,m);
   const nx=isMy?tvNext(d,my):{next:[],done:false};
@@ -2466,6 +2480,8 @@ function renderTavla(d,my){
   const usedN=game.tvPath.length,dice=d.dice||[];const dl=dice.length?(dice[0]===dice[1]?[dice[0],dice[0],dice[0],dice[0]]:dice):[];
   const usedVals=game.tvPath.map(m=>m.d);const dUsed=dl.map(()=>false);usedVals.forEach(v=>{const k=dl.findIndex((x,i)=>x===v&&!dUsed[i]);if(k>=0)dUsed[k]=true});
   const pipsTxt=`${TV.pips(d.tv,me2)} / ${TV.pips(d.tv,op)}`;
+  const PIP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+  const dieH=(v,used,hide)=>`<span class="die ${used?"used":""} ${animDice?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${!hide&&PIP[v]&&PIP[v].includes(k)?"on":""}"></i>`).join("")}</span>`;
   const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>${i===me2?"⚪ beyaz":"⚫ siyah"} · ${(d.scores||[])[i]||0} sayı</span></div></div>`;
   let over="";
   if(d.status==="over"){const w=d.winner;over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}${d.mars?" · MARS!":""}</b><div style="font-size:13px;opacity:.85">Skor ${(d.scores||[0,0])[me2]} - ${(d.scores||[0,0])[op]}</div>
@@ -2475,8 +2491,9 @@ function renderTavla(d,my){
   $("#gTable").innerHTML=`<div class="ttable">${side(op,true)}
     <div class="tboard"><div class="trow top">${row([12,13,14,15,16,17],true,1)}</div><div class="trow top r">${row([18,19,20,21,22,23],true,8)}</div>${bar}
       <div class="trow bot">${row([11,10,9,8,7,6],false,1)}</div><div class="trow bot r">${row([5,4,3,2,1,0],false,8)}</div>${offT}</div>
-    <div class="tctl"><div class="tdice ${d.turn===my?"mine":""}">${dl.map((v,i)=>`<span class="die ${dUsed[i]?"used":""}">${["","⚀","⚁","⚂","⚃","⚄","⚅"][v]}</span>`).join("")}</div>
-      <div class="thint">${hint}<small>${esc(d.log||"")} · pip ${pipsTxt}</small></div>${isMy&&usedN?`<button id="tUndo">↶ Geri al</button>`:""}</div>
+    <div class="tctl"><div class="tdice ${d.turn===my?"mine":""}">${(needRoll?[1,1]:dl.slice(0,dice[0]===dice[1]?4:2)).map((v,i)=>dieH(v,!needRoll&&dUsed[i],needRoll)).join("")}</div>
+      ${needRoll?`<button id="tRoll">🎲 Zar at</button>`:`<div class="thint">${hint}<small>${esc(d.log||"")} · pip ${pipsTxt}</small></div>`}${isMy&&usedN?`<button id="tUndo">↶ Geri al</button>`:""}
+      ${my>=0?`<div class="tmode"><button data-tm="auto" class="${tmode==="auto"?"on":""}">Otomatik zar</button><button data-tm="manual" class="${tmode==="manual"?"on":""}">Elle zar at</button></div>`:""}</div>
     ${side(me2,false)}${over}</div>`;
   const bd=$(".tboard");if(bd)bd.onclick=e=>{if(!isMy)return;const el=e.target.closest("[data-p]");if(!el)return;const p=+el.dataset.p;
     if(game.tvSel!=null&&tgts.has(p)){const m=nx.next.find(x=>x.from===game.tvSel&&x.to===p);game.tvPath=[...game.tvPath,m];game.tvSel=null;sfx("tile");tvAfter(d,my);return}
@@ -2485,6 +2502,9 @@ function renderTavla(d,my){
       game.tvSel=game.tvSel===p?null:p;renderGame();return}
     game.tvSel=null;renderGame()};
   const u=$("#tUndo");if(u)u.onclick=()=>{game.tvPath=game.tvPath.slice(0,-1);game.tvSel=null;renderGame()};
+  const rb=$("#tRoll");if(rb)rb.onclick=()=>{game.tvRolled=dkey;sfx("ball");renderGame();setTimeout(()=>sfx("ball"),200)};
+  document.querySelectorAll(".tmode [data-tm]").forEach(b=>b.onclick=()=>{localStorage.setItem("tr-tvmode",b.dataset.tm);if(b.dataset.tm==="auto"&&d.turn===my)game.tvRolled=dkey;renderGame()});
+  if(animDice)setTimeout(()=>sfx("ball"),80);
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 function tvAfter(d,my){const nx=tvNext(d,my);
