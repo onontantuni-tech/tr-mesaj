@@ -100,6 +100,12 @@ export function addTour(tx, db, uid, wl, pts, won) {
   if (!pts || wl.tourDay !== d.day || !tourOpen()) return;
   tx.set(db.doc(`tour/${d.day}/p/${uid}`), { points: FieldValue.increment(pts), wins: FieldValue.increment(won ? 1 : 0), games: FieldValue.increment(1) }, { merge: true });
 }
+// ---- Kulüpler (kahvehaneler): en çok 30 üye; üyelerin lig puanları kulübün haftalık puanına eklenir ----
+export const CLUB = { price: 50000, max: 30, icons: ["☕", "🦅", "🐺", "🦁", "⚓", "🌙", "🔥", "⚡", "🎯", "👑", "🍀", "🏰"] };
+export function addClub(tx, db, wl, pts) {
+  if (!pts || !wl.club) return;
+  tx.set(db.doc(`club_week/${weekId()}/c/${wl.club}`), { points: FieldValue.increment(pts) }, { merge: true });
+}
 export function addLeague(tx, db, uid, wl, pts, won) {
   if (!pts) return;
   const wk = weekId(), tier = Math.max(0, Math.min(LEAGUES.length - 1, wl.league || 0));
@@ -210,6 +216,7 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   const lp = leaguePoints({ won, draw, stake, opp, points });
   addLeague(tx, db, uid, wl, lp, won);
   addTour(tx, db, uid, wl, lp, won);
+  addClub(tx, db, wl, lp);
   // galibiyet serisi (sadece jetonlu masalarda; ücretsiz masada bilgisayarı yenip jeton toplanmasın)
   if (won && stake > 0) {
     wl.winStreak = (wl.winStreak || 0) + 1;

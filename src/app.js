@@ -1597,6 +1597,7 @@ function renderGamesTab(){
     <button data-g="store"><span>🪙</span>Jeton al</button>
     <button data-g="rank"><span>🏆</span>Sıralama</button>
     <button data-g="skins"><span>🎨</span>Masa ve ıstaka</button>
+    <button data-g="club"><span>🏛️</span>${wallet.club?"Kulübüm":"Kulüpler"}</button>
     <button data-g="ach"><span>🏅</span>Başarımlar ${(wallet.ach||[]).length}/${(catalog?.ach||[]).length||16}</button>
     <button data-g="ledger"><span>📜</span>Jeton hareketlerim</button>
     <button data-g="history"><span>🕘</span>Oyun geçmişim</button>
@@ -1610,7 +1611,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -1640,6 +1641,40 @@ function openGift(peer){
       await sendContent(peer,{t:"gift",id:G.id});sfx("win");toast(`${G.icon} ${G.name} gönderildi`)}
     catch(err){toast(err.status===402?"Bakiyen yetmiyor":err.status===403?"Sadece arkadaşlarına hediye gönderebilirsin":"Gönderilemedi");openGift(peer)}};
 }
+let clubUnsubs=[];
+function stopClub(){clubUnsubs.forEach(u=>{try{u()}catch(e){}});clubUnsubs=[]}
+function openClub(){
+  stopClub();const C=catalog?.club||{price:50000,max:30,icons:["☕"]};
+  const top=`<div class="fl" style="margin-top:12px">Bu haftanın kulüpleri</div><div id="clTop"><div class="isub">Yükleniyor…</div></div>`;
+  if(!wallet.club){
+    openInfoModal("🏛️ Kulüpler",`<p class="isub">Arkadaşlarınla kulüp (kahvehane) kur. Üyelerin lig puanları kulübün haftalık puanına eklenir. En çok ${C.max} üye.</p>
+      <div class="fl">Kulübe katıl</div><div class="row2"><input id="clCode" maxlength="6" placeholder="Kulüp kodu (örn. K7M2QX)" style="text-transform:uppercase"><button id="clJoin" style="background:var(--brand)">Katıl</button></div>
+      <div class="fl" style="margin-top:10px">Yeni kulüp kur · ${fmtCoin(C.price)} jeton</div><input id="clName" maxlength="24" placeholder="Kulüp adı">
+      <div class="clicons">${C.icons.map((x,i)=>`<button data-ic="${x}" class="${i?"":"on"}">${x}</button>`).join("")}</div>
+      <div class="row2"><button id="clNew" style="background:#0E7C3A">Kur</button></div>${top}`);
+    let icon=C.icons[0];
+    $("#eBody").addEventListener("click",e=>{const b=e.target.closest("[data-ic]");if(!b)return;icon=b.dataset.ic;$("#eBody").querySelectorAll("[data-ic]").forEach(x=>x.classList.toggle("on",x===b))});
+    $("#clJoin").onclick=async()=>{const code=$("#clCode").value.trim().toUpperCase();if(code.length!==6){toast("6 haneli kulüp kodunu yaz");return}
+      try{const r=await callApi("/api/wallet",{action:"clubJoin",code});applyWallet({...wallet,...r.wallet});toast("Kulübe katıldın 🎉");openClub()}catch(e){toast(e.status===404?"Bu kodla kulüp yok":e.status===409?"Kulüp dolu":"Katılınamadı")}};
+    $("#clNew").onclick=async()=>{const name=$("#clName").value.trim();if(name.length<3){toast("Kulüp adı en az 3 harf olsun");return}if(hasBad(name)){toast("Kulüp adında uygunsuz kelime var");return}
+      if((wallet.balance||0)<C.price){toast("Bakiyen yetmiyor");return}
+      try{const r=await callApi("/api/wallet",{action:"clubCreate",name,icon});applyWallet({...wallet,...r.wallet});toast("Kulübün kuruldu 🎉");openClub()}catch(e){toast(e.status===402?"Bakiyen yetmiyor":"Kurulamadı, tekrar dene")}};
+  }else{
+    openInfoModal("🏛️ Kulübüm",`<div id="clHead" class="clhead"><div class="isub">Yükleniyor…</div></div><div class="fl">Üyeler</div><div id="clMem"></div>
+      <div class="row2" style="margin-top:8px"><button id="clShare" style="background:var(--brand)">Kodu paylaş</button><button id="clLeave" style="background:#777">Kulüpten ayrıl</button></div>${top}`);
+    const code=wallet.club;
+    clubUnsubs.push(onSnapshot(doc(fs,"clubs",code),s=>{if(!$("#clHead"))return;if(!s.exists()){$("#clHead").innerHTML='<div class="isub">Kulüp bulunamadı</div>';return}const c=s.data();(c.members||[]).forEach(watchUser);
+      $("#clHead").innerHTML=`<span class="cli">${esc(c.icon||"☕")}</span><div><b>${esc(c.name)}</b><div class="isub">Kod: <b>${esc(code)}</b> · ${(c.members||[]).length}/${C.max} üye</div></div>`;
+      $("#clMem").innerHTML=(c.members||[]).map(u=>`<div class="lbrow ${u===me?"me":""}">${avHTML(u)}<span class="nm">${esc(u===me?"Sen":realName(u))}${vipMark(u)}${u===c.owner?" · 👑 kurucu":""}</span></div>`).join("")},()=>{}));
+    $("#clShare").onclick=()=>{const t=`TR'de kulübüme katıl! Oyun → Kulüpler → kod: ${code}`;if(navigator.share)navigator.share({text:t}).catch(()=>{});else{navigator.clipboard?.writeText(t);toast("Kopyalandı")}};
+    $("#clLeave").onclick=()=>{openModal({title:"Kulüpten ayrıl",text:"Kulüpten ayrılmak istiyor musun?",input:false,ok:"Ayrıl"},async()=>{try{const r=await callApi("/api/wallet",{action:"clubLeave"});applyWallet({...wallet,...r.wallet,club:null});toast("Kulüpten ayrıldın")}catch(e){toast("Yapılamadı")}})};
+  }
+  clubUnsubs.push(onSnapshot(query(collection(fs,"club_week",wallet.week,"c"),orderBy("points","desc"),limit(20)),async s=>{const rows=s.docs.map(d=>({id:d.id,...d.data()}));
+    const info=await Promise.all(rows.map(r=>getDoc(doc(fs,"clubs",r.id)).then(x=>x.exists()?x.data():null).catch(()=>null)));
+    const el=$("#clTop");if(!el)return;
+    el.innerHTML=rows.length?rows.map((r,i)=>info[i]?`<div class="lbrow ${r.id===wallet.club?"me":""}"><span class="rk">${i<3?["🥇","🥈","🥉"][i]:i+1}</span><span class="cli sm">${esc(info[i].icon||"☕")}</span><span class="nm">${esc(info[i].name)}</span><span class="isub">${(info[i].members||[]).length} üye</span><span class="pt">${fmtCoin(r.points||0)} p</span></div>`:"").join(""):'<div class="isub">Bu hafta henüz puan alan kulüp yok</div>'},()=>{}));
+}
+$("#eClose").addEventListener("click",stopClub);
 function openAch(){
   const A=catalog?.ach||[],have=new Set(wallet?.ach||[]);
   openInfoModal("🏅 Başarımlar",`<p class="isub">${have.size}/${A.length} başarım · her biri bir kez jeton ödülü verir ve profilinde rozet olarak görünür.</p>`+A.map(a=>`<div class="pk ach ${have.has(a.id)?"on":""}"><span class="ai">${a.icon}</span><div style="flex:1"><b>${esc(a.name)}</b><div class="isub">${esc(a.desc)}</div></div><span class="isub">${have.has(a.id)?"✅":"+"+fmtCoin(a.prize)}</span></div>`).join(""));

@@ -296,6 +296,14 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+    match /clubs/{c} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /club_week/{w}/c/{c} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     match /tour/{d} {
       allow read: if signedIn();
       allow write: if false;

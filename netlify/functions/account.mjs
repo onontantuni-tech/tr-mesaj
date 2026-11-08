@@ -45,6 +45,16 @@ export default async (req) => {
     await g.ref.update(upd);
   }
 
+  // Kulüpten çık
+  try {
+    const wv = await db.doc(`wallets/${uid}`).get();
+    const code = wv.exists ? wv.data().club : null;
+    if (code) {
+      const cref = db.doc(`clubs/${code}`); const cs = await cref.get();
+      if (cs.exists) { const m = (cs.data().members || []).filter((x) => x !== uid); if (!m.length) await cref.delete(); else await cref.update({ members: m, owner: cs.data().owner === uid ? m[0] : cs.data().owner }); }
+    }
+  } catch {}
+
   // Profil, TR ID, özel anahtarlar, cüzdan, rozet, durum
   const u = await db.doc(`users/${uid}`).get();
   const code = u.exists ? u.data().code : null;
