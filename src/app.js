@@ -216,6 +216,7 @@ function hydrateMedia(){
       if(!url){el.innerHTML='<span>🔒 Medya açılamadı</span>';return}
       const c=plain[id]||{};
       if(c.t==="img"){const img=new Image();img.className="media";img.alt="Fotoğraf";img.src=url;if(c.w&&c.h)img.style.aspectRatio=c.w+"/"+c.h;img.onclick=()=>openViewer(url);el.replaceWith(img)}
+      else if(c.t==="vnote"){const v=document.createElement("video");v.className="vnote";v.src=url;v.playsInline=true;v.loop=true;v.muted=true;v.autoplay=true;v.onclick=()=>{v.muted=!v.muted;if(!v.muted){v.currentTime=0;v.play()}};el.replaceWith(v)}
       else if(c.t==="voice"){const a=document.createElement("audio");a.controls=true;a.preload="metadata";a.src=url;a.playbackRate=SET.vspeed||1;a.onplay=()=>{a.playbackRate=SET.vspeed||1};el.replaceWith(a)}
     });
   });
@@ -241,10 +242,13 @@ function openSettings(){
     <div class="fl">Sohbet duvar kâğıdı</div>${seg("wall",Object.entries(WALLS))}
     <div class="fl">Sesli mesaj hızı</div>${seg("vspeed",[[1,"1x"],[1.5,"1,5x"],[2,"2x"]])}
     ${tog("autoImg","Fotoğrafları otomatik indir","Kapalıyken fotoğraflar dokununca iner (düşük internet / veri tasarrufu)")}
+    ${tog("hq","Fotoğrafları yüksek kalitede gönder","Daha net ama daha çok internet harcar")}
     ${tog("vib","Titreşim","Oyunda sıra gelince ve mesajda")}
     ${tog("left","Solak modu","Oyun butonları sola geçer")}
     ${tog("hidePush","Bildirimde içerik gizle","Kilit ekranında sadece \"Yeni mesaj\" yazar")}
+    <div class="row2"><button id="setTest" style="background:#555">🎙️ Mikrofon ve kamera testi</button></div>
     <div class="fl">Gizlenecek kelimeler</div><input id="setWords" maxlength="300" placeholder="virgülle ayır: spoiler, maç sonucu" value="${esc(SET.words||"")}">`);
+  $("#setTest").onclick=()=>{closeE();deviceTest()};
   $("#setWords").onchange=e=>{saveSet({words:e.target.value.slice(0,300)});if(cur)renderMsgs()};
   $("#eBody").onclick=e=>{const b=e.target.closest(".seg button");if(!b)return;const k=b.closest(".seg").dataset.k;let v=b.dataset.v;if(k==="fs"||k==="vspeed")v=+v;saveSet({[k]:v});
     b.closest(".seg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));if(cur)renderMsgs()};
@@ -274,6 +278,8 @@ function pollHTML(m,c){const opts=c.t==="event"?["✅ Katılıyorum","❌ Katıl
   const head=c.t==="event"?`<div class="evh"><b>📅 ${esc(String(c.title||"").slice(0,100))}</b><span>${new Date(+c.when||0).toLocaleString("tr-TR",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}${c.place?" · 📍 "+esc(String(c.place).slice(0,100)):""}</span></div>`:`<b>📊 ${esc(String(c.q||"").slice(0,200))}</b>`;
   return`<div class="poll" data-poll="${esc(m.id)}">${head}${opts.map((o,i)=>`<button data-vote="${i}" class="${mine===i?"on":""}"><i style="width:${Math.round(100*cnt[i]/tot)}%"></i><span>${esc(String(o).slice(0,80))}</span><b>${cnt[i]||""}</b></button>`).join("")}${c.t==="event"&&+c.when>Date.now()?`<button class="evrem" data-remind="${esc(m.id)}">⏰ Hatırlat</button>`:""}</div>`}
 $("#msgs").addEventListener("click",async e=>{
+  const fc=e.target.closest("[data-file]");if(fc){const id=fc.dataset.file,c=plain[id]||{};fc.querySelector("span:last-child")&&(fc.querySelector("div span").textContent="İndiriliyor…");const url=await loadMedia(id);
+    if(!url){toast("Belge açılamadı");return}const a=document.createElement("a");a.href=url;a.download=String(c.name||"belge").replace(/[\\/:*?"<>|]/g,"_");document.body.appendChild(a);a.click();a.remove();fc.querySelector("div span").textContent=fmtSize(+c.size||0)+" · indirildi";return}
   const uf=e.target.closest("[data-unfilt]");if(uf){const m=msgById(uf.dataset.unfilt);if(m){m._show=1;renderMsgs()}return}
   const ac=e.target.closest("[data-addcode]");if(ac){addById(ac.dataset.addcode);return}
   const oc=e.target.closest("[data-openc]");if(oc){openChat(oc.dataset.openc);return}
@@ -386,7 +392,7 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 /* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
@@ -484,6 +490,9 @@ function bubbleBody(m,c){
   }
   if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
   if(c.t==="poll"||c.t==="event")return pollHTML(m,c);
+  if(c.t==="file")return`<div class="fcard" data-file="${esc(m.id)}"><span class="fi">📄</span><div><b>${esc(String(c.name||"belge").slice(0,80))}</b><span>${fmtSize(+c.size||0)} · dokun, indir</span></div></div>`;
+  if(c.t==="loc"){const la=+c.lat,ln=+c.lng;if(isFinite(la)&&isFinite(ln))return`<a class="loccard" href="https://www.openstreetmap.org/?mlat=${la.toFixed(5)}&mlon=${ln.toFixed(5)}#map=17/${la.toFixed(5)}/${ln.toFixed(5)}" target="_blank" rel="noopener noreferrer"><span class="lp">📍</span><div><b>Konum</b><span>${la.toFixed(4)}, ${ln.toFixed(4)} · haritada aç</span></div></a>`}
+  if(c.t==="vnote"){if(c._local)return`<video class="vnote" src="${esc(c._local)}" playsinline loop muted autoplay></video>`;return`<div class="mload vnote" data-media="${esc(m.id)}">🎥</div>`}
   if(c.t==="contact")return`<div class="ccard">${avHTML(c.uid)}<div><b>${esc(String(c.name||"Kişi").slice(0,62))}</b><span>${c.code&&/^\d{6}$/.test(c.code)?"TR ID "+esc(fmtCode(c.code)):""}</span></div>${c.uid!==me&&!isFriend(c.uid)&&/^\d{6}$/.test(c.code||"")?`<button data-addcode="${esc(c.code)}">Ekle</button>`:c.uid!==me?`<button data-openc="${esc(c.uid)}">Mesaj</button>`:""}</div>`;
   if(c.t==="gres")return`<div class="gamecard res"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} bitti</b><span>${c.draw?"Berabere":"🏆 "+esc(String(c.w||"").slice(0,40))+" kazandı"}${+c.pot?" · "+fmtCoin(+c.pot)+" jeton":""}</span></div></div>`;
   if(c.t==="gift"){const G=giftOf(c.id);if(G)return`<div class="giftmsg"><span>${G.icon}</span><b>${esc(G.name)}</b><small>hediye</small></div>`}
@@ -1238,15 +1247,50 @@ $("#composer").onsubmit=async e=>{e.preventDefault();
 
 /* ---------- fotoğraf ---------- */
 $("#photoBtn").onclick=()=>$("#photoInput").click();
+const fmtSize=n=>n>1048576?(n/1048576).toFixed(1).replace(".",",")+" MB":Math.max(1,Math.round(n/1024))+" KB";
+$("#attBtn").onclick=()=>{if(!cur)return;$("#msheet").innerHTML=`<button data-att="album">🖼️ Fotoğraflar (10'a kadar)</button><button data-att="once">① Tek seferlik fotoğraf</button><button data-att="file">📄 Belge</button><button data-att="loc">📍 Konum</button><button data-att="vnote">🎥 Yuvarlak video mesaj</button>${isGroupConv(cur)?'<button data-att="poll">📊 Anket</button><button data-att="event">📅 Etkinlik</button>':""}`;
+  sheetFor=null;$("#msheet").dataset.conv="";overlay.classList.add("show");$("#msheet").classList.add("show")};
+$("#msheet").addEventListener("click",e=>{const b=e.target.closest("[data-att]");if(!b)return;e.stopPropagation();closeSheet();const a=b.dataset.att,conv=cur;
+  if(a==="album")$("#photoInput").click();
+  if(a==="once"){window.__onceNext=true;$("#photoInput").click()}
+  if(a==="file")$("#fileInput").click();
+  if(a==="poll")openPollMaker(conv);if(a==="event")openEventMaker(conv);
+  if(a==="loc"){if(!navigator.geolocation){toast("Konum desteklenmiyor");return}toast("Konum alınıyor…",1500);
+    navigator.geolocation.getCurrentPosition(p=>{openModal({title:"Konumu gönder",text:"Şu anki konumun bu sohbete gönderilsin mi?",input:false,ok:"Gönder"},()=>sendContent(conv,{t:"loc",lat:+p.coords.latitude.toFixed(6),lng:+p.coords.longitude.toFixed(6),acc:Math.round(p.coords.accuracy||0)}))},()=>toast("Konum alınamadı, izin vermen gerekiyor",3000),{enableHighAccuracy:true,timeout:15000})}
+  if(a==="vnote")recordVideoNote(conv);
+},true);
+$("#fileInput").onchange=async e=>{const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!cur)return;
+  if(f.size>CHUNK*16){toast("Belge en fazla 9 MB olabilir",3000);return}const conv=cur;
+  openModal({title:"Belge gönder",text:`${esc(f.name)} (${fmtSize(f.size)}) gönderilsin mi?`,input:false,ok:"Gönder"},async()=>{toast("Gönderiliyor…",1500);
+    await sendContent(conv,{t:"file",name:f.name.slice(0,120)},{blob:f,mime:f.type||"application/octet-stream",meta:{name:f.name.slice(0,120)}})})};
+async function recordVideoNote(conv){let st;try{st=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:480},height:{ideal:480}},audio:true})}catch(e){toast("Kamera/mikrofon izni gerekli");return}
+  openInfoModal("🎥 Yuvarlak video",`<video id="vnPrev" class="vnote big" playsinline autoplay muted></video><div class="isub" id="vnT" style="text-align:center">En fazla 30 saniye</div><div class="row2"><button id="vnGo" style="background:var(--brand)">● Kaydı başlat</button></div>`);
+  $("#vnPrev").srcObject=st;let rec=null,chunks=[],t0=0,timer=0,done=false;const stop=()=>{st.getTracks().forEach(t=>t.stop());clearInterval(timer)};
+  $("#eClose").addEventListener("click",()=>{done=true;if(rec&&rec.state!=="inactive")rec.stop();stop()},{once:true});
+  $("#vnGo").onclick=()=>{if(rec&&rec.state==="recording"){rec.stop();return}
+    const mime=["video/mp4","video/webm;codecs=vp8,opus","video/webm"].find(x=>window.MediaRecorder&&MediaRecorder.isTypeSupported(x))||"";
+    try{rec=new MediaRecorder(st,mime?{mimeType:mime,videoBitsPerSecond:400000}:{})}catch(e){toast("Bu cihazda video kaydı desteklenmiyor");return}
+    rec.ondataavailable=ev=>{if(ev.data&&ev.data.size)chunks.push(ev.data)};
+    rec.onstop=async()=>{stop();if(done)return;const blob=new Blob(chunks,{type:rec.mimeType||"video/webm"});closeE();
+      if(blob.size>CHUNK*8){toast("Video çok büyük");return}await sendContent(conv,{t:"vnote"},{blob,mime:blob.type,meta:{dur:Math.round((Date.now()-t0)/1000)}})};
+    rec.start(500);t0=Date.now();$("#vnGo").textContent="■ Durdur ve gönder";
+    timer=setInterval(()=>{const sec=Math.floor((Date.now()-t0)/1000);$("#vnT").textContent=sec+" / 30 sn";if(sec>=30&&rec.state==="recording")rec.stop()},250)}}
+async function deviceTest(){let st;try{st=await navigator.mediaDevices.getUserMedia({video:true,audio:true})}catch(e){toast("Kamera/mikrofon izni verilmedi",3000);return}
+  openInfoModal("🎙️ Cihaz testi",`<video id="dtV" playsinline autoplay muted style="width:100%;border-radius:12px;background:#000;transform:scaleX(-1)"></video><div class="fl">Mikrofon seviyesi</div><div class="meter"><i id="dtM"></i></div><p class="isub">Konuşunca çubuk hareket ediyorsa mikrofonun çalışıyor.</p>`);
+  $("#dtV").srcObject=st;const ac=new (window.AudioContext||window.webkitAudioContext)(),an=ac.createAnalyser();ac.createMediaStreamSource(st).connect(an);const buf=new Uint8Array(an.fftSize);let on=true;
+  const loop=()=>{if(!on)return;an.getByteTimeDomainData(buf);let m=0;for(const v of buf)m=Math.max(m,Math.abs(v-128));const el=$("#dtM");if(el)el.style.width=Math.min(100,m*1.6)+"%";requestAnimationFrame(loop)};loop();
+  $("#eClose").addEventListener("click",()=>{on=false;st.getTracks().forEach(t=>t.stop());ac.close().catch(()=>{})},{once:true})}
 // uzun basınca: tek seferlik fotoğraf
 {let t=null;$("#photoBtn").addEventListener("pointerdown",()=>{t=setTimeout(()=>{t=null;window.__onceNext=true;toast("① Tek seferlik fotoğraf: bir kez açılabilir",2500);$("#photoInput").click()},550)});["pointerup","pointerleave","pointercancel"].forEach(ev=>$("#photoBtn").addEventListener(ev,()=>{if(t){clearTimeout(t);t=null}}))}
 $("#photoInput").onchange=async e=>{
-  const f=e.target.files&&e.target.files[0];e.target.value="";if(!f||!cur)return;
+  const fl=[...(e.target.files||[])].slice(0,10);e.target.value="";if(!fl.length||!cur)return;
+  if(fl.length>1){const conv=cur;toast(`${fl.length} fotoğraf gönderiliyor…`,2000);for(const f of fl){if(!f.type.startsWith("image/"))continue;try{const {blob,w,h}=await compressImage(f,SET.hq?2600:1600,SET.hq?0.92:0.82);if(blob.size<=CHUNK*8)await sendContent(conv,{t:"img"},{blob,mime:blob.type,meta:{w,h}})}catch(err){}}return}
+  const f=fl[0];
   if(!f.type.startsWith("image/")){toast("Lütfen bir fotoğraf seç");return}
   const conv=cur;
   try{
     toast("Fotoğraf hazırlanıyor…",1500);
-    const {blob,w,h}=await compressImage(f,1600,0.82);
+    const {blob,w,h}=await compressImage(f,SET.hq?2600:1600,SET.hq?0.92:0.82);
     if(blob.size>CHUNK*8){toast("Fotoğraf çok büyük");return}
     const once=!!window.__onceNext;window.__onceNext=false;
     await sendContent(conv,once?{t:"img",once:true}:{t:"img"},{blob,mime:blob.type,meta:{w,h}});
@@ -1445,7 +1489,7 @@ function updateCallUI(){
   $("#callscr").classList.toggle("inc",c.phase==="ringing");
   $("#csIncoming").classList.toggle("show",c.phase==="ringing");
   $("#csActive").classList.toggle("show",c.phase!=="ringing"&&c.phase!=="ended");
-  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";
+  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";$("#csPip").style.display=c.video&&document.pictureInPictureEnabled?"":"none";
 }
 async function getMedia(video,facing="user"){
   return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:facing,width:{ideal:640},height:{ideal:480}}:false});
@@ -1543,6 +1587,7 @@ async function endCall(state){
 }
 $("#csAccept").onclick=acceptCall;
 $("#csDecline").onclick=declineCall;
+$("#csPip").onclick=async()=>{const v=$("#remoteVideo");try{if(document.pictureInPictureElement)await document.exitPictureInPicture();else if(v&&document.pictureInPictureEnabled)await v.requestPictureInPicture();else toast("Küçük pencere bu cihazda desteklenmiyor")}catch(e){toast("Küçük pencere açılamadı")}};
 $("#csDeclineMsg").onclick=()=>{const c=call;if(!c)return;const peer=c.peer;
   openInfoModal("💬 Mesajla reddet",["Şu an konuşamıyorum, sonra ararım.","Toplantıdayım, mesaj atar mısın?","Yoldayım, birazdan dönerim.","Müsait değilim 🙏"].map((t,i)=>`<div class="pk" data-q="${i}" style="cursor:pointer">${esc(t)}</div>`).join(""));
   const Q=["Şu an konuşamıyorum, sonra ararım.","Toplantıdayım, mesaj atar mısın?","Yoldayım, birazdan dönerim.","Müsait değilim 🙏"];
