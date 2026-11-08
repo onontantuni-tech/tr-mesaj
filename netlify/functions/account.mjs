@@ -55,7 +55,7 @@ export default async (req) => {
     const cs = await db.doc(`codes/${code}`).get();
     if (cs.exists && cs.data().uid === uid) batch.delete(cs.ref);
   }
-  for (const p of [`users/${uid}`, `wallets/${uid}`, `badges/${uid}`, `statuses/${uid}`, `bans/${uid}`]) batch.delete(db.doc(p));
+  for (const p of [`users/${uid}`, `wallets/${uid}`, `badges/${uid}`, `statuses/${uid}`, `bans/${uid}`, `avatars/${uid}`, `presence/${uid}`]) batch.delete(db.doc(p));
   await batch.commit();
 
   // Jeton kayıtları kimliksiz kalsın (muhasebe için tutar ve tarih saklanır)

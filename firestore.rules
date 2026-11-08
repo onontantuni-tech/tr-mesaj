@@ -20,8 +20,21 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if signedIn();
       allow write: if isMe(uid)
-        && nd().keys().hasOnly(['first','last','nick','code','pub','joined'])
-        && nd().nick is string && nd().nick.size() <= 62;
+        && nd().keys().hasOnly(['first','last','nick','code','pub','joined','av','bio'])
+        && nd().nick is string && nd().nick.size() <= 62
+        && (!('bio' in nd()) || (nd().bio is string && nd().bio.size() <= 140))
+        && (!('av' in nd()) || nd().av is number);
+    }
+
+    // profil fotoğrafı (küçük JPEG, herkese açık)
+    match /avatars/{uid} {
+      allow read: if signedIn();
+      allow delete: if isMe(uid);
+      allow create, update: if isMe(uid) && notBanned()
+        && nd().keys().hasOnly(['img','at'])
+        && nd().img is string && nd().img.size() <= 60000
+        && nd().img.matches('^data:image/(jpeg|webp);base64,[A-Za-z0-9+/=]+$')
+        && nd().at is number;
     }
 
     // TR ID'lerin benzersizliği

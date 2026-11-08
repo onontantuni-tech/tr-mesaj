@@ -228,8 +228,33 @@ function avHTML(c,{size}={}){
   const st=size?`width:${size}px;height:${size}px;`:"";
   if(isGroupConv(c))return`<div class="av grp" style="${st}background:${colorOf(c)}">👥</div>`;
   const n=c===me?(users[me]?.nick||"Ben"):realName(c);
+  const img=avUrl(c);
+  if(img)return`<div class="av" style="${st}background-color:${colorOf(c)};background-image:url(${img})"></div>`;
   return`<div class="av" style="${st}background:${colorOf(c)}">${esc(initials(n))}</div>`;
 }
+/* profil fotoğrafları: avatars/{uid} (herkese açık, küçük JPEG); users/{uid}.av sürüm damgası */
+const avCache={};let avQ=new Set(),avT=0,avRT=0;
+try{Object.assign(avCache,JSON.parse(localStorage.getItem("tr-avc")||"{}"))}catch(e){}
+function avUrl(uid){const v=users[uid]?.av;if(!v)return"";const c=avCache[uid];
+  if(c&&c.at===v)return /^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(c.img)?c.img:"";
+  if(!avQ.has(uid)){avQ.add(uid);clearTimeout(avT);avT=setTimeout(fetchAvatars,40)}
+  return c&&/^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(c.img)?c.img:""}
+async function fetchAvatars(){const list=[...avQ];avQ=new Set();let got=false;
+  await Promise.all(list.map(async uid=>{try{const s=await getDoc(doc(fs,"avatars",uid));
+    if(s.exists()){const d=s.data();if(typeof d.img==="string"){avCache[uid]={img:d.img,at:+d.at||0};got=true}}
+    else{avCache[uid]={img:"",at:users[uid]?.av||0}}}catch(e){}}));
+  if(got){saveAvCache();clearTimeout(avRT);avRT=setTimeout(()=>{try{renderAll()}catch(e){}},60)}}
+function saveAvCache(){try{const ks=Object.keys(avCache);if(ks.length>80)ks.slice(0,ks.length-80).forEach(k=>delete avCache[k]);localStorage.setItem("tr-avc",JSON.stringify(avCache))}catch(e){}}
+function shrinkImage(file,size=192){return new Promise((res,rej)=>{const im=new Image(),u=URL.createObjectURL(file);
+  im.onload=()=>{URL.revokeObjectURL(u);const c=document.createElement("canvas");c.width=c.height=size;const x=c.getContext("2d");
+    const m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,size,size);
+    let q=.85,d=c.toDataURL("image/jpeg",q);while(d.length>45000&&q>.4){q-=.1;d=c.toDataURL("image/jpeg",q)}res(d)};
+  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("img"))};im.src=u})}
+let pAvNew=null;
+async function saveAvatar(img){const at=Date.now();
+  if(img){await setDoc(doc(fs,"avatars",me),{img,at});avCache[me]={img,at}}
+  else{try{await deleteDoc(doc(fs,"avatars",me))}catch(e){}delete avCache[me]}
+  saveAvCache();return img?at:0}
 const convOfMsg=m=>m.gid?"g:"+m.gid:(m.from===me?m.to:m.from);
 function hm(t){return new Date(t).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
 function when(t){const d=new Date(t),n=new Date();
@@ -364,7 +389,7 @@ function renderMsgs(){
   const canSend=g?!!grp:okFriend;
   $("#composer").style.display=canSend?"":"none";
 }
-function renderAll(){renderChats();renderStatus();if(tabNow==="calls")renderCalls();if(cur){renderChatHeader();renderMsgs()}}
+function renderAll(){renderBell();renderChats();renderStatus();if(tabNow==="calls")renderCalls();if(cur){renderChatHeader();renderMsgs()}}
 
 /* ---------- okundu ---------- */
 const readBusy={};
@@ -794,7 +819,8 @@ function openInfo(){
   }else{
     const u=users[cur]||{};
     $("#iAv").innerHTML=avHTML(cur);$("#iName").innerHTML=esc(realName(cur))+vipMark(cur);recordView(cur);$("#iSub").textContent=u.code?"TR ID "+fmtCode(u.code):"";
-    $("#iLabel").textContent="";
+    $("#iLabel").innerHTML=(u.bio?`<div class="ibio">${esc(u.bio)}</div>`:"")+(u.joined?`<div class="ijoin">📅 ${new Date(u.joined).toLocaleDateString("tr-TR",{month:"long",year:"numeric"})} tarihinden beri TR'de</div>`:"");
+    {const im=avUrl(cur);$("#iAv").onclick=im?()=>{const big=avCache[cur]?.img;if(big)openViewer(big)}:null}
     const common=Object.entries(groups).filter(([,g])=>g.members.includes(cur));
     $("#iList").innerHTML=common.length?`<div class="fl" style="padding:0 8px">Ortak gruplar</div>`+common.map(([id,g])=>`<div class="gitem" data-g="${esc(id)}">${avHTML("g:"+id)}<div class="gn"><b>${esc(g.name)}</b><span>${g.members.length} üye</span></div></div>`).join(""):"";
     const f=friends[cur];
@@ -903,7 +929,7 @@ $("#fab").onclick=()=>{if(tabNow==="status")askStatus();else if(tabNow==="games"
 document.querySelector(".content").addEventListener("click",e=>{const r=e.target.closest("[data-callback]");if(r)startCall(r.dataset.callback,r.dataset.video==="1")});
 
 /* ---------- profil / ID ---------- */
-function cleanUser(x){return{nick:typeof x.nick==="string"?cleanText(x.nick.slice(0,62)):"",first:typeof x.first==="string"?cleanText(x.first.slice(0,30)):"",last:typeof x.last==="string"?cleanText(x.last.slice(0,30)):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0}}
+function cleanUser(x){return{nick:typeof x.nick==="string"?cleanText(x.nick.slice(0,62)):"",first:typeof x.first==="string"?cleanText(x.first.slice(0,30)):"",last:typeof x.last==="string"?cleanText(x.last.slice(0,30)):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0,av:+x.av||0,bio:typeof x.bio==="string"?cleanText(x.bio.slice(0,140)):""}}
 function cleanGroup(x){if(!x||!Array.isArray(x.members))return null;return{name:typeof x.name==="string"?cleanText(x.name.slice(0,50)):"Grup",members:x.members.filter(u=>typeof u==="string").slice(0,MAX_GROUP),admins:Array.isArray(x.admins)?x.admins.filter(u=>typeof u==="string"):[],createdBy:String(x.createdBy||""),at:+x.at||0}}
 async function claimCode(){
   for(let i=0;i<10;i++){
@@ -914,7 +940,7 @@ async function claimCode(){
 }
 async function saveMe(patch){
   const prev=users[me];
-  const next={nick:prev?.nick||"",first:prev?.first||"",last:prev?.last||"",code:prev?.code||"",pub:prev?.pub||myPub,joined:prev?.joined||Date.now(),...patch};
+  const next={nick:prev?.nick||"",first:prev?.first||"",last:prev?.last||"",code:prev?.code||"",pub:prev?.pub||myPub,joined:prev?.joined||Date.now(),av:prev?.av||0,bio:prev?.bio||"",...patch};
   users[me]=next;renderAll();
   try{await setDoc(doc(fs,"users",me),next);return true}catch(e){users[me]=prev;renderAll();return false}
 }
@@ -935,7 +961,8 @@ function askProfile(first){
   const u=users[me]||{};
   let f=u.first,l=u.last;
   if(!f&&!l){const n=(meUser?.displayName||"").trim().split(/\s+/);if(n[0]){l=n.length>1?n.pop():"";f=n.join(" ")}}
-  $("#pFirst").value=f||"";$("#pLast").value=l||"";$("#pPhone").value=myPhone?fmtPhone(myPhone):"";
+  $("#pFirst").value=f||"";$("#pLast").value=l||"";$("#pBio").value=u.bio||"";
+  pAvNew=null;$("#pAvPrev").innerHTML=avHTML(me,{size:72});$("#pAvDel").style.display=u.av?"":"none";$("#pPhone").value=myPhone?fmtPhone(myPhone):"";
   $("#pErr").textContent="";$("#pCancel").style.display=first?"none":"";
   $("#pOk").textContent=first?"Başla":"Kaydet";
   $("#pTermsRow").style.display=first?"":"none";$("#pTerms").checked=false;
@@ -944,6 +971,11 @@ function askProfile(first){
 }
 function closeProfile(){$("#pmodal").classList.remove("show");overlay.classList.remove("show");profileLocked=false}
 $("#pCancel").onclick=closeProfile;
+$("#pAvPick").onclick=()=>$("#pAvFile").click();
+$("#pAvFile").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+  if(!/^image\//.test(f.type)){toast("Bir fotoğraf seç");return}
+  try{pAvNew=await shrinkImage(f);$("#pAvPrev").innerHTML=`<div class="av" style="width:72px;height:72px;background-image:url(${pAvNew})"></div>`;$("#pAvDel").style.display=""}catch(err){toast("Fotoğraf açılamadı")}};
+$("#pAvDel").onclick=()=>{pAvNew="";$("#pAvPrev").innerHTML=`<div class="av" style="width:72px;height:72px;background:${colorOf(me)}">${esc(initials(users[me]?.nick||"Ben"))}</div>`;$("#pAvDel").style.display="none"};
 ["#pFirst","#pLast","#pPhone"].forEach((id,i,arr)=>$(id).onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();i<arr.length-1?$(arr[i+1]).focus():$("#pOk").click()}});
 $("#pOk").onclick=async()=>{
   const f=cap($("#pFirst").value).slice(0,30),l=cap($("#pLast").value).slice(0,30),ph=normPhone($("#pPhone").value);
@@ -951,12 +983,15 @@ $("#pOk").onclick=async()=>{
   if(!l){$("#pErr").textContent="Soyadını yaz";$("#pLast").focus();return}
   if(!ph){$("#pErr").textContent="Geçerli bir telefon numarası yaz (örn. 0532 123 45 67)";$("#pPhone").focus();return}
   if(hasBad(f)||hasBad(l)){$("#pErr").textContent="Ad ve soyadında uygunsuz kelime olamaz";return}
+  const bio=$("#pBio").value.replace(/\s+/g," ").trim().slice(0,140);
+  if(hasBad(bio)){$("#pErr").textContent="Hakkında yazısında uygunsuz kelime var";return}
   if(pFirstTime&&!$("#pTerms").checked){$("#pErr").textContent="Devam etmek için kullanım koşullarını ve gizlilik politikasını kabul et";return}
   $("#pOk").disabled=true;$("#pErr").textContent="";
   let ok=true;
   try{
     if(ph!==myPhone){const old=myPhone;await setDoc(privRef(),{phone:ph},{merge:true});myPhone=ph;await syncPhone(old)}
-    const patch={first:f,last:l,nick:f+" "+l,pub:myPub};
+    const patch={first:f,last:l,nick:f+" "+l,pub:myPub,bio};
+    if(pAvNew!==null)patch.av=await saveAvatar(pAvNew);
     if(!/^\d{6}$/.test(users[me]?.code||""))patch.code=await claimCode();
     ok=await saveMe(patch);
   }catch(e){ok=false}
@@ -1340,13 +1375,13 @@ async function initWallet(){
   unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin,vipUntil:+x.vipUntil||0,adult:!!x.adult,ageSet:!!x.birthYear})},()=>{}));
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
-function applyWallet(w){wallet=w;if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
+function applyWallet(w){wallet=w;setTimeout(renderBell,0);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
 function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ceviz");if(id.startsWith("vip_")&&!isVipU(me))return kind==="table"?"yesil":"ceviz";return id}
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
 const chestLeft=()=>wallet?(wallet.chestAt||0)+(wallet.chestEvery||4*3600e3)-Date.now():1;
 const fmtWait=ms=>{const m=Math.ceil(ms/60000);return m>=60?Math.floor(m/60)+" sa "+(m%60)+" dk":m+" dk"};
-setInterval(()=>{const l=document.querySelector(".chestlbl");if(l&&wallet){const x=chestLeft();l.textContent=x<=0?"Sandık hazır!":"Sandık · "+fmtWait(x)}},30000);
+setInterval(()=>{renderBell();const l=document.querySelector(".chestlbl");if(l&&wallet){const x=chestLeft();l.textContent=x<=0?"Sandık hazır!":"Sandık · "+fmtWait(x)}},30000);
 async function claimGift(kind){
   if(kind==="chest"&&chestLeft()>0){toast("Sandık "+fmtWait(chestLeft())+" sonra açılır");return}
   try{const r=await callApi("/api/wallet",{action:kind});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`${kind==="chest"?"🧰":"🆘"} +${fmtCoin(r.gift.amount)} jeton`,3000)}
@@ -1544,6 +1579,25 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
   if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+/* ---------- bildirim merkezi ---------- */
+function notifItems(){const it=[];
+  for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
+  const men=raw.filter(m=>m.from!==me&&Array.isArray(m.men)&&m.men.includes(me)&&m.at>(reads[me+"_"+convOfMsg(m)]||0));
+  const byC={};for(const m of men)byC[convOfMsg(m)]=m;
+  for(const[c,m]of Object.entries(byC))it.push({ic:"@",t:`<b>${esc(realName(m.from))}</b>, ${esc(convTitle(c))} grubunda senden bahsetti`,go:()=>openChat(c),at:m.at});
+  if(wallet){
+    if(dailyAvailable())it.push({ic:"🎁",t:"Günlük hediyen hazır",go:()=>openDaily(),at:0});
+    if(chestLeft()<=0)it.push({ic:"🧰",t:"Sandığın hazır, açmayı unutma",go:()=>claimGift("chest"),at:0});
+    const td=(wallet.tasks||[]).filter(t=>t.done&&!t.claimed).length;
+    if(td)it.push({ic:"✅",t:`${td} görev tamamlandı, ödülünü al`,go:()=>openTasks(),at:0});
+    if(wallet.balance!=null&&wallet.balance<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today)it.push({ic:"🛟",t:"Jetonun azaldı, kurtarma hediyesini alabilirsin",go:()=>claimGift("rescue"),at:0});
+  }
+  return it.sort((a,b)=>b.at-a.at)}
+function setTabSafe(t){const b=document.querySelector(`.tab[data-tab="${t}"]`);if(b)b.click()}
+function renderBell(){const b=$("#btnBell");if(!b||!me)return;const n=notifItems().length;b.querySelector("i").textContent=n>9?"9+":n||"";b.classList.toggle("has",n>0)}
+$("#btnBell").onclick=()=>{const it=notifItems();
+  openInfoModal("🔔 Bildirimler",it.length?it.map((x,i)=>`<div class="nitem" data-n="${i}"><span class="nic">${x.ic}</span><span class="nt">${x.t}</span><span class="nar">›</span></div>`).join(""):'<div class="isub" style="text-align:center;padding:24px 0">Yeni bildirim yok 🎉</div>');
+  $("#eBody").onclick=e=>{const r=e.target.closest("[data-n]");if(!r)return;closeAll();$("#emodal").classList.remove("show");it[+r.dataset.n].go()}};
 function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
 function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
 $("#eClose").onclick=closeE;

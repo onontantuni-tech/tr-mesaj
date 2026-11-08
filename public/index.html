@@ -59,7 +59,8 @@ input{font:inherit;color:inherit}
 .badge{background:var(--brand);color:#fff;font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 6px}
 .section{padding:14px 16px 6px;font-size:13px;font-weight:600;color:var(--brand)}
 .terms{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:12px;line-height:1.4}
-.terms input{width:18px;height:18px;margin-top:1px;flex-shrink:0}
+.terms input,#pmodal .terms input{width:18px!important;height:18px;margin:1px 0 0;padding:0;flex:0 0 18px}
+.terms span{flex:1;min-width:0}
 .terms a,.lg-note a{color:var(--brand)}
 .replist{display:flex;flex-direction:column;gap:2px;margin:8px 0}
 .repr{display:flex;gap:8px;align-items:center;font-size:14px;padding:6px 2px;flex-wrap:wrap}
@@ -197,6 +198,17 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 .fl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:2px 0 4px}
 .fl .priv{font-weight:500;color:var(--brand);margin-left:4px}
 .acct{display:flex;align-items:center;gap:10px;background:var(--bg);border-radius:10px;padding:10px 12px;margin:10px 0 14px;font-size:13px;color:var(--muted)}
+.ibtn.bell{position:relative}.ibtn.bell i{position:absolute;top:4px;right:2px;min-width:17px;height:17px;border-radius:9px;background:#FFD54F;color:#7a0a10;font:700 10px/17px system-ui;font-style:normal;padding:0 4px;display:none}
+.ibtn.bell.has i{display:block}
+.nitem{display:flex;align-items:center;gap:12px;padding:12px 6px;border-bottom:1px solid var(--line,#eee);cursor:pointer;font-size:14px}
+.nitem .nic{width:36px;height:36px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-size:17px;flex:none;font-weight:700;color:var(--brand)}
+.nitem .nt{flex:1}.nitem .nar{color:var(--muted);font-size:20px}
+.pavrow{display:flex;align-items:center;gap:14px;margin:4px 0 6px}
+.pavrow button{background:var(--bg);border:0;border-radius:18px;padding:8px 14px;font-weight:600;color:var(--text);cursor:pointer;margin-right:6px}
+.pavrow button.lnk{background:none;color:#DC2626}
+#iAv .av{cursor:pointer}
+.ibio{font-size:14px;color:var(--text);margin:4px 8px 6px;white-space:pre-wrap;font-weight:400}
+.ijoin{font-size:12px;color:var(--muted);margin:0 8px 8px;font-weight:400}
 .acct img{width:32px;height:32px;border-radius:50%}
 .acct b{color:var(--text);display:block;font-size:14px}
 .perr{color:#E53935;font-size:13px;min-height:18px;margin:-4px 0 6px}
@@ -629,6 +641,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="top-row">
         <div class="logo"><span class="mark"><svg viewBox="0 0 1200 800" width="26" height="17" style="border-radius:3px;display:block"><rect width="1200" height="800" fill="#E30A17"/><circle cx="425" cy="400" r="200" fill="#fff"/><circle cx="475" cy="400" r="160" fill="#E30A17"/><polygon fill="#fff" points="583.334,400 764.235,458.779 652.431,304.894 652.431,495.106 764.235,341.221"/></svg></span>TR<span class="conn" id="conn"></span></div>
         <div class="icons">
+          <button class="ibtn bell" id="btnBell" aria-label="Bildirimler"><svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.4-2h-4.8a2.5 2.5 0 0 0 2.4 2zm7-6V11a7 7 0 0 0-5.5-6.8V3.5a1.5 1.5 0 0 0-3 0v.7A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg><i></i></button>
           <button class="ibtn" id="btnSearch" aria-label="Ara"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg></button>
           <button class="ibtn" id="btnMenu" aria-label="Menü"><svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button>
         </div>
@@ -716,9 +729,11 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   <div class="modal" id="pmodal">
     <h3 id="pTitle">Profilini oluştur</h3>
     <div class="acct" id="pAcct"></div>
+    <div class="pavrow"><div id="pAvPrev"></div><div><button type="button" id="pAvPick">📷 Fotoğraf seç</button><button type="button" id="pAvDel" class="lnk">Kaldır</button></div><input type="file" id="pAvFile" accept="image/*" hidden></div>
     <label class="fl">Ad</label><input id="pFirst" maxlength="30" autocomplete="given-name">
     <label class="fl">Soyad</label><input id="pLast" maxlength="30" autocomplete="family-name">
     <label class="fl">Telefon numarası <span class="priv">🔒 Kimse göremez</span></label><input id="pPhone" type="tel" inputmode="tel" placeholder="05xx xxx xx xx" maxlength="17" autocomplete="tel">
+    <label class="fl">Hakkında <span class="priv">herkes görebilir</span></label><input id="pBio" maxlength="140" placeholder="Kısaca kendini anlat (isteğe bağlı)">
     <div id="pRefRow"><label class="fl">Davet eden arkadaşının TR ID'si <span class="priv">isteğe bağlı</span></label><input id="pRef" inputmode="numeric" maxlength="7" placeholder="örn. 482 913"></div>
     <label class="terms" id="pTermsRow"><input type="checkbox" id="pTerms"> <span><a href="/kosullar.html" target="_blank">Kullanım koşullarını</a> ve <a href="/gizlilik.html" target="_blank">gizlilik politikasını</a> okudum, kabul ediyorum.</span></label>
     <div class="perr" id="pErr"></div>
