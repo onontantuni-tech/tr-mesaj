@@ -374,6 +374,17 @@ video.vnote.big{width:240px;height:240px;margin:0 auto 8px;transform:scaleX(-1)}
 .recg{display:grid;grid-template-columns:1fr 1fr;gap:8px}.recg div{background:var(--bg);border-radius:12px;padding:10px;text-align:center}.recg b{display:block;font-size:20px}.recg span{font-size:11.5px;color:var(--muted)}
 .gamescr.show.batakg{position:fixed;inset:0;max-width:none}
 .gamescr.batakg .overbox{z-index:6;background:rgba(5,25,15,.95)}
+.pubkizma{background:linear-gradient(135deg,#e53935,#1e88e5)!important;color:#fff!important}.pubkizma small{display:block;font-size:12px;opacity:.85}
+.gamescr.kizmag{background:radial-gradient(ellipse at 50% 40%,#2b2f3a,#12141a)}
+.kztable{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px;height:calc(100dvh - 64px);box-sizing:border-box;color:#fff}
+.kzside{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.kzs{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border-radius:12px;padding:4px 10px;font-size:12.5px;border:2px solid transparent}.kzs.turn{border-color:var(--c)}.kzs i{width:12px;height:12px;border-radius:50%;background:var(--c)}
+.kzboard{--kw:min(100vw - 16px,100dvh - 230px,560px);width:var(--kw);height:var(--kw);display:grid;grid-template-columns:repeat(11,1fr);grid-template-rows:repeat(11,1fr);gap:2px;background:#f3e6c4;border-radius:14px;padding:6px;box-sizing:border-box;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.kzc{border-radius:50%;display:grid;place-items:center;position:relative}.kzc.x{background:transparent}
+.kzc.tr{background:#fff;box-shadow:inset 0 0 0 2px #c9b88f}.kzc.st{box-shadow:inset 0 0 0 3px #555}.kzc.s0,.kzc.f0,.kzc.h0{background:#ffcdd2}.kzc.s1,.kzc.f1,.kzc.h1{background:#bbdefb}.kzc.s2,.kzc.f2,.kzc.h2{background:#c8e6c9}.kzc.s3,.kzc.f3,.kzc.h3{background:#fff9c4}
+.kzc.fin{box-shadow:inset 0 0 0 2px rgba(0,0,0,.25)}
+.kzp{position:absolute;width:72%;height:72%;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.7),var(--c) 45%,rgba(0,0,0,.35));box-shadow:0 2px 3px rgba(0,0,0,.5)}
+.kzp+.kzp{transform:translate(18%,-18%)}.kzp.can{cursor:pointer;box-shadow:0 0 0 3px #fff,0 0 12px #fff;animation:tglow .7s infinite alternate;z-index:2}
+.kzctl{display:flex;align-items:center;gap:12px;width:var(--kw,100%);max-width:560px}
 .pubbatak{background:linear-gradient(135deg,#1e3a5f,#0b1a2e)!important;color:#fff!important}.pubbatak small{display:block;font-size:12px;opacity:.85}
 .bktable{position:relative;height:calc(100dvh - 64px);display:grid;grid-template-columns:1fr 2fr 1fr;grid-template-rows:auto 1fr auto auto auto;gap:4px;padding:6px 8px;box-sizing:border-box;color:#fff}
 .bkseat{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.25);border-radius:12px;padding:5px 8px;border:2px solid transparent;font-size:12px;align-self:center}.bkseat.turn{border-color:#FFD54F;box-shadow:0 0 12px rgba(255,213,79,.45)}
@@ -993,6 +1004,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
       <div class="gitem" data-newgame="pisti"><div class="av" style="background:#7a1020">🃏</div><div class="gn"><b>Pişti</b><span>2 kişilik · kart</span></div></div>
       <div class="gitem" data-newgame="batak"><div class="av" style="background:#1e3a5f">♠️</div><div class="gn"><b>İhaleli Batak</b><span>4 kişilik · koz seçmeli</span></div></div>
+      <div class="gitem" data-newgame="kizma"><div class="av" style="background:#e53935">🎯</div><div class="gn"><b>Kızma Birader</b><span>4 kişilik · zar</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">👑</div><div class="gn"><b>King</b><span>Yakında</span></div></div>
       <div class="gitem" data-newgame="tavla"><div class="av" style="background:#6b3f1d">🎲</div><div class="gn"><b>Tavla</b><span>2 kişilik · mars çifte sayı</span></div></div>
     </div>
