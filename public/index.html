@@ -322,6 +322,11 @@ body.dark .poll button[data-vote]{background:rgba(255,255,255,.06);border-color:
 .ccard button{background:var(--brand);color:#fff;border:0;border-radius:16px;padding:6px 12px;font-weight:700;cursor:pointer}
 .filt{opacity:.7;font-style:italic;cursor:pointer}
 .pickl label.gitem{cursor:pointer}.pickl input{width:20px!important;height:20px;margin-left:auto}
+.noticebar{display:none;align-items:center;gap:8px;padding:8px 12px;background:#FFF4CC;color:#5a4300;font-size:13.5px}.noticebar.show{display:flex}.noticebar.maint{background:#FDE2E1;color:#7a0a10}
+.noticebar span{flex:1}.noticebar button{background:none;border:0;font-weight:800;color:inherit;cursor:pointer}
+.dailybar{display:none;align-items:center;gap:6px;margin:8px 12px 0;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,#ffe082,#ffb300);color:#4a2c00;cursor:pointer;font-size:14px}.dailybar.show{display:flex}.dailybar span{margin-left:auto;font-weight:800}
+.dailybar.soft{background:var(--bg);color:var(--muted)}
+.tour{text-align:center;padding:6px 4px}.tour .ti{font-size:64px}.tour b{display:block;font-size:20px;margin:6px 0}.tour p{color:var(--muted)}.tour .dots{display:flex;gap:6px;justify-content:center;margin:10px 0}.tour .dots i{width:8px;height:8px;border-radius:50%;background:#ddd}.tour .dots i.on{background:var(--brand)}
 .pubpisti{background:linear-gradient(135deg,#9b1b2a,#4a0a12)!important;color:#fff!important}
 .ptable .overbox{z-index:4;background:rgba(0,0,0,.88)}
 .pubpisti small{display:block;font-size:12px;opacity:.85}
@@ -791,7 +796,9 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="banner" id="banner"></div>
     <div class="notifbar" id="notifbar"><span>🔔 Yeni mesajlardan haberin olsun</span><button id="notifOn">Bildirimleri aç</button><button id="notifX" aria-label="Kapat">✕</button></div>
     <div class="searchbar" id="searchbar"><input id="searchInput" placeholder="Ara..."></div>
+    <div class="noticebar" id="noticeBar"></div>
     <div class="content">
+      <div class="dailybar" id="dailyBar"></div>
       <div class="pane active" id="pane-chats"></div>
       <div class="pane" id="pane-status"></div>
       <div class="pane" id="pane-calls"></div>
@@ -815,6 +822,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="profile">Profilim</button>
       <button data-act="readall">Tümünü okundu say</button>
       <button data-act="dark">Karanlık mod</button>
+      <button data-act="feedback">Görüş bildir / sıradaki oyun</button>
       <button data-act="support">Destek</button>
       <button data-act="terms">Kullanım koşulları</button>
       <button data-act="privacy">Gizlilik politikası</button>

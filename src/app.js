@@ -297,6 +297,32 @@ function openBroadcast(){pickFriends("📣 Toplu mesaj","Hepsine gönder",async(
   if(hasBad(text)){toast("Mesajda uygunsuz kelime var");return}let n=0;for(const to of sel.slice(0,50)){if(await sendContent(to,{t:"text",text}))n++}toast(`${n} kişiye ayrı ayrı gönderildi`)},{extra:'<textarea id="pfText" maxlength="2000" rows="3" placeholder="Mesajın (her kişiye ayrı sohbet olarak gider)" style="width:100%;margin-bottom:8px"></textarea>'})}
 const wordFilter=()=>String(SET.words||"").split(",").map(x=>x.trim().toLocaleLowerCase("tr")).filter(x=>x.length>1);
 function filtered(text){const w=wordFilter();if(!w.length)return false;const t=String(text||"").toLocaleLowerCase("tr");return w.some(x=>t.includes(x))}
+/* ---------- tanıtım turu, duyuru, hata raporu, geri bildirim, puan isteme, yeni sürüm ---------- */
+function showTour(){if(localStorage.getItem("tr-tour"))return;localStorage.setItem("tr-tour","1");
+  const P=[["🔒","Uçtan uca şifreli","Mesajların ve aramaların sadece sen ve karşındakinde açılır. Sunucu bile okuyamaz."],["🤝","Arkadaşını ekle","TR ID'ni, @kullanıcı adını ya da QR kodunu paylaş. İstek kabul edilince yazışırsınız."],["🀄","Oyun sekmesi","Okey, Bilardo, Pişti ve Tavla. Her gün hediye, lig, turnuva ve kulüpler seni bekliyor."],["⚙️","Sana göre","Menü → Ayarlar'dan yazı boyutu, tema ve duvar kâğıdını değiştir."]];
+  let i=0;const draw=()=>{openInfoModal("",`<div class="tour"><div class="ti">${P[i][0]}</div><b>${P[i][1]}</b><p>${P[i][2]}</p><div class="dots">${P.map((_,k)=>`<i class="${k===i?"on":""}"></i>`).join("")}</div><div class="row2"><button id="tNext" style="background:var(--brand)">${i<P.length-1?"İleri":"Başla"}</button></div></div>`);
+    $("#tNext").onclick=()=>{i++;if(i<P.length)draw();else closeE()}};draw()}
+let noticeShown="";
+onSnapshot(doc(fs,"config","app"),s=>{const n=s.exists()?s.data().notice:null;const bar=$("#noticeBar");if(!bar)return;
+  if(!n||!n.text||localStorage.getItem("tr-notice-x")===String(n.at)){bar.classList.remove("show");return}
+  bar.className="noticebar show "+(n.kind==="maint"?"maint":"");bar.innerHTML=`<span>${n.kind==="maint"?"🛠️":"📢"} ${esc(n.text)}</span><button aria-label="Kapat">✕</button>`;
+  bar.querySelector("button").onclick=()=>{localStorage.setItem("tr-notice-x",String(n.at));bar.classList.remove("show")}},()=>{});
+{let sent=0;const rep=(msg,src)=>{if(!me||sent>=5)return;sent++;try{addDoc(collection(fs,"errors"),{uid:me,msg:String(msg).slice(0,500),src:String(src||"").slice(0,300),ua:navigator.userAgent.slice(0,200),at:Date.now(),v:1})}catch(e){}};
+  window.addEventListener("error",e=>rep(e.message,(e.filename||"")+":"+(e.lineno||"")));window.addEventListener("unhandledrejection",e=>rep("promise: "+(e.reason&&e.reason.message||e.reason),""))}
+function openFeedback(){const G=["101 Okey","Batak","King","Satranç","Dama","Kızma Birader","Domino","Tombala"];
+  openInfoModal("💬 Görüşün bizim için önemli",`<div class="fl">Sıradaki oyun ne olsun?</div><div class="seg" id="fbVote">${G.map(g=>`<button data-v="${g}">${g}</button>`).join("")}</div>
+    <div class="fl">Önerin ya da şikâyetin</div><textarea id="fbText" maxlength="1000" rows="4" style="width:100%" placeholder="Yaz, okuyoruz…"></textarea><div class="row2"><button id="fbGo" style="background:var(--brand)">Gönder</button></div>`);
+  let vote="";$("#fbVote").onclick=e=>{const b=e.target.closest("button");if(!b)return;vote=b.dataset.v;$("#fbVote").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))};
+  $("#fbGo").onclick=async()=>{const text=$("#fbText").value.trim();if(!vote&&!text){toast("Bir oyun seç ya da bir şey yaz");return}
+    try{await setDoc(doc(fs,"feedback",me),{...(vote?{vote}:{}),...(text?{text}:{}),at:Date.now()});closeE();toast("Teşekkürler! 🙏")}catch(e){toast("Gönderilemedi")}}}
+function maybeAskRating(){if(localStorage.getItem("tr-rated")||!wallet||(wallet.wins||0)<5)return;localStorage.setItem("tr-rated","1");
+  openModal({title:"TR'yi beğendin mi? ⭐",text:"Birkaç saniyeni ayırıp Play Store'da puan verirsen çok seviniriz.",input:false,ok:"Puan ver",cancelText:"Sonra"},()=>{window.open("https://play.google.com/store/apps/details?id=com.trtr.mesaj","_blank")})}
+if("serviceWorker" in navigator){navigator.serviceWorker.addEventListener("controllerchange",()=>{if(window.__swReady){const bar=$("#noticeBar");if(bar){bar.className="noticebar show";bar.innerHTML='<span>✨ Yeni sürüm hazır</span><button id="nbReload">Yenile</button>';$("#nbReload").onclick=()=>location.reload()}}});
+  navigator.serviceWorker.ready.then(()=>{window.__swReady=!!navigator.serviceWorker.controller}).catch(()=>{})}
+function dailyBanner(){const el=$("#dailyBar");if(!el)return;if(!wallet||tabNow!=="chats"){el.classList.remove("show");return}
+  if(dailyAvailable()){el.className="dailybar show";el.innerHTML=`🎁 <b>Günün ödülü hazır!</b><span>Al ›</span>`;el.onclick=()=>openDaily()}
+  else{const ms=new Date(new Date(Date.now()+3*3600e3).toISOString().slice(0,10)+"T00:00:00Z").getTime()+86400e3-3*3600e3-Date.now();el.className="dailybar show soft";el.innerHTML=`🎁 Yeni günlük ödüle <b>${fmtWait(ms)}</b>`;el.onclick=()=>openDaily()}}
+setInterval(dailyBanner,60000);
 /* ---------- bağlantılar ---------- */
 function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
 function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
@@ -995,7 +1021,7 @@ $("#back").onclick=()=>{try{if(history.state&&history.state.chat){history.back()
 window.addEventListener("popstate",()=>{if($("#viewer").classList.contains("show")){closeViewer();return}if(game)return;if(cur)closeChat()});
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if($("#viewer").classList.contains("show")){closeViewer();return}if(cur&&!document.querySelector(".modal.show")&&!$("#story.show"))$("#back").click()});
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
-  tabNow=t.dataset.tab;
+  tabNow=t.dataset.tab;setTimeout(dailyBanner,0);
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("active",p.id==="pane-"+tabNow));
   if(tabNow==="calls")renderCalls();
@@ -1078,6 +1104,7 @@ menu.onclick=e=>{const a=e.target.dataset.act;if(!a)return;closeAll();
   if(a==="settings")openSettings();
   if(a==="notes")openNotes();
   if(a==="broadcast")openBroadcast();
+  if(a==="feedback")openFeedback();
   if(a==="sound"){const m=localStorage.getItem("tr-mute")==="1";localStorage.setItem("tr-mute",m?"0":"1");toast(m?"🔊 Sesler açıldı":"🔇 Sesler kapatıldı");if(m)sfx("coin")}
   if(a==="privacy2")openPrivacy();
   if(a==="terms")window.open("/kosullar.html","_blank");
@@ -1547,12 +1574,14 @@ function levelFromXp(xp){let lvl=1,need=200,acc=0;while(xp>=acc+need&&lvl<50){ac
 function trDay(ms=Date.now()){const d=new Date(ms+3*3600*1000);return{day:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}${String(d.getUTCDate()).padStart(2,"0")}`,month:`${d.getUTCFullYear()}${String(d.getUTCMonth()+1).padStart(2,"0")}`}}
 async function initWallet(){
   try{const r=await callApi("/api/wallet",{action:"me"});catalog=r.wallet.catalog;applyWallet(r.wallet);
+    if(r.back)setTimeout(()=>openInfoModal("💛 Seni özledik!",`<div style="text-align:center;font-size:15px"><div style="font-size:44px">🤗</div>Tekrar hoş geldin! Sana <b>${fmtCoin(r.back)}</b> jeton hediye ettik.</div>`),1200);
+    if(r.welcomed)setTimeout(showTour,9000);
     if(!r.welcomed&&dailyAvailable())setTimeout(()=>{if(!document.querySelector(".modal.show"))openDaily()},1800);
     if(r.welcomed)setTimeout(()=>openInfoModal("🎁 Hoş geldin!",`<div style="text-align:center;font-size:15px;line-height:1.5"><div style="font-size:44px">🎉</div>Sana <b>${fmtCoin(100000)}</b> <span class="coin"></span> jeton hediye ettik.<br>Oyun sekmesinden harcayabilirsin.</div>`),1500)}catch(e){}
   unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin,vipUntil:+x.vipUntil||0,adult:!!x.adult,ageSet:!!x.birthYear})},()=>{}));
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
-function applyWallet(w){wallet=w;setTimeout(renderBell,0);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
+function applyWallet(w){wallet=w;setTimeout(renderBell,0);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
 function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ceviz");if(id.startsWith("vip_")&&!isVipU(me))return kind==="table"?"yesil":"ceviz";return id}
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
@@ -1927,6 +1956,13 @@ function openAdmin(){
   const h=houseStats||{};
   openInfoModal("Yönetim paneli",`<div class="pk" style="display:block;margin-bottom:10px"><div class="isub">Kasa (net)</div><div style="font-size:20px;font-weight:800"><span class="coin"></span> ${fmtCoin(h.net||0)}</div><div class="isub">%5 kesinti: ${fmtCoin(h.rake||0)} · Bilgisayar kazancı: ${fmtCoin(h.botWin||0)} · Bilgisayar ücreti: −${fmtCoin(h.botStake||0)} · ${fmtCoin(h.hands||0)} el</div></div><div class="row2" style="margin-bottom:10px"><button id="adReps" style="background:#E53935">🚩 Şikâyetler</button></div><input id="adCode" inputmode="numeric" placeholder="Kullanıcının TR ID'si (örn. 482 913)"><div class="row2"><button id="adFind" style="background:var(--brand)">Bul</button></div><div id="adOut" style="margin-top:10px"></div>`);
   $("#adReps").onclick=adminReports;
+  $("#adOut").insertAdjacentHTML("beforebegin",`<div class="row2"><button id="adNotice" style="background:#555">📢 Duyuru / bakım</button><button id="adStats" style="background:#555">📈 Hata ve görüşler</button></div>`);
+  $("#adNotice").onclick=()=>{$("#adOut").innerHTML=`<textarea id="anT" maxlength="300" rows="3" style="width:100%" placeholder="Herkese gösterilecek duyuru (boş bırakıp kaydedersen kaldırılır)"></textarea><label class="tgl"><span><b>Bakım duyurusu</b></span><input type="checkbox" id="anM"></label><div class="row2"><button id="anGo" style="background:var(--brand)">Yayınla</button></div>`;
+    $("#anGo").onclick=async()=>{try{await callApi("/api/admin",{action:"notice",text:$("#anT").value,kind:$("#anM").checked?"maint":"info"});toast("Duyuru güncellendi")}catch(e){toast("Olmadı")}}};
+  $("#adStats").onclick=async()=>{$("#adOut").innerHTML='<div class="isub">Yükleniyor…</div>';try{const r=await callApi("/api/admin",{action:"stats"});
+    $("#adOut").innerHTML=`<div class="pk" style="display:block"><b>Son 24 saatte hata: ${r.errors24h}</b>${(r.lastErrors||[]).slice(0,8).map(x=>`<div class="isub">${esc(String(x.msg).slice(0,120))}</div>`).join("")}</div>
+      <div class="pk" style="display:block"><b>Sıradaki oyun oyları</b>${Object.entries(r.votes||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div>${esc(k)}: <b>${v}</b></div>`).join("")||'<div class="isub">Henüz oy yok</div>'}</div>
+      <div class="pk" style="display:block"><b>Görüşler</b>${(r.feedback||[]).map(x=>`<div class="isub">“${esc(String(x.text).slice(0,200))}”</div>`).join("")||'<div class="isub">Henüz yok</div>'}</div>`}catch(e){$("#adOut").innerHTML='<div class="isub">Yüklenemedi</div>'}};
   $("#adFind").onclick=adminLookup;$("#adCode").onkeydown=e=>{if(e.key==="Enter")adminLookup()};setTimeout(()=>$("#adCode").focus(),60);
 }
 const banLabel=u=>u>Date.now()+3650*86400e3?"kalıcı yasaklı":"askıda: "+new Date(u).toLocaleString("tr-TR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})+" tarihine kadar";

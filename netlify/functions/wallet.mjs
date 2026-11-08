@@ -55,7 +55,13 @@ export default async (req) => {
         const is = await tx.get(invRef);
         invW = is.exists ? is.data() : null;
       }
-      let welcomed = false;
+      let welcomed = false, back = 0;
+      if (w && act === "me") {
+        // "Seni özledik": 7 günden uzun aradan sonra ilk girişte bir kez hediye
+        const away = Date.now() - (w.lastMe || Date.now());
+        if (away > 7 * 86400000) { back = E.COMEBACK; E.credit(tx, db, uid, w, back, "Seni özledik hediyesi"); }
+        w.lastMe = Date.now();
+      }
       if (!w) {
         w = E.newWallet();
         tx.set(db.collection("ledger").doc(), { uid, delta: E.WELCOME_BONUS, reason: "Hoş geldin hediyesi", by: "system", at: Date.now(), after: w.balance });
@@ -264,7 +270,7 @@ export default async (req) => {
       }
       if (act === "me") E.checkAch(tx, db, uid, w);
       tx.set(ref, w);
-      return { status: 200, body: { wallet: view(w), welcomed, daily, gift, club } };
+      return { status: 200, body: { wallet: view(w), welcomed, daily, gift, club, back } };
     });
     return json(res.status, res.body);
   } catch (e) {

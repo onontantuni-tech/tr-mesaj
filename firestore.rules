@@ -28,6 +28,25 @@ service cloud.firestore {
         && (!('av' in nd()) || nd().av is number);
     }
 
+    // uygulama duyurusu (sadece sunucu yazar)
+    match /config/{d} {
+      allow read: if true;
+      allow write: if false;
+    }
+    // otomatik hata raporları (sadece ekleme)
+    match /errors/{id} {
+      allow create: if signedIn() && nd().keys().hasOnly(['uid','msg','src','ua','at','v'])
+        && nd().uid == request.auth.uid && nd().msg is string && nd().msg.size() <= 500
+        && nd().src is string && nd().src.size() <= 300 && nd().ua is string && nd().ua.size() <= 200 && nd().at is number;
+    }
+    // geri bildirim / "sıradaki oyun" oylaması (kişi başı bir kayıt)
+    match /feedback/{uid} {
+      allow read: if isMe(uid);
+      allow write: if isMe(uid) && nd().keys().hasOnly(['vote','text','at'])
+        && (!('text' in nd()) || (nd().text is string && nd().text.size() <= 1000))
+        && (!('vote' in nd()) || (nd().vote is string && nd().vote.size() <= 30)) && nd().at is number;
+    }
+
     // kullanıcı adları (@harun): ilk alan sahibi olur
     match /usernames/{un} {
       allow read: if signedIn();

@@ -27,6 +27,22 @@ export default async (req) => {
   }
 
   // Şikâyetler
+  // Uygulama içi duyuru / bakım bandı (herkes görür)
+  if (act === "notice") {
+    const text = String(b.text || "").slice(0, 300).trim();
+    const kind = b.kind === "maint" ? "maint" : "info";
+    await db.doc("config/app").set({ notice: text ? { text, kind, at: Date.now() } : null }, { merge: true });
+    return json(200, { ok: true });
+  }
+  if (act === "stats") {
+    const day = Date.now() - 86400000;
+    const [errs, fb] = await Promise.all([
+      db.collection("errors").where("at", ">", day).limit(200).get(),
+      db.collection("feedback").limit(500).get(),
+    ]);
+    const votes = {}; fb.docs.forEach((d) => { const v = d.data().vote; if (v) votes[v] = (votes[v] || 0) + 1; });
+    return json(200, { errors24h: errs.size, lastErrors: errs.docs.slice(0, 20).map((d) => d.data()), votes, feedback: fb.docs.map((d) => d.data()).filter((x) => x.text).slice(0, 50) });
+  }
   if (act === "reports") {
     const q = await db.collection("reports").where("status", "==", "open").limit(100).get();
     const rows = q.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => b.at - a.at);

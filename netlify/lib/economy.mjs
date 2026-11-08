@@ -27,6 +27,7 @@ export const tierIndex = (balance) => { let i = 0; TIERS.forEach((t, k) => { if 
 export const stakeAllowed = (v, balance) => TIERS.some((t, k) => k <= tierIndex(balance) && t.stakes.includes(v)) && (balance || 0) >= v;
 // Kasa kesintisi: her elde potun %5'i
 export const RAKE = 0.05;
+export const COMEBACK = 20000; // 7+ gün aradan sonra dönene
 
 // Ödüller: sıralamada ilk 3
 export const DAILY_PRIZES = [100000, 50000, 20000];
