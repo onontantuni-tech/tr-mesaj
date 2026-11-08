@@ -296,6 +296,10 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+    match /lb_week/{w}/{t}/{u} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
     match /lb_month/{m}/u/{u} {
       allow read: if signedIn();
       allow write: if false;

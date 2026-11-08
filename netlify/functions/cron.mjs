@@ -54,6 +54,41 @@ async function refundStale(db) {
   return { kind: "refund", games: n };
 }
 
+// Haftalık lig kapanışı (pazartesi gecesi): ödüller, yükselme ve düşme
+async function settleLeague(db, wk) {
+  const flag = db.doc(`rewards/league_${wk}`);
+  if ((await flag.get()).exists) return { kind: "league", week: wk, skipped: true };
+  const summary = [];
+  for (let tier = 0; tier < E.LEAGUES.length; tier++) {
+    const q = await db.collection(`lb_week/${wk}/t${tier}`).orderBy("points", "desc").limit(2000).get();
+    const rows = q.docs.map((d) => ({ uid: d.id, ...d.data() })).filter((x) => (x.points || 0) > 0)
+      .sort((a, b) => (b.points - a.points) || ((b.wins || 0) - (a.wins || 0)));
+    const n = rows.length;
+    const up = tier < E.LEAGUES.length - 1 ? Math.max(1, Math.ceil(n * E.LEAGUE_MOVE)) : 0;
+    const down = tier > 0 && n >= 5 ? Math.ceil(n * E.LEAGUE_MOVE) : 0;
+    const L = E.LEAGUES[tier];
+    for (let i = 0; i < n; i++) {
+      const r = rows[i];
+      const move = i < up ? 1 : i >= n - down ? -1 : 0;
+      const prize = L.prizes[i] || 0;
+      await db.runTransaction(async (tx) => {
+        const ref = db.doc(`wallets/${r.uid}`);
+        const ws = await tx.get(ref);
+        const w = ws.exists ? ws.data() : E.newWallet();
+        if (w.leagueDone === wk) return;
+        w.leagueDone = wk;
+        w.league = Math.max(0, Math.min(E.LEAGUES.length - 1, tier + move));
+        w.lastLeague = { week: wk, tier, rank: i + 1, of: n, move, prize };
+        if (prize) E.credit(tx, db, r.uid, w, prize, `${L.name} ligi ${i + 1}.lik ödülü`);
+        tx.set(ref, w);
+      });
+    }
+    summary.push({ tier, players: n, up: Math.min(up, n), down });
+  }
+  await flag.set({ at: Date.now(), summary });
+  return { kind: "league", week: wk, summary };
+}
+
 export default async (req) => {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.get("authorization") || "";
@@ -64,6 +99,7 @@ export default async (req) => {
   const today = E.trDate();
   const out = [await payTop(db, "day", y.day, E.DAILY_PRIZES)];
   if (today.dom === 1) out.push(await payTop(db, "month", y.month, E.MONTHLY_PRIZES));
+  if (today.dow === 0) out.push(await settleLeague(db, E.weekId(Date.now() - 10 * 60 * 1000)));
   out.push(await refundStale(db));
   return json(200, { ok: true, out });
 };

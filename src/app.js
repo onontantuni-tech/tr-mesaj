@@ -1380,7 +1380,7 @@ function mySkin(kind){const id=wallet?.skin?.[kind]||(kind==="table"?"yesil":"ce
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
 const chestLeft=()=>wallet?(wallet.chestAt||0)+(wallet.chestEvery||4*3600e3)-Date.now():1;
-const fmtWait=ms=>{const m=Math.ceil(ms/60000);return m>=60?Math.floor(m/60)+" sa "+(m%60)+" dk":m+" dk"};
+const fmtWait=ms=>{const m=Math.max(1,Math.ceil(ms/60000));if(m>=1440)return Math.floor(m/1440)+" gün "+Math.floor(m%1440/60)+" sa";return m>=60?Math.floor(m/60)+" sa "+(m%60)+" dk":m+" dk"};
 setInterval(()=>{renderBell();const l=document.querySelector(".chestlbl");if(l&&wallet){const x=chestLeft();l.textContent=x<=0?"Sandık hazır!":"Sandık · "+fmtWait(x)}},30000);
 async function claimGift(kind){
   if(kind==="chest"&&chestLeft()>0){toast("Sandık "+fmtWait(chestLeft())+" sonra açılır");return}
@@ -1558,6 +1558,7 @@ function renderGamesTab(){
   </div>
   <div class="gbtns">
     ${(wallet.balance||0)<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today?`<button data-g="rescue" class="hot" style="grid-column:span 2;background:#fff4d6"><span>🆘</span>Jetonun bitti mi? ${fmtCoin(catalog?.rescue?.amount||10000)} jeton desteği al<i class="dot"></i></button>`:""}
+    ${(()=>{const L=(catalog?.leagues||[])[wallet.league||0];return L?`<button data-g="league" class="lgbtn lg${wallet.league||0}" style="grid-column:span 2"><span>${L.icon}</span>${esc(L.name)} ligi<small>Hafta bitimine ${fmtWait(weekLeft())} · ilk 3'e ${fmtCoin(L.prizes[0])} jetona kadar ödül</small></button>`:""})()}
     <button data-g="daily" class="${dailyAvailable()?"hot":""}"><span>🎁</span>Günlük hediye${dailyAvailable()?'<i class="dot"></i>':""}</button>
     <button data-g="spin" class="${wallet.spinDay!==wallet.today?"hot":""}"><span>🎡</span>Günlük çark${wallet.spinDay!==wallet.today?'<i class="dot"></i>':""}</button>
     <button data-g="chest" class="${chestLeft()<=0?"hot":""}"><span>🧰</span><span class="chestlbl" style="font-size:inherit">${chestLeft()<=0?"Sandık hazır!":"Sandık · "+fmtWait(chestLeft())}</span>${chestLeft()<=0?'<i class="dot"></i>':""}</button>
@@ -1578,7 +1579,7 @@ document.querySelector(".content").addEventListener("click",e=>{const b=e.target
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
   if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
-  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
+  if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
 function notifItems(){const it=[];
   for(const u of Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u)))it.push({ic:"🤝",t:`<b>${esc(realName(u))}</b> arkadaşlık isteği gönderdi`,go:()=>{setTabSafe("chats")},at:friends[u].at||0});
@@ -1618,6 +1619,23 @@ function openSkins(){
     if(it.vip){b.disabled=true;try{const r=await callApi("/api/wallet",{action:"equip",kind,id});applyWallet({...r.wallet});openSkins();toast("Değiştirildi")}catch(err){toast("İşlem yapılamadı");b.disabled=false}return}
     if(!own&&(wallet.balance||0)<it.price){toast("Yeterli jetonun yok");return}
     b.disabled=true;try{const r=await callApi("/api/wallet",{action:own?"equip":"buySkin",kind,id});applyWallet({...r.wallet});catalog=r.wallet.catalog;openSkins();toast(own?"Değiştirildi":"Satın alındı 🎉")}catch(err){toast("İşlem yapılamadı");b.disabled=false}};
+}
+function weekLeft(){const d=new Date(Date.now()+3*3600e3);const dow=(d.getUTCDay()+6)%7;
+  const end=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()-dow+7)-3*3600e3;return end-Date.now()}
+function openLeague(){
+  const Ls=catalog?.leagues||[],t=wallet.league||0,L=Ls[t];if(!L)return;
+  const mv=Math.round((catalog.leagueMove||.2)*100),ll=wallet.lastLeague;
+  const last=ll&&ll.week!==wallet.week?`<div class="pk" style="display:block;margin-bottom:8px"><b>Geçen hafta:</b> ${esc(Ls[ll.tier]?.name||"")} liginde ${ll.rank}. oldun (${ll.of} oyuncu)${ll.prize?` · +${fmtCoin(ll.prize)} jeton`:""}${ll.move>0?" · ⬆️ yükseldin!":ll.move<0?" · ⬇️ düştün":""}</div>`:"";
+  openInfoModal(`${L.icon} ${L.name} ligi`,`${last}<div class="lgpath">${Ls.map((x,i)=>`<span class="${i===t?"on":""}">${x.icon}<small>${esc(x.name)}</small></span>`).join("<i>›</i>")}</div>
+    <div class="isub" style="margin:6px 0">Hafta bitimine <b>${fmtWait(weekLeft())}</b>. İlk %${mv} üst lige çıkar${t>0?`, son %${mv} alt lige düşer`:""}. Ödüller: 🥇 ${fmtCoin(L.prizes[0])} · 🥈 ${fmtCoin(L.prizes[1])} · 🥉 ${fmtCoin(L.prizes[2])} jeton.</div>
+    <div class="isub" style="margin-bottom:6px">Puan: galibiyette oyun puanı (jetonlu masada 2 katı), yenilgide 1 katılım puanı. Bilgisayara karşı ücretsiz masalar sayılmaz.</div><div id="lbList"><div class="empty">Yükleniyor…</div></div>`);
+  if(lbUnsub)lbUnsub();
+  lbUnsub=onSnapshot(query(collection(fs,"lb_week",wallet.week,"t"+t),orderBy("points","desc"),limit(100)),s=>{
+    const rows=s.docs.map(d=>({uid:d.id,...d.data()})).filter(x=>(x.points||0)>0);rows.forEach(r=>watchUser(r.uid));
+    const n=rows.length,up=t<Ls.length-1?Math.max(1,Math.ceil(n*(catalog.leagueMove||.2))):0,down=t>0&&n>=5?Math.ceil(n*(catalog.leagueMove||.2)):0;
+    const el=$("#lbList");if(!el)return;
+    el.innerHTML=n?rows.map((r,i)=>`<div class="lbrow ${r.uid===me?"me":""} ${i<up?"up":i>=n-down?"down":""}"><span class="rk">${i<3?["🥇","🥈","🥉"][i]:i+1}</span>${avHTML(r.uid)}<span class="nm">${esc(r.uid===me?"Sen":realName(r.uid))}${vipMark(r.uid)}</span><span class="isub">${i<up?"⬆️":i>=n-down?"⬇️":""}</span><span class="pt">${fmtCoin(r.points)} p</span></div>`).join(""):`<div class="empty">Bu hafta henüz kimse puan almadı. Bir arkadaşınla ya da jetonlu masada oyna, ilk sen ol!</div>`;
+  },()=>{const el=$("#lbList");if(el)el.innerHTML='<div class="empty">Lig yüklenemedi</div>'});
 }
 let lbUnsub=null;
 function openRanking(kind){

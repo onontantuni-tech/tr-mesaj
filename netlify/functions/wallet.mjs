@@ -215,8 +215,9 @@ function view(w) {
     streak: w.streak || 0, lastDaily: w.lastDaily || "", today: E.trDate().day, yesterday: E.trDate(Date.now() - 86400000).day,
     chestAt: w.chestAt || 0, chestEvery: E.CHEST.every, rescueDay: w.rescueDay || "", spinDay: w.spinDay || "", winStreak: w.winStreak || 0,
     tasks: (() => { const t = E.todayTasks(w); return E.TASKS.map((x) => ({ id: x.id, text: x.text, prize: x.prize, prog: x.goal(t), done: x.need(t), claimed: (t.claimed || []).includes(x.id) })); })(),
+    league: Math.max(0, Math.min(E.LEAGUES.length - 1, w.leagueWeek === E.weekId() ? (w.leagueTier ?? w.league ?? 0) : (w.league || 0))), week: E.weekId(), lastLeague: w.lastLeague || null,
     refBy: !!w.refBy, refCount: w.refCount || 0, canRef: !w.refBy && !(w.games > 0) && Date.now() - (w.createdAt || 0) < 7 * 86400000,
-    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES },
+    catalog: { wheel: E.WHEEL.map((x) => x.amount), chest: E.CHEST, rescue: E.RESCUE, login: E.LOGIN_CALENDAR, loginVip: E.LOGIN_VIP_DAYS, refBonus: E.REFERRAL_BONUS, vip: E.VIP, skins: E.SKINS, packages: E.PACKAGES, tiers: E.TIERS, rake: E.RAKE, daily: E.DAILY_PRIZES, monthly: E.MONTHLY_PRIZES, leagues: E.LEAGUES, leagueMove: E.LEAGUE_MOVE },
   };
 }
 

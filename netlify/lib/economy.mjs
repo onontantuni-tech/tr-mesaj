@@ -68,7 +68,34 @@ export const botSkillForLevel = (lvl) => (lvl >= 10 ? 2 : lvl >= 4 ? 1 : 0);
 export function trDate(ms = Date.now()) {
   const d = new Date(ms + 3 * 3600 * 1000);
   const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, "0"), day = String(d.getUTCDate()).padStart(2, "0");
-  return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate() };
+  return { day: `${y}${m}${day}`, month: `${y}${m}`, dom: d.getUTCDate(), dow: (d.getUTCDay() + 6) % 7 };
+}
+
+// ---- Haftalık lig: Bronz → Gümüş → Altın → Elmas. Hafta pazartesi 00:00 (TR) başlar. ----
+// Her ligde haftanın ilk %20'si bir üst lige çıkar, son %20'si (en az 5 oyuncu varsa) bir alt lige düşer.
+// Her ligin ilk 3'üne ödül. Puan: galibiyet = oyun puanı (jetonlu masada 2 katı), mağlubiyet = 1 katılım puanı.
+// Bilgisayara karşı ücretsiz masalar lig puanı vermez.
+export const LEAGUES = [
+  { id: "bronz", name: "Bronz", icon: "🥉", prizes: [20000, 10000, 5000] },
+  { id: "gumus", name: "Gümüş", icon: "🥈", prizes: [50000, 25000, 10000] },
+  { id: "altin", name: "Altın", icon: "🥇", prizes: [100000, 50000, 25000] },
+  { id: "elmas", name: "Elmas", icon: "💎", prizes: [250000, 125000, 50000] },
+];
+export const LEAGUE_MOVE = 0.2;
+export function weekId(ms = Date.now()) {
+  const d = trDate(ms);
+  return trDate(ms - d.dow * 86400000).day;
+}
+export function leaguePoints({ won, draw, stake, opp, points }) {
+  if (!(stake > 0) && !(opp && opp.length)) return 0;
+  if (draw) return 1;
+  return won ? (points || 2) * (stake > 0 ? 2 : 1) : 1;
+}
+export function addLeague(tx, db, uid, wl, pts, won) {
+  if (!pts) return;
+  const wk = weekId(), tier = Math.max(0, Math.min(LEAGUES.length - 1, wl.league || 0));
+  if (wl.leagueWeek !== wk) { wl.leagueWeek = wk; wl.leagueTier = tier; }
+  tx.set(db.doc(`lb_week/${wk}/t${wl.leagueTier ?? tier}/${uid}`), { points: FieldValue.increment(pts), wins: FieldValue.increment(won ? 1 : 0), games: FieldValue.increment(1), uid }, { merge: true });
 }
 
 // Sadakat: her gün ilk girişte o günün hediyesi. 30 günlük takvim, bir gün kaçırılırsa 1. güne döner.
@@ -130,6 +157,7 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   if (won) wl.wins = (wl.wins || 0) + 1;
   wl.xp = (wl.xp || 0) + (won ? XP_WIN : XP_PLAY);
   addStats(tx, db, uid, won ? points || 2 : 0, won);
+  addLeague(tx, db, uid, wl, leaguePoints({ won, draw, stake, opp, points }), won);
   // galibiyet serisi (sadece jetonlu masalarda; ücretsiz masada bilgisayarı yenip jeton toplanmasın)
   if (won && stake > 0) {
     wl.winStreak = (wl.winStreak || 0) + 1;
