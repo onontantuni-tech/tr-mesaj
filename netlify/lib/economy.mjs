@@ -176,7 +176,7 @@ export function afterGame(tx, db, uid, wl, { won, draw, type, stake, delta, opp,
   } else if (!draw && !won) wl.winStreak = 0;
   // günlük görevler
   const t = todayTasks(wl);
-  t.played++; if (won) t.won++; if (type === "pool") t.pool++; else t.okey++;
+  t.played++; if (won) t.won++; if (type === "pool") t.pool++; else if (type === "okey") t.okey++;
   wl.td = t;
   // oyun geçmişi
   tx.set(db.doc(`gh/${uid}/g/${gid}_${round}`), { at: Date.now(), type, stake: stake || 0, won: !!won, draw: !!draw, delta: delta || 0, opp: (opp || []).slice(0, 3) });

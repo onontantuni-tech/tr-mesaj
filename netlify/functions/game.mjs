@@ -71,6 +71,7 @@ export default async (req) => {
       if (!gs.exists) return { status: 404, body: { error: "game" } };
       const g = gs.data();
       g.gid = id;
+      if (g.type && g.type !== "okey") return { status: 400, body: { error: "type" } };
       if (!g.members.includes(uid) && !(g.public && act === "join")) return { status: 403, body: { error: "member" } };
       let auto = false; // açık masa dolunca ya da süre bitince kendiliğinden başlar
       const mySeat = g.seats.findIndex((s) => s && !s.bot && s.uid === uid);

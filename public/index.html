@@ -203,6 +203,41 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 .nitem{display:flex;align-items:center;gap:12px;padding:12px 6px;border-bottom:1px solid var(--line,#eee);cursor:pointer;font-size:14px}
 .nitem .nic{width:36px;height:36px;border-radius:50%;background:var(--bg);display:grid;place-items:center;font-size:17px;flex:none;font-weight:700;color:var(--brand)}
 .nitem .nt{flex:1}.nitem .nar{color:var(--muted);font-size:20px}
+/* Pişti */
+.gamescr.pistig{background:radial-gradient(ellipse at 50% 45%,#1f7a46 0%,#0f4a2a 70%,#0a3520 100%)}
+.ptable{position:relative;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;height:100%;min-height:calc(100dvh - 120px);padding:8px 10px 14px;color:#fff;gap:6px}
+.pside{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.22);border-radius:14px;padding:6px 10px;border:2px solid transparent}
+.pside.turn{border-color:#FFD54F;box-shadow:0 0 14px rgba(255,213,79,.45)}
+.pside .av{width:38px;height:38px;font-size:15px}.pinfo{display:flex;flex-direction:column;font-size:12.5px}.pinfo b{font-size:14.5px}.pinfo em{color:#FFD54F;font-style:normal;font-weight:800}
+.pcard{position:relative;width:62px;height:88px;border-radius:8px;background:#fff;color:#1a1a1a;box-shadow:0 2px 6px rgba(0,0,0,.35);flex:none;font-family:Georgia,"Times New Roman",serif;user-select:none}
+.pcard.red{color:#C8102E}
+.pcard .tl,.pcard .br{position:absolute;font-size:13px;line-height:1;font-weight:700;text-align:center}
+.pcard .tl{left:5px;top:5px}.pcard .br{right:5px;bottom:5px;transform:rotate(180deg)}
+.pcard .mid{position:absolute;inset:0;display:grid;place-items:center;font-size:34px}
+.pcard.back{background:repeating-linear-gradient(45deg,#b3121f 0 6px,#d7261e 6px 12px);border:3px solid #fff}
+.phand{display:flex;justify-content:center;min-height:60px}
+.phand.opp .pcard{width:44px;height:62px;margin:0 -8px}
+.phand.me{gap:8px;padding:4px 0}
+.phand.me .pcard{width:72px;height:102px;transition:transform .15s}
+.phand.me.can .pcard{cursor:pointer}.phand.me.can .pcard:active{transform:translateY(-14px)}
+.phand.me:not(.can) .pcard{filter:brightness(.82)}
+.phand.me .pcard.go{transform:translateY(-120px) scale(.9);opacity:.2;transition:all .15s}
+.pcenter{display:flex;align-items:center;justify-content:center;gap:28px;flex:1}
+.pdeck{position:relative}.pdeck span{position:absolute;bottom:-20px;left:0;right:0;text-align:center;font-size:12px;opacity:.85}
+.pdeck.empty{width:62px;height:88px;border:2px dashed rgba(255,255,255,.3);border-radius:8px;display:grid;place-items:center}.pdeck.empty span{position:static;font-size:11px}
+.ppile{position:relative;width:96px;height:120px}
+.ppile .pcard{position:absolute;width:76px;height:108px}
+.ppile .st3{left:2px;top:4px;transform:rotate(-9deg)}.ppile .st2{left:10px;top:4px;transform:rotate(6deg)}.ppile .st1{left:14px;top:8px;transform:rotate(-2deg)}
+.ppile .land{animation:pland .25s ease-out}
+@keyframes pland{from{transform:translateY(60px) rotate(-12deg);opacity:.3}}
+.pempty{width:96px;height:120px;border:2px dashed rgba(255,255,255,.35);border-radius:10px;display:grid;place-items:center;font-weight:800;color:#FFD54F}
+.plog{text-align:center;font-weight:700;font-size:14px;min-height:36px}.plog small{display:block;font-weight:500;opacity:.85;font-size:12px}
+.pflash{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);background:#FFD54F;color:#7a0a10;font-weight:900;font-size:24px;padding:10px 20px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.4);animation:pfl 1.2s ease-out both;pointer-events:none;z-index:3;white-space:nowrap}
+@keyframes pfl{0%{transform:translate(-50%,-50%) scale(.3)}30%{transform:translate(-50%,-50%) scale(1.15)}100%{transform:translate(-50%,-50%) scale(1)}}
+.pfin{margin:6px auto;border-collapse:collapse;font-size:14px}.pfin td,.pfin th{padding:3px 10px;text-align:center}
+.pubpisti{background:linear-gradient(135deg,#9b1b2a,#4a0a12)!important;color:#fff!important}
+.ptable .overbox{z-index:4;background:rgba(0,0,0,.88)}
+.pubpisti small{display:block;font-size:12px;opacity:.85}
 .tourbtn{background:linear-gradient(135deg,#D7261E,#7a0a10)!important;color:#fff!important}
 .tourbtn small,.lgbtn small{display:block;font-size:11.5px;opacity:.85;font-weight:500;margin-top:2px}
 .tourhead{display:flex;gap:8px}.tourhead div{flex:1;background:var(--bg);border-radius:12px;padding:10px 6px;text-align:center}
@@ -785,7 +820,8 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="gitem" data-newgame="okey"><div class="av" style="background:#0E7C3A">🀄</div><div class="gn"><b>Okey</b><span>4 kişilik · seri ve çift</span></div></div>
       <div class="gitem" data-newgame="pool"><div class="av" style="background:#1d3d7a">🎱</div><div class="gn"><b>Bilardo</b><span>2 kişilik · 8 top</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
-      <div class="gitem soon"><div class="av" style="background:#555">🃏</div><div class="gn"><b>Pişti · Batak · King</b><span>Yakında</span></div></div>
+      <div class="gitem" data-newgame="pisti"><div class="av" style="background:#7a1020">🃏</div><div class="gn"><b>Pişti</b><span>2 kişilik · kart</span></div></div>
+      <div class="gitem soon"><div class="av" style="background:#555">🂡</div><div class="gn"><b>Batak · King</b><span>Yakında</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">🎲</div><div class="gn"><b>Tavla</b><span>Yakında</span></div></div>
     </div>
     <div class="acts"><button id="gpickClose">Kapat</button></div>
