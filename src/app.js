@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, arrayUnion, collection, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import * as P from "../netlify/lib/pool.mjs";
 import * as OK from "../netlify/lib/okey.mjs";
 import * as TV from "../netlify/lib/tavla.mjs";
@@ -255,6 +255,32 @@ async function openNotes(){const items=await loadNotes();
     <div id="nList">${items.length?items.map((x,i)=>`<div class="pk note"><div style="flex:1;white-space:pre-wrap">${linkify(esc(x.t))}<div class="isub">${new Date(x.at).toLocaleString("tr-TR",{dateStyle:"short",timeStyle:"short"})}</div></div><button data-del="${i}" class="lnk">✕</button></div>`).join(""):'<div class="empty">Henüz kayıt yok. Mesajlara uzun basıp “Kaydet” diyebilir ya da buraya not yazabilirsin. Notlar sadece sende görünür.</div>'}</div>`);
   $("#nAdd").onclick=async()=>{const v=$("#nIn").value.trim();if(!v)return;await addNote(v);openNotes()};
   $("#nList").onclick=async e=>{const b=e.target.closest("[data-del]");if(!b)return;const it=await loadNotes();it.splice(+b.dataset.del,1);await setDoc(doc(fs,"private",me,"data","notes"),{items:it});openNotes()}}
+/* ---------- anket ve etkinlik (oylar mesajın pv alanında: {uid: seçenek}) ---------- */
+function openPollMaker(conv){
+  openInfoModal("📊 Anket oluştur",`<input id="plQ" maxlength="200" placeholder="Soru"><div id="plOpts">${[1,2,3].map(i=>`<input class="plo" maxlength="80" placeholder="Seçenek ${i}">`).join("")}</div>
+    <button id="plMore" class="lnkb">+ Seçenek ekle</button><div class="row2"><button id="plGo" style="background:var(--brand)">Gönder</button></div>`);
+  $("#plMore").onclick=()=>{const n=$("#plOpts").children.length;if(n>=10)return;$("#plOpts").insertAdjacentHTML("beforeend",`<input class="plo" maxlength="80" placeholder="Seçenek ${n+1}">`)};
+  $("#plGo").onclick=async()=>{const q=$("#plQ").value.trim(),o=[...document.querySelectorAll(".plo")].map(x=>x.value.trim()).filter(Boolean);
+    if(!q||o.length<2){toast("Soru ve en az 2 seçenek yaz");return}if(hasBad(q+" "+o.join(" "))){toast("Uygunsuz kelime var");return}closeE();await sendContent(conv,{t:"poll",q,o})}}
+function openEventMaker(conv){
+  const d=new Date(Date.now()+86400e3);d.setMinutes(0);const iso=new Date(d-d.getTimezoneOffset()*60e3).toISOString().slice(0,16);
+  openInfoModal("📅 Etkinlik oluştur",`<input id="evT" maxlength="100" placeholder="Etkinlik adı (ör. Cuma akşamı okey)"><label class="fl">Ne zaman?</label><input id="evW" type="datetime-local" value="${iso}"><input id="evP" maxlength="100" placeholder="Yer (isteğe bağlı)"><div class="row2"><button id="evGo" style="background:var(--brand)">Gönder</button></div>`);
+  $("#evGo").onclick=async()=>{const t=$("#evT").value.trim(),w=new Date($("#evW").value).getTime(),pl=$("#evP").value.trim();if(!t||!w){toast("Ad ve tarih gerekli");return}if(hasBad(t+" "+pl)){toast("Uygunsuz kelime var");return}closeE();await sendContent(conv,{t:"event",title:t,when:w,place:pl})}}
+function pollHTML(m,c){const opts=c.t==="event"?["✅ Katılıyorum","❌ Katılamıyorum"]:(Array.isArray(c.o)?c.o.slice(0,10):[]);const pv=m.pv||{};
+  const cnt=opts.map((_,i)=>Object.values(pv).filter(v=>v===i).length),tot=cnt.reduce((a,b)=>a+b,0)||1,mine=pv[me];
+  const head=c.t==="event"?`<div class="evh"><b>📅 ${esc(String(c.title||"").slice(0,100))}</b><span>${new Date(+c.when||0).toLocaleString("tr-TR",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"})}${c.place?" · 📍 "+esc(String(c.place).slice(0,100)):""}</span></div>`:`<b>📊 ${esc(String(c.q||"").slice(0,200))}</b>`;
+  return`<div class="poll" data-poll="${esc(m.id)}">${head}${opts.map((o,i)=>`<button data-vote="${i}" class="${mine===i?"on":""}"><i style="width:${Math.round(100*cnt[i]/tot)}%"></i><span>${esc(String(o).slice(0,80))}</span><b>${cnt[i]||""}</b></button>`).join("")}${c.t==="event"&&+c.when>Date.now()?`<button class="evrem" data-remind="${esc(m.id)}">⏰ Hatırlat</button>`:""}</div>`}
+$("#msgs").addEventListener("click",async e=>{
+  const v=e.target.closest("[data-vote]");if(v){const id=v.closest("[data-poll]").dataset.poll,m=msgById(id);if(!m)return;const i=+v.dataset.vote;
+    const pv={...(m.pv||{})};if(pv[me]===i)delete pv[me];else pv[me]=i;m.pv=pv;renderMsgs();
+    try{await updateDoc(doc(fs,"msgs",id),{pv})}catch(err){toast("Oy verilemedi")}return}
+  const r=e.target.closest("[data-remind]");if(r){const m=msgById(r.dataset.remind),c=m&&contentOf(m);if(!c)return;addReminder(+c.when-30*60e3,`📅 ${c.title} 30 dakika sonra`);toast("Etkinlikten 30 dakika önce hatırlatacağım")}
+});
+/* basit hatırlatıcı: uygulama açıkken bildirir */
+function reminders(){try{return JSON.parse(localStorage.getItem("tr-rem")||"[]")}catch(e){return[]}}
+function addReminder(at,text){const r=reminders().filter(x=>x.at>Date.now()-60e3);r.push({at,text});localStorage.setItem("tr-rem",JSON.stringify(r.slice(-50)))}
+setInterval(()=>{const now=Date.now(),r=reminders(),due=r.filter(x=>x.at<=now);if(!due.length)return;localStorage.setItem("tr-rem",JSON.stringify(r.filter(x=>x.at>now)));
+  due.forEach(x=>{toast("⏰ "+x.text,6000);try{if(Notification.permission==="granted")new Notification("TR hatırlatma",{body:x.text})}catch(e){}})},20000);
 /* ---------- bağlantılar ---------- */
 function linkify(h){return h.replace(/\b(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer nofollow">${u}</a>`)}
 function linkCard(text){const m=String(text||"").match(/https?:\/\/[^\s]+/);if(!m)return"";let u;try{u=new URL(m[0])}catch(e){return""}
@@ -318,7 +344,7 @@ const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
 const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
-function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
+function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
 /* kaybolan mesajlar: sohbetteki en son {t:"ttl"} mesajı süreyi belirler; yeni mesajlara exp yazılır */
@@ -398,8 +424,9 @@ function renderChatHeader(){
   $("#cName").innerHTML=esc(convTitle(cur))+(isGroupConv(cur)?"":vipMark(cur));
   $("#acallBtn").style.display=$("#vcallBtn").style.display=isGroupConv(cur)||!isFriend(cur)?"none":"";
   $("#gameBtn").style.display=isGroupConv(cur)||isFriend(cur)?"":"none";
-  if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın"}
-  else{const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):"";renderPresence()}
+  if(isGroupConv(cur)){const g=groups[gidOf(cur)];$("#cSub").textContent=g?g.members.map(realName).join(", "):"Bu gruptan çıkarıldın";
+    const lock=!!(g&&g.adminOnly&&!g.admins.includes(me));$("#composer").classList.toggle("locked",lock);$("#composer").dataset.lockmsg="🔒 Bu grupta sadece yöneticiler mesaj gönderebilir"}
+  else{$("#composer").classList.remove("locked");const code=users[cur]?.code;$("#cSub").textContent=code?"TR ID: "+fmtCode(code):"";renderPresence()}
 }
 function bubbleBody(m,c){
   if(!c)return(m.id in plain)?'<i style="opacity:.7">🔒 Bu mesaj çözülemedi</i>':'<i style="opacity:.6">🔒 …</i>';
@@ -414,6 +441,7 @@ function bubbleBody(m,c){
     return`<div class="mload" data-media="${esc(m.id)}"${ar}>📷 Yükleniyor…</div>`;
   }
   if(c.t==="ttl")return`<div class="sysnote">⏱️ Kaybolan mesajlar <b>${esc(ttlLabel(+c.v||0))}</b>${+c.v?" · yeni mesajlar bu süre sonunda silinir":" · kapatıldı"}</div>`;
+  if(c.t==="poll"||c.t==="event")return pollHTML(m,c);
   if(c.t==="gres")return`<div class="gamecard res"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} bitti</b><span>${c.draw?"Berabere":"🏆 "+esc(String(c.w||"").slice(0,40))+" kazandı"}${+c.pot?" · "+fmtCoin(+c.pot)+" jeton":""}</span></div></div>`;
   if(c.t==="gift"){const G=giftOf(c.id);if(G)return`<div class="giftmsg"><span>${G.icon}</span><b>${esc(G.name)}</b><small>hediye</small></div>`}
   if(c.t==="game")return`<div class="gamecard" data-game="${esc(c.gid)}"><span class="gi">${gk(c.kind)[0]}</span><div><b>${gk(c.kind)[1]} masası</b><span>${c.stake?"Masa ücreti "+(+c.stake).toLocaleString("tr-TR")+" jeton":"Ücretsiz masa"}</span></div><span class="go">Masaya git</span></div>`;
@@ -508,7 +536,7 @@ function openMsgSheet(id){
   sheetFor=id;const mine=m.from===me,isText=c.t==="text",canEdit=mine&&isText&&Date.now()-m.at<15*60e3;
   const myRx=m.rx&&m.rx[me];
   $("#msheet").innerHTML=`<div class="rxrow">${RX.map(x=>`<button data-rx="${x}" class="${myRx===x?"on":""}">${x}</button>`).join("")}</div>
-    <button data-ma="reply">↩️ Yanıtla</button><button data-ma="fwd">↪️ İlet</button>${isText?'<button data-ma="copy">📋 Kopyala</button><button data-ma="note">📝 Kaydet (notlarım)</button>':""}
+    <button data-ma="reply">↩️ Yanıtla</button><button data-ma="fwd">↪️ İlet</button>${isText?'<button data-ma="copy">📋 Kopyala</button><button data-ma="note">📝 Kaydet (notlarım)</button>':""}<button data-ma="remind">⏰ Hatırlat</button>
     ${canEdit?'<button data-ma="edit">✏️ Düzenle</button>':""}<button data-ma="star">${prefs.star.includes(id)?"☆ Yıldızı kaldır":"⭐ Yıldızla"}</button>
     <button data-ma="pin">${prefs.pinMsg[cur]===id?"📌 Sabitlemeyi kaldır":"📌 Sabitle"}</button>
     <button data-ma="delme">🗑️ Benden sil</button>${mine?'<button data-ma="delall" class="danger">🗑️ Herkesten sil</button>':""}
@@ -527,6 +555,8 @@ $("#msheet").addEventListener("click",async e=>{
   const r=e.target.closest("[data-rx]");if(r){closeSheet();react(id,r.dataset.rx);return}
   const b=e.target.closest("[data-ma]");if(!b)return;const a=b.dataset.ma;closeSheet();
   if(a==="reply"){replyTo={id,from:m.from,p:previewText(c).slice(0,120)};renderReplyBar();$("#msgInput").focus()}
+  if(a==="remind"){openInfoModal("⏰ Hatırlat",[[60,"1 saat sonra"],[180,"3 saat sonra"],[1440,"Yarın bu saatte"]].map(([mn,l])=>`<div class="pk" data-rm="${mn}" style="cursor:pointer">${l}</div>`).join("")+'<p class="isub">Hatırlatma uygulama açıkken gelir.</p>');
+    $("#eBody").onclick=ev=>{const r=ev.target.closest("[data-rm]");if(!r)return;addReminder(Date.now()+ +r.dataset.rm*60e3,previewText(c).slice(0,80));closeE();toast("Hatırlatma kuruldu")};return}
   if(a==="note"){try{await addNote(c.text||"");toast("Notlarına kaydedildi")}catch(err){toast("Kaydedilemedi")}}
   if(a==="copy"){try{await navigator.clipboard.writeText(c.text||"");toast("Kopyalandı")}catch(err){toast("Kopyalanamadı")}}
   if(a==="star"){const st=prefs.star.includes(id)?prefs.star.filter(x=>x!==id):[...prefs.star,id].slice(-300);savePrefs({star:st})}
@@ -875,10 +905,21 @@ function openInfo(){
     const admin=g.admins.includes(me);
     $("#iAv").innerHTML=avHTML(cur);$("#iName").textContent=g.name;$("#iSub").textContent=g.members.length+" üye";
     $("#iLabel").textContent="Üyeler";
-    $("#iList").innerHTML=g.members.map(u=>memberRow(u,{tag:g.admins.includes(u)?"yönetici":"",remove:admin&&u!==me})).join("");
+    $("#iList").innerHTML=g.members.map(u=>memberRow(u,{tag:g.admins.includes(u)?"yönetici":"",remove:admin&&u!==me})+(admin&&u!==me?`<button class="mkadm" data-mkadmin="${esc(u)}">${g.admins.includes(u)?"Yöneticilikten al":"Yönetici yap"}</button>`:"")).join("");
     $("#iActs").innerHTML=(admin?`<button id="iAdd">Üye ekle</button><button id="iRename">Adını değiştir</button>`:"")+`<button id="iMedia">🖼️ Medya</button><button id="iExport">⬇️ Dışa aktar</button><button class="danger" id="iRep">Şikâyet et</button><button class="danger" id="iLeave">Gruptan çık</button><button class="pri" id="iClose">Kapat</button>`;
     $("#iRep").onclick=()=>{closeInfo();openReport(g.createdBy===me?null:g.createdBy,"g:"+gid)};
     $("#iMedia").onclick=()=>{closeInfo();openGallery("g:"+gid)};$("#iExport").onclick=()=>{closeInfo();exportChat("g:"+gid)};
+    $("#iActs").insertAdjacentHTML("afterbegin",`<button id="iPoll">📊 Anket</button><button id="iEvent">📅 Etkinlik</button>`+(admin?`<button id="iInv">🔗 Davet bağlantısı</button><button id="iAdm">${g.adminOnly?"💬 Herkes yazabilsin":"🔒 Sadece yöneticiler yazsın"}</button>`:""));
+    $("#iPoll").onclick=()=>{closeInfo();openPollMaker("g:"+gid)};$("#iEvent").onclick=()=>{closeInfo();openEventMaker("g:"+gid)};
+    if(admin){
+      $("#iAdm").onclick=async()=>{closeInfo();try{await setDoc(doc(fs,"groups",gid),{...g,adminOnly:!g.adminOnly});toast(g.adminOnly?"Artık herkes yazabilir":"Artık sadece yöneticiler yazabilir")}catch(e){toast("Kaydedilemedi")}};
+      $("#iInv").onclick=async()=>{closeInfo();let inv=g.inv;if(!inv){inv=[...crypto.getRandomValues(new Uint8Array(12))].map(b=>"abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"[b%56]).join("");try{await setDoc(doc(fs,"groups",gid),{...g,inv})}catch(e){toast("Bağlantı oluşturulamadı");return}}
+        const u=`${location.origin}/?j=${gid}.${inv}`;const t=`TR'de “${g.name}” grubuna katıl: ${u}`;if(navigator.share)navigator.share({text:t,url:u}).catch(()=>{});else{navigator.clipboard?.writeText(u);toast("Davet bağlantısı kopyalandı")}};
+      $("#iList").addEventListener("click",async e=>{const b=e.target.closest("[data-mkadmin]");if(!b)return;e.preventDefault();e.stopPropagation();const u=b.dataset.mkadmin;
+        const admins=g.admins.includes(u)?g.admins.filter(x=>x!==u):[...g.admins,u];if(!admins.length){toast("En az bir yönetici olmalı");return}
+        try{await setDoc(doc(fs,"groups",gid),{...g,admins});toast(admins.includes(u)?"Yönetici yapıldı":"Yöneticilik alındı");closeInfo()}catch(err){toast("Yapılamadı")}},{capture:true});
+      $("#iList").querySelectorAll(".row[data-uid], .mrow").forEach(()=>{});
+    }
     if(admin){$("#iAdd").onclick=()=>{closeInfo();openGroupModal("add",gid)};
       $("#iRename").onclick=()=>{closeInfo();openModal({title:"Grup adı",value:g.name,ok:"Kaydet"},async v=>{if(hasBad(v)){toast("Grup adında uygunsuz kelime var",3000);return}try{await setDoc(doc(fs,"groups",gid),{...g,name:v.slice(0,50)})}catch(e){toast("Değiştirilemedi")}})};}
     $("#iLeave").onclick=()=>{closeInfo();openModal({title:"Gruptan çık",text:`“${esc(g.name)}” grubundan çıkmak istiyor musun?`,input:false,ok:"Çık"},async()=>{
@@ -1011,7 +1052,7 @@ document.querySelector(".content").addEventListener("click",e=>{const r=e.target
 
 /* ---------- profil / ID ---------- */
 function cleanUser(x){return{nick:typeof x.nick==="string"?cleanText(x.nick.slice(0,62)):"",first:typeof x.first==="string"?cleanText(x.first.slice(0,30)):"",last:typeof x.last==="string"?cleanText(x.last.slice(0,30)):"",code:/^\d{6}$/.test(x.code)?x.code:"",pub:validPub(x.pub)?{x:x.pub.x,y:x.pub.y}:null,joined:+x.joined||0,av:+x.av||0,bio:typeof x.bio==="string"?cleanText(x.bio.slice(0,140)):""}}
-function cleanGroup(x){if(!x||!Array.isArray(x.members))return null;return{name:typeof x.name==="string"?cleanText(x.name.slice(0,50)):"Grup",members:x.members.filter(u=>typeof u==="string").slice(0,MAX_GROUP),admins:Array.isArray(x.admins)?x.admins.filter(u=>typeof u==="string"):[],createdBy:String(x.createdBy||""),at:+x.at||0}}
+function cleanGroup(x){if(!x||!Array.isArray(x.members))return null;return{name:typeof x.name==="string"?cleanText(x.name.slice(0,50)):"Grup",members:x.members.filter(u=>typeof u==="string").slice(0,MAX_GROUP),admins:Array.isArray(x.admins)?x.admins.filter(u=>typeof u==="string"):[],createdBy:String(x.createdBy||""),at:+x.at||0,adminOnly:!!x.adminOnly,inv:typeof x.inv==="string"&&/^[A-Za-z0-9]{8,32}$/.test(x.inv)?x.inv:""}}
 async function claimCode(){
   for(let i=0;i<10;i++){
     const c=String(100000+crypto.getRandomValues(new Uint32Array(1))[0]%900000);
@@ -1260,7 +1301,7 @@ onAuthStateChanged(auth,async u=>{
     decryptAll();renderAll();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"msgs"),where("members","array-contains",me)),s=>{
-    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null}})
+    raw=s.docs.map(d=>{const x=d.data()||{};return{id:d.id,from:String(x.from||""),to:typeof x.to==="string"?x.to:"",gid:typeof x.gid==="string"?x.gid:"",keys:x.keys&&typeof x.keys==="object"?x.keys:null,at:+x.at||0,iv:String(x.iv||""),ct:String(x.ct||""),ed:+x.ed||0,rx:x.rx&&typeof x.rx==="object"?x.rx:null,exp:+x.exp||0,men:Array.isArray(x.men)?x.men:null,pv:x.pv&&typeof x.pv==="object"?x.pv:null}})
       .filter(m=>m.iv&&m.ct&&m.from&&(m.gid||(m.to&&m.from!==m.to&&(m.from===me||m.to===me))));
     raw.forEach(m=>{watchUser(m.from);if(m.to)watchUser(m.to);if(ctSeen[m.id]&&ctSeen[m.id]!==m.ct)delete plain[m.id];ctSeen[m.id]=m.ct});
     pending=pending.filter(p=>!raw.find(m=>m.id===p.id));
@@ -2637,11 +2678,16 @@ function notifMenu(){
   setupPush(true).then(ok=>toast(ok?"Bildirimler açıldı 🔔":"Bildirim izni verilmedi")).catch(()=>toast("Bildirimler açılamadı"));
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){try{const c=new URL(e.data.url,location.origin).searchParams.get("c");if(c){deepLink=c;openPendingDeepLink()}const k=new URL(e.data.url,location.origin).searchParams.get("call");if(k&&callLog[k])onIncoming(k,callLog[k])}catch(_){}}});
-let deepLink=null,pendingCallId=null,deepGame=null;
+let deepLink=null,pendingCallId=null,deepGame=null,deepJoin=null;
+try{const j=new URLSearchParams(location.search).get("j");if(j&&/^[A-Za-z0-9]{10,40}\.[A-Za-z0-9]{8,32}$/.test(j))deepJoin=j}catch(e){}
 try{deepGame=new URLSearchParams(location.search).get("g");if(deepGame&&!/^[A-Za-z0-9]{10,40}$/.test(deepGame))deepGame=null}catch(e){}
 try{pendingCallId=new URLSearchParams(location.search).get("call");deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
 function openPendingDeepLink(){
   if(deepGame&&ready){const g=deepGame;deepGame=null;openGame(g)}
+  if(deepJoin&&ready){const [gid,tok]=deepJoin.split(".");deepJoin=null;
+    if(groups[gid]){openChat("g:"+gid)}
+    else openModal({title:"Gruba katıl",text:"Davet bağlantısıyla bir gruba katılmak üzeresin. Katılınca grup üyeleri adını ve TR ID'ni görür.",input:false,ok:"Katıl"},async()=>{
+      try{await updateDoc(doc(fs,"groups",gid),{members:arrayUnion(me),jt:tok});toast("Gruba katıldın 🎉");setTimeout(()=>openChat("g:"+gid),1200)}catch(e){toast("Bağlantı geçersiz ya da grup dolu")}})}
   if(!deepLink||!ready)return;
   const c=deepLink;
   if(isGroupConv(c)&&!groups[gidOf(c)])return;

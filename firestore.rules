@@ -70,7 +70,19 @@ service cloud.firestore {
             && !(request.auth.uid in nd().members)
             && resource.data.members.removeAll([request.auth.uid]).hasAll(nd().members)
             && nd().members.hasAll(resource.data.members.removeAll([request.auth.uid]))
-            && nd().name == resource.data.name)
+            && nd().name == resource.data.name
+            && nd().get('inv', '') == resource.data.get('inv', '')
+            && nd().get('adminOnly', false) == resource.data.get('adminOnly', false))
+          ||
+          // davet bağlantısıyla katılma: sadece kendini ekler, bağlantı anahtarı doğru olmalı
+          (resource.data.get('inv', '') != ''
+            && nd().get('jt', '') == resource.data.inv
+            && !(request.auth.uid in resource.data.members)
+            && nd().members == resource.data.members.concat([request.auth.uid])
+            && nd().admins == resource.data.admins
+            && nd().name == resource.data.name
+            && nd().get('inv', '') == resource.data.inv
+            && nd().get('adminOnly', false) == resource.data.get('adminOnly', false))
         );
     }
 
@@ -92,7 +104,9 @@ service cloud.firestore {
           ||
           (nd().gid is string
             && !('to' in nd())
-            && get(/databases/$(database)/documents/groups/$(nd().gid)).data.members == nd().members)
+            && get(/databases/$(database)/documents/groups/$(nd().gid)).data.members == nd().members
+            && (get(/databases/$(database)/documents/groups/$(nd().gid)).data.get('adminOnly', false) != true
+              || request.auth.uid in get(/databases/$(database)/documents/groups/$(nd().gid)).data.admins))
         );
       // düzenleme (gönderen, 15 dakika içinde, sadece şifreli içerik) ya da tepki (herkes sadece kendi tepkisini)
       allow update: if signedIn() && request.auth.uid in resource.data.members && (
@@ -107,6 +121,12 @@ service cloud.firestore {
           && nd().rx is map && nd().rx.size() <= 60
           && nd().rx.diff(resource.data.get('rx', {})).affectedKeys().hasOnly([request.auth.uid])
           && (!(request.auth.uid in nd().rx) || nd().rx[request.auth.uid] in ['❤️', '😂', '👍', '😮', '😢', '🙏']))
+        ||
+        // anket / etkinlik oyu: herkes sadece kendi oyunu değiştirir
+        (nd().diff(resource.data).affectedKeys().hasOnly(['pv'])
+          && nd().pv is map && nd().pv.size() <= 60
+          && nd().pv.diff(resource.data.get('pv', {})).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in nd().pv) || (nd().pv[request.auth.uid] is int && nd().pv[request.auth.uid] >= 0 && nd().pv[request.auth.uid] < 10)))
       );
       allow delete: if signedIn() && resource.data.from == request.auth.uid;
     }
