@@ -1248,6 +1248,8 @@ function askProfile(first){
   overlay.classList.add("show");$("#pmodal").classList.add("show");
   $("#pTitle").textContent=first?"TR'ye hoş geldin 👋":"Profilim";
   $("#pAcct").innerHTML=(meUser?.photoURL?`<img src="${esc(meUser.photoURL)}" alt="" referrerpolicy="no-referrer">`:"")+`<div><b>${esc(meUser?.email||"Google hesabın")}</b>${first?"Google ile giriş yaptın. Profilini tamamla.":"Giriş yapılan Google hesabı"}${users[me]?.code?" · TR ID "+esc(fmtCode(users[me].code)):""}</div>`;
+  $("#pAcct").insertAdjacentHTML("beforeend",`<button type="button" id="pLogout" style="margin-left:auto;background:none;border:1.5px solid #E53935;color:#E53935;border-radius:14px;padding:6px 10px;font-weight:700;flex:none">🚪 Çıkış</button>`);
+  $("#pLogout").onclick=()=>openModal({title:"Çıkış yap",text:"Hesabından çıkmak istiyor musun? Başka bir Google hesabıyla giriş yapabilirsin.",input:false,ok:"Çıkış yap"},logout);
   const u=users[me]||{};
   let f=u.first,l=u.last;
   if(!f&&!l){const n=(meUser?.displayName||"").trim().split(/\s+/);if(n[0]){l=n.length>1?n.pop():"";f=n.join(" ")}}

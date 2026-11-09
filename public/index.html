@@ -176,7 +176,7 @@ input{font:inherit;color:inherit}
 .emojis button{font-size:24px;padding:4px;border-radius:8px}
 .overlay{position:absolute;inset:0;background:rgba(0,0,0,.4);display:none;z-index:10}
 .overlay.show{display:block}
-.menu{position:absolute;top:52px;right:10px;background:var(--panel);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.2);z-index:11;display:none;min-width:200px;overflow:hidden}
+.menu{position:absolute;top:52px;right:10px;background:var(--panel);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.2);z-index:11;display:none;min-width:200px;max-height:calc(100dvh - 70px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .menu.show{display:block}
 .menu button{display:block;width:100%;text-align:left;padding:13px 18px;font-size:15px}
 .menu button:active{background:var(--bg)}
@@ -1020,7 +1020,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button data-act="terms">Kullanım koşulları</button>
       <button data-act="privacy">Gizlilik politikası</button>
       <button data-act="delacct">Hesabımı sil</button>
-      <button data-act="logout">Çıkış yap</button>
+      <button data-act="logout" style="color:#E53935;font-weight:700">🚪 Çıkış yap</button>
     </div>
   </section>
 
