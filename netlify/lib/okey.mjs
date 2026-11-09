@@ -190,11 +190,11 @@ export function botChooseDraw(hand, leftTop, okey, skill = 2) {
   if (findFinish([...hand, leftTop], okey)) return "left";
   if (valueOf(leftTop, okey) === "W") return "left";
   if (skill === 0) return Math.random() < 0.25 ? "left" : "pile";
-  return usefulness(leftTop, [...hand, leftTop], okey) >= (skill === 1 ? 8 : 6) ? "left" : "pile";
+  return usefulness(leftTop, [...hand, leftTop], okey) >= (skill === 1 ? 8 : skill >= 3 ? 5 : 6) ? "left" : "pile";
 }
 
 export function botChooseDiscard(hand15, okey, rnd = Math.random, skill = 2) {
-  const noise = skill === 0 ? 7 : skill === 1 ? 2.5 : 0.5;
+  const noise = skill === 0 ? 7 : skill === 1 ? 2.5 : skill >= 3 ? 0.05 : 0.5;
   let best = null, bestScore = Infinity;
   for (const t of hand15) {
     if (skill === 0 && valueOf(t, okey) === "W") continue;

@@ -55,7 +55,7 @@ export default async (req) => {
       if (!E.stakeAllowed(stake, bal)) return json(403, { error: "stake" });
       const ref = db.collection("games").doc();
       await ref.set({
-        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillForLevel(lvl), turnSec: [15, 30].includes(Number(b.turnSec)) ? Number(b.turnSec) : 0, canak: b.canak === true && stake > 0, canakPot: 0, hostLvl: lvl,
+        type, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [], botSkill: E.botSkillFor(lvl, stake), turnSec: [15, 30].includes(Number(b.turnSec)) ? Number(b.turnSec) : 0, canak: b.canak === true && stake > 0, canakPot: 0, hostLvl: lvl,
         seats: [{ uid, bot: false }, null, null, null],
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0, 0, 0], v: 1,
       });

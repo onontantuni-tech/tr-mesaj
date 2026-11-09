@@ -37,9 +37,23 @@ export function place(chain, id, side) {
 export function botMove(chain, hand, skill = 1, rnd = Math.random) {
   const ok = playable(chain, hand);
   if (!ok.length) return null;
-  let pick;
-  if (skill <= 0) pick = ok[Math.floor(rnd() * ok.length)];
-  else pick = ok.slice().sort((a, b) => (TILES[b][0] === TILES[b][1]) - (TILES[a][0] === TILES[a][1]) || pips(b) - pips(a))[0];
-  const sd = sides(chain, pick);
-  return { id: pick, side: sd[skill >= 2 && sd.length > 1 ? (Math.random() < 0.5 ? 0 : 1) : 0] };
+  if (skill <= 0) { const pick = ok[Math.floor(rnd() * ok.length)]; return { id: pick, side: sides(chain, pick)[0] }; }
+  if (skill === 1) {
+    const pick = ok.slice().sort((a, b) => (TILES[b][0] === TILES[b][1]) - (TILES[a][0] === TILES[a][1]) || pips(b) - pips(a))[0];
+    return { id: pick, side: sides(chain, pick)[0] };
+  }
+  // usta: her taş ve uç için puan hesaplar — ağır taşı ve çiftleri erken atar, elinde uyan taş bırakan ucu seçer,
+  // elinde çok olan sayıyı uçta tutar (rakibi pazara/pasa zorlamak için)
+  const cnt = Array(7).fill(0); hand.forEach((id) => { cnt[TILES[id][0]]++; if (TILES[id][1] !== TILES[id][0]) cnt[TILES[id][1]]++; });
+  let best = null, bv = -1e9;
+  for (const id of ok) for (const side of sides(chain, id)) {
+    const nc = place(chain, id, side), e = ends(nc), rest = hand.filter((x) => x !== id);
+    let v = pips(id) * 1.2 + (TILES[id][0] === TILES[id][1] ? 4 : 0);
+    v += rest.filter((x) => sides(nc, x).length).length * 2.5;
+    v += (cnt[e[0]] + cnt[e[1]]) * 1.5;
+    if (!rest.length) v += 1000;
+    v += rnd() * (skill >= 3 ? 0.1 : 1);
+    if (v > bv) { bv = v; best = { id, side }; }
+  }
+  return best;
 }

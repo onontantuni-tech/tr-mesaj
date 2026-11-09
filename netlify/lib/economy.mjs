@@ -70,6 +70,9 @@ export function levelFromXp(xp) {
 }
 // Seviyeye göre bilgisayar zorluğu: 0 kolay, 1 orta, 2 zor
 export const botSkillForLevel = (lvl) => (lvl >= 10 ? 2 : lvl >= 4 ? 1 : 0);
+// Jetonlu masada bilgisayar her zaman en güçlü seviyede (3 = usta) oynar; ücretsiz masada oyuncunun seviyesine göre.
+// Bilgisayar hile yapmaz: başkasının elini görmez, dağıtım hep rastgele; sadece daha iyi karar verir.
+export const botSkillFor = (lvl, stake) => (stake > 0 ? 3 : botSkillForLevel(lvl));
 
 // Türkiye saatine göre gün ve ay anahtarları (UTC+3, yaz saati yok)
 export function trDate(ms = Date.now()) {

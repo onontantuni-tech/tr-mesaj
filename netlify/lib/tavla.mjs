@@ -105,7 +105,7 @@ export function botSeq(s, p, dice, skill = 1, rnd = Math.random) {
   for (const seq of all) {
     let r = rel(s, p);
     for (const m of seq) r = applyRel(r, m);
-    const v = evalRel(r, skill) + rnd() * (skill > 1 ? 0.5 : 3);
+    const v = evalRel(r, skill) + rnd() * (skill >= 3 ? 0.05 : skill > 1 ? 0.5 : 3);
     if (v > bv) { bv = v; best = seq; }
   }
   return best;

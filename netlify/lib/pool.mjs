@@ -246,7 +246,7 @@ export function botShot(st, seat, rnd = Math.random, skill = 1) {
   }
   if (!best) best = { dir: { x: 1, y: 0 }, power: 0.5 };
   // beceriye göre sapma
-  const noise = [0.045, 0.022, 0.009][Math.max(0, Math.min(2, skill))];
+  const noise = [0.045, 0.022, 0.009, 0.0035][Math.max(0, Math.min(3, skill))];
   const a = Math.atan2(best.dir.y, best.dir.x) + (rnd() - 0.5) * 2 * noise;
   return { cue: cuePos, dir: { x: Math.cos(a), y: Math.sin(a) }, power: Math.max(0.1, Math.min(1, best.power + (rnd() - 0.5) * 0.1)) };
 }
