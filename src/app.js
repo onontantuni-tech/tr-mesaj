@@ -1726,7 +1726,10 @@ async function initWallet(){
   unsubs.push(onSnapshot(doc(fs,"wallets",me),s=>{if(!s.exists())return;const x=s.data();const lv=levelFromXp(x.xp||0);applyWallet({...(wallet||{}),balance:x.balance||0,xp:x.xp||0,level:lv.level,levelCur:lv.cur,levelNext:lv.next,wins:x.wins||0,games:x.games||0,owned:x.owned,skin:x.skin,vipUntil:+x.vipUntil||0,adult:!!x.adult,ageSet:!!x.birthYear})},()=>{}));
   callApi("/api/admin",{action:"check"}).then(r=>{isAdminUser=!!(r&&r.admin);window.__isMod=!!(r&&r.mod);houseStats=r&&r.house;renderGamesTab()}).catch(()=>{});
 }
-function applyWallet(w){wallet=w;setTimeout(renderBell,0);setTimeout(weeklySummary,6000);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
+let fundsWarned=false;
+function applyWallet(w){const prevBal=wallet?.balance;wallet=w;
+  if(w&&prevBal!=null&&w.balance!=null&&w.balance<(catalog?.rescue?.below||1000)&&prevBal>=(catalog?.rescue?.below||1000)&&!fundsWarned){fundsWarned=true;setTimeout(()=>{if(!game||game.data?.status!=="play")noFunds("Jetonun bitti! Yeni jeton yükleyebilir ya da ücretsiz jeton alabilirsin.")},2500)}
+setTimeout(renderBell,0);setTimeout(weeklySummary,6000);setTimeout(dailyBanner,0);setTimeout(maybeAskRating,4000);if(w&&w.vipUntil!=null&&me)vipU[me]=Math.max(vipU[me]||0,+w.vipUntil||0);renderGamesTab();if(game)renderGame()}
 function mySkin(kind){const def=kind==="table"?"yesil":kind==="tile"?"klasik":"ceviz";const id=wallet?.skin?.[kind]||def;if((id.startsWith("vip_")||id==="sedef")&&!isVipU(me))return def;return id}
 
 /* ---------- sandık, destek, çark, görevler, oyun geçmişi ---------- */
@@ -1834,12 +1837,12 @@ async function openLedger(){
 
 /* ---------- herkese açık masalar ---------- */
 let pubUnsub=null;
-function openPublic(type){
-  const [icon,name]=gk(type);
+function openPublic(type,variant){
+  const cnk=variant==="canak";const [icon,name]=cnk?["🍯","Çanak Okey"]:gk(type);
   openInfoModal(`${icon} ${name} · açık masalar`,`<div class="row2"><button id="pubQuick" style="background:var(--brand)">⚡ Hızlı otur</button><button id="pubNew" style="background:#0E7C3A">+ Masa kur</button></div>
     <p class="isub" style="margin:8px 0">Masa 20 saniye içinde dolmazsa boş yerlere bilgisayar oturur.</p><div id="pubList"><div class="isub">Yükleniyor…</div></div><div class="fl" style="margin-top:10px">👀 Oynanan masaları izle</div><div id="pubLive"><div class="isub">Yükleniyor…</div></div>`);
   getDocs(query(collection(fs,"games"),where("public","==",true),where("status","==","play"),limit(30))).then(s=>{const el=$("#pubLive");if(!el)return;
-    const rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(g=>g.type===type||(type==="okey"&&!g.type)).filter(g=>Date.now()-(g.updatedAt||0)<5*60e3).slice(0,10);
+    const rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(g=>g.type===type||(type==="okey"&&!g.type)).filter(g=>type!=="okey"||!!g.canak===cnk).filter(g=>Date.now()-(g.updatedAt||0)<5*60e3).slice(0,10);
     rows.forEach(g=>g.seats.forEach(x=>x&&x.uid&&watchUser(x.uid)));
     el.innerHTML=rows.length?rows.map(g=>`<div class="pk pubrow" data-watch="${g.id}" style="cursor:pointer"><div style="flex:1"><b>${g.stake?`<span class="coin"></span> ${fmtCoin(g.stake)}`:"Ücretsiz"}</b><div class="isub">${g.seats.map(x=>x?esc(seatName(x)):"").filter(Boolean).join(", ")}</div></div><span>İzle ›</span></div>`).join(""):'<div class="isub">Şu an oynanan açık masa yok</div>'}).catch(()=>{const el=$("#pubLive");if(el)el.innerHTML=""});
   if(pubUnsub)pubUnsub();
@@ -1847,25 +1850,25 @@ function openPublic(type){
   let rows=[];
   pubUnsub=onSnapshot(q,s=>{
     if(!$("#pubList")){pubUnsub&&pubUnsub();pubUnsub=null;return}
-    rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(g=>g.type===type&&Date.now()-(g.at||0)<10*60e3&&g.seats.some(x=>!x)).sort((a,b)=>(a.stake-b.stake)||(b.at-a.at));
+    rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(g=>g.type===type&&(type!=="okey"||!!g.canak===cnk)&&Date.now()-(g.at||0)<10*60e3&&g.seats.some(x=>!x)).sort((a,b)=>(a.stake-b.stake)||(b.at-a.at));
     rows.forEach(g=>g.seats.forEach(x=>x&&x.uid&&watchUser(x.uid)));
     $("#pubList").innerHTML=rows.length?rows.map(g=>{const n=g.seats.filter(Boolean).length;return`<div class="pk pubrow"><div style="flex:1"><b>${g.stake?`<span class="coin"></span> ${fmtCoin(g.stake)}`:"Ücretsiz"}</b><div class="isub">${g.seats.map(x=>x?esc(x.uid===me?"Sen":realName(x.uid)):"boş").join(" · ")}</div></div><button class="pr" data-pubjoin="${esc(g.id)}" data-stake="${g.stake||0}">${n}/${g.seats.length} · Otur</button></div>`}).join(""):`<div class="empty">Şu an açık ${name} masası yok. İlk masayı sen kur!</div>`;
   },()=>{if($("#pubList"))$("#pubList").innerHTML='<div class="isub">Masalar yüklenemedi</div>'});
   const join=async(id,stake)=>{
-    if(stake&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>openPublic(type));return}
-    if(stake>(wallet?.balance||0)){toast("Bakiyen yetmiyor");return}
+    if(stake&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>openPublic(type,variant));return}
+    if(stake>(wallet?.balance||0)){noFunds();return}
     closeE();pubUnsub&&pubUnsub();pubUnsub=null;
     const r=await gameApi({action:"join",id},type);
     if(r&&r.error){toast("Masaya oturulamadı, dolmuş olabilir");return}
     openGame(id);
   };
-  const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0,canak:!!window.__canak},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
+  const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0,canak:cnk},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
   $("#eBody").onclick=e=>{const w=e.target.closest("[data-watch]");if(w){closeE();pubUnsub&&pubUnsub();pubUnsub=null;openGame(w.dataset.watch);return}const b=e.target.closest("[data-pubjoin]");if(b)join(b.dataset.pubjoin,+b.dataset.stake)};
-  $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake),type)};
+  $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake),type,variant)};
   $("#pubQuick").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>{
     const lv=wallet?.level||1;const m=rows.filter(g=>(g.stake||0)===stake&&!g.seats.some(x=>x&&x.uid===me)).sort((a,b)=>Math.abs((a.hostLvl||lv)-lv)-Math.abs((b.hostLvl||lv)-lv))[0];
     if(m)join(m.id,stake);else create(stake);
-  },type)};
+  },type,variant)};
 }
 
 /* ---------- VIP ---------- */
@@ -1915,6 +1918,7 @@ function renderGamesTab(){
   <div id="potw"></div>
   <div class="playnow">
     <button data-g="pub-okey"><span>🀄</span><b>Okey</b><small>Açık masalar · hemen otur</small></button>
+    <button data-g="pub-canak" class="pubcanak"><span>🍯</span><b>Çanak Okey</b><small>Okey atan çanağı alır · jetonlu</small></button>
     <button data-g="pub-pool"><span>🎱</span><b>Bilardo</b><small>Açık masalar · hemen otur</small></button>
     <button data-g="pub-pisti" class="pubpisti" ><span>🃏</span><b>Pişti</b><small>Açık masalar · 2 kişilik</small></button>
     <button data-g="pub-tavla" class="pubtavla"><span>🎲</span><b>Tavla</b><small>Açık masalar · 2 kişilik</small></button>
@@ -1954,7 +1958,7 @@ function renderGamesTab(){
 }
 document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
-  if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");if(g==="pub-kizma")openPublic("kizma");if(g==="pub-domino")openPublic("domino");
+  if(g==="pub-okey")openPublic("okey");if(g==="pub-canak")openPublic("okey","canak");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");if(g==="pub-kizma")openPublic("kizma");if(g==="pub-domino")openPublic("domino");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
   if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="quiz")openQuiz();if(g==="cafe")openCafe();if(g==="cal")openCalendar();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
@@ -1986,7 +1990,7 @@ function openGift(peer){
     $("#eBody").querySelectorAll("[data-gift]").forEach(x=>x.disabled=true);
     try{const r=await callApi("/api/wallet",{action:"gift",to:peer,id:G.id});applyWallet({...wallet,...r.wallet});closeE();
       await sendContent(peer,{t:"gift",id:G.id});sfx("win");toast(`${G.icon} ${G.name} gönderildi`)}
-    catch(err){toast(err.status===402?"Bakiyen yetmiyor":err.status===403?"Sadece arkadaşlarına hediye gönderebilirsin":"Gönderilemedi");openGift(peer)}};
+    catch(err){if(err.status===402){noFunds();return}toast(err.status===402?"Bakiyen yetmiyor":err.status===403?"Sadece arkadaşlarına hediye gönderebilirsin":"Gönderilemedi");openGift(peer)}};
 }
 let clubUnsubs=[];
 function stopClub(){clubUnsubs.forEach(u=>{try{u()}catch(e){}});clubUnsubs=[]}
@@ -2004,7 +2008,7 @@ function openClub(){
     $("#clJoin").onclick=async()=>{const code=$("#clCode").value.trim().toUpperCase();if(code.length!==6){toast("6 haneli kulüp kodunu yaz");return}
       try{const r=await callApi("/api/wallet",{action:"clubJoin",code});applyWallet({...wallet,...r.wallet});toast("Kulübe katıldın 🎉");openClub()}catch(e){toast(e.status===404?"Bu kodla kulüp yok":e.status===409?"Kulüp dolu":"Katılınamadı")}};
     $("#clNew").onclick=async()=>{const name=$("#clName").value.trim();if(name.length<3){toast("Kulüp adı en az 3 harf olsun");return}if(hasBad(name)){toast("Kulüp adında uygunsuz kelime var");return}
-      if((wallet.balance||0)<C.price){toast("Bakiyen yetmiyor");return}
+      if((wallet.balance||0)<C.price){noFunds();return}
       try{const r=await callApi("/api/wallet",{action:"clubCreate",name,icon});applyWallet({...wallet,...r.wallet});toast("Kulübün kuruldu 🎉");openClub()}catch(e){toast(e.status===402?"Bakiyen yetmiyor":"Kurulamadı, tekrar dene")}};
   }else{
     openInfoModal("🏛️ Kulübüm",`<div id="clHead" class="clhead"><div class="isub">Yükleniyor…</div></div><div class="fl">Üyeler</div><div id="clMem"></div>
@@ -2081,11 +2085,17 @@ function openAch(){
 function openInfoModal(title,html){closeAll();$("#eTitle").textContent=title;$("#eBody").innerHTML=html;overlay.classList.add("show");$("#emodal").classList.add("show")}
 function closeE(){$("#emodal").classList.remove("show");overlay.classList.remove("show")}
 $("#eClose").onclick=closeE;
-function openStore(){
+function openStore(reason){
   const pk=(catalog?.packages||[]).map(p=>`<div class="pk"><span class="coin" style="font-size:28px"></span><div><b>${fmtCoin(p.coins)}</b><div class="isub">jeton</div></div><button class="pr" data-buy="${p.id}">${p.price} TL</button></div>`).join("");
-  openInfoModal("Jeton al",pk+`<p class="isub" style="margin-top:8px">Ödeme, TR Play Store'da yayınlandığında Google Play üzerinden açılacak. Şimdilik jeton yükleme için yöneticiyle iletişime geç.</p>`);
-  $("#eBody").onclick=e=>{if(e.target.closest("[data-buy]"))toast("Ödeme henüz açık değil. Play Store yayınından sonra aktif olacak.",3500)};
+  const resc=(wallet?.balance||0)<(catalog?.rescue?.below||1000)&&wallet?.rescueDay!==wallet?.today;
+  const free=`<div class="fl" style="margin-top:4px">Ücretsiz jeton</div><div class="row2" style="flex-wrap:wrap">${resc?`<button data-sf="rescue" style="background:#E53935">🆘 Kurtarma hediyesi</button>`:""}<button data-sf="daily" style="background:#0E7C3A">🎁 Günlük hediye</button><button data-sf="chest" style="background:#6a4c93">🧰 Sandık</button><button data-sf="spin" style="background:#1e88e5">🎡 Çark</button><button data-sf="tasks" style="background:#555">✅ Görevler</button><button data-sf="vip" style="background:#b8860b">👑 VIP (günlük 10.000)</button></div>`;
+  openInfoModal(reason?"⚠️ Yetersiz jeton":"Jeton yükle",(reason?`<p style="margin:0 0 8px;font-weight:700;color:#E53935">${esc(reason)}</p>`:"")+`<div class="fl">Jeton paketleri</div>`+pk+`<p class="isub" style="margin-top:8px">Google Play ile ödeme, TR Play Store'da yayınlanınca açılacak. Şimdilik jeton yüklemek için <a href="mailto:farukplaystore10@gmail.com?subject=TR%20jeton%20y%C3%BCkleme%20(TR%20ID%20${esc(users[me]?.code||"")})">farukplaystore10@gmail.com</a> adresine TR ID'nle yaz.</p>`+free);
+  $("#eBody").onclick=e=>{if(e.target.closest("[data-buy]")){toast("Ödeme henüz açık değil. Play Store yayınından sonra aktif olacak.",3500);return}
+    const f=e.target.closest("[data-sf]");if(!f)return;const k=f.dataset.sf;closeE();
+    if(k==="rescue")claimGift("rescue");if(k==="daily")openDaily();if(k==="chest")claimGift("chest");if(k==="spin")openSpin();if(k==="tasks")openTasks();if(k==="vip")openVip()};
 }
+// jeton yetmeyince otomatik yükleme ekranına götür
+function noFunds(msg){closeAll();setTimeout(()=>openStore(msg||"Jetonun bu işlem için yetmiyor. Aşağıdan jeton yükleyebilir ya da ücretsiz jeton alabilirsin."),60)}
 const SW_COLORS={klasik:"#f7f1e3",fildisi:"linear-gradient(#fffaf0,#f1e4c8)",mermer:"linear-gradient(135deg,#fafafa,#d8d8de)",sedef:"linear-gradient(135deg,#fff6fb,#e6f2ff,#fdf0e6)",vip_mor:"linear-gradient(135deg,#4a1a6b,#2a0b40)",vip_mermer:"linear-gradient(135deg,#f4f1ea,#cfc8bb)",vip_altin:"linear-gradient(135deg,#1b3d2a,#c9a43a)",vip_sedef:"linear-gradient(135deg,#f6efe6,#c9d6e8,#e8d3e6)",vip_elmas:"linear-gradient(135deg,#dff3ff,#8fc6e8)",yesil:"#0b5a31",lacivert:"#122a57",bordo:"#64121f",siyah:"#222",ay:"#C8102E",ceviz:"#7c5428",abanoz:"#1e140e",kiraz:"#7a2a22",altin:"#c79a2a"};
 function openSkins(){
   const sec=(kind,title)=>`<div class="fl" style="margin-top:6px">${title}</div>`+(catalog?.skins?.[kind]||[]).map(it=>{const own=it.vip?isVipU(me):(wallet.owned?.[kind]||[]).includes(it.id)||!it.price,eq=mySkin(kind)===it.id;
@@ -2096,7 +2106,7 @@ function openSkins(){
     const it=catalog.skins[kind].find(x=>x.id===id);
     if(it.vip&&!isVipU(me)){openVip();return}
     if(it.vip){b.disabled=true;try{const r=await callApi("/api/wallet",{action:"equip",kind,id});applyWallet({...r.wallet});openSkins();toast("Değiştirildi")}catch(err){toast("İşlem yapılamadı");b.disabled=false}return}
-    if(!own&&(wallet.balance||0)<it.price){toast("Yeterli jetonun yok");return}
+    if(!own&&(wallet.balance||0)<it.price){noFunds();return}
     b.disabled=true;try{const r=await callApi("/api/wallet",{action:own?"equip":"buySkin",kind,id});applyWallet({...r.wallet});catalog=r.wallet.catalog;openSkins();toast(own?"Değiştirildi":"Satın alındı 🎉")}catch(err){toast("İşlem yapılamadı");b.disabled=false}};
 }
 function weekLeft(){const d=new Date(Date.now()+3*3600e3);const dow=(d.getUTCDay()+6)%7;
@@ -2117,7 +2127,7 @@ function openTour(){
     <div class="fl" style="margin-top:8px">Sıralama</div><div id="lbList"><div class="empty">Yükleniyor…</div></div>`);
   if($("#tJoin"))$("#tJoin").onclick=async()=>{
     if(!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu turnuva 18 yaş üstüne açık",3000);else askAge(openTour);return}
-    if((wallet.balance||0)<T.fee){toast("Yeterli jetonun yok");return}
+    if((wallet.balance||0)<T.fee){noFunds();return}
     $("#tJoin").disabled=true;
     try{const r=await callApi("/api/wallet",{action:"tjoin"});applyWallet({...wallet,...r.wallet});toast("Turnuvaya katıldın 🎉");openTour()}
     catch(e){$("#tJoin").disabled=false;toast(e.status===409?"Katılım şu an kapalı":"Katılınamadı")}};
@@ -2236,18 +2246,20 @@ async function adminLookup(){
 }
 // Masa ücreti seçimi: salonlar bakiyeye göre açılır
 function tierIdx(bal){const t=catalog?.tiers||[];let i=0;t.forEach((x,k)=>{if((bal||0)>=x.min)i=k});return i}
-function pickStake(cb,type="okey"){
+function pickStake(cb,type="okey",variant){
+  const cnkMode=variant==="canak";window.__canak=cnkMode;
   const bal=wallet?.balance||0,ti=tierIdx(bal),tiers=catalog?.tiers||[{name:"Çaylak Salonu",icon:"🌱",min:0,stakes:[0]}];
   const rk=Math.round((catalog?.rake??0.05)*100);
-  const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open||v>bal?"disabled":""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
+  const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open?"disabled":""} ${v>bal?'data-poor="1"':""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
   const isOk=type==="okey";if(!isOk){window.__turnSec=0;window.__canak=false}
+  const html2=cnkMode?html.replace(/data-stake="0"( )/g,'data-stake="0" disabled$1'):html;
   const spd=!isOk?"":`<div class="fl">Okey tur süresi</div><div class="seg" id="tsSeg">${[[0,"Normal · 45 sn"],[30,"Hızlı · 30 sn"],[15,"Şimşek · 15 sn"]].map(([v,l])=>`<button data-ts="${v}" class="${(window.__turnSec||0)===v?"on":""}">${l}</button>`).join("")}</div>`;
-  const cnk=!isOk?"":`<label class="tgl"><span><b>🍯 Çanak Okey</b><small>Her elden %5 kasaya, %5 çanağa. Okey atarak biten çanaktakinin hepsini alır (jetonlu masada).</small></span><input type="checkbox" id="cnkT" ${window.__canak?"checked":""}></label>`;
-  openInfoModal("Masa ücreti",spd+cnk+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html}`);
+  const cnk=cnkMode?`<p class="isub">🍯 <b>Çanak Okey:</b> her elden %5 kasaya, %5 çanağa gider. Okey atarak biten çanaktakinin hepsini alır. Sadece jetonlu masa.</p>`:"";
+  openInfoModal(cnkMode?"🍯 Çanak Okey · masa ücreti":"Masa ücreti",spd+cnk+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html2}`);
   $("#eBody").onclick=e=>{const ts=e.target.closest("[data-ts]");if(ts){window.__turnSec=+ts.dataset.ts;$("#tsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===ts));return}
-    if(e.target.id==="cnkT"){window.__canak=e.target.checked;return}
     const b=e.target.closest("[data-stake]");if(!b||b.disabled)return;const v=+b.dataset.stake;
-    if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb,type));return}
+    if(b.dataset.poor){noFunds("Bu masa için "+fmtCoin(v)+" jeton gerekiyor, bakiyen "+fmtCoin(wallet?.balance||0)+".");return}
+    if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb,type,variant));return}
     closeE();cb(v)};
 }
 /* ---------- oyunlar: Okey ---------- */
@@ -2266,7 +2278,7 @@ const backHTML=(n=1)=>`<div class="tback">${Array.from({length:Math.min(n,3)},()
 let game=null;            // {id, data, hand, order, sel, unsubs, busy}
 async function gameApi(body,type){
   const t=type||(game&&game.data&&game.data.type);
-  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":t==="batak"?"/api/batak":t==="kizma"?"/api/kizma":t==="domino"?"/api/domino":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
+  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":t==="batak"?"/api/batak":t==="kizma"?"/api/kizma":t==="domino"?"/api/domino":"/api/game",body).catch(e=>({error:e.status===409?"busy":e.status===402?"balance":e.status===403&&e.body&&e.body.error?e.body.error:"net",who:e.body&&e.body.who}));
   return r;
 }
 $("#gameBtn").onclick=()=>{if(!cur)return;closeAll();{const gi=$("#gpick [data-gift-open]");if(gi)gi.style.display=isGroupConv(cur)||!isFriend(cur)?"none":""}overlay.classList.add("show");$("#gpick").classList.add("show")};
@@ -2274,14 +2286,15 @@ $("#gpickClose").onclick=()=>{$("#gpick").classList.remove("show");overlay.class
 $("#gpick").addEventListener("click",async e=>{
   if(e.target.closest("[data-gift-open]")){$("#gpick").classList.remove("show");overlay.classList.remove("show");if(cur&&!isGroupConv(cur))openGift(cur);return}
   const it=e.target.closest("[data-newgame]");if(!it||!cur)return;
-  const conv=cur,type=it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
+  const conv=cur,variant=it.dataset.newgame==="canak"?"canak":undefined,type=variant?"okey":it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
   pickStake(async stake=>{
     toast("Masa kuruluyor…",2500);
     const r=await gameApi({action:"create",type,conv,stake,turnSec:window.__turnSec||0,canak:!!window.__canak},type);
+    if(r&&r.error==="balance"){noFunds();return}
     if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
     await sendContent(conv,{t:"game",gid:r.id,kind:type,stake});
     openGame(r.id);
-  },type);
+  },type,variant);
 });
 $("#msgs").addEventListener("click",e=>{const c=e.target.closest("[data-game]");if(c)openGame(c.dataset.game)});
 
@@ -2304,7 +2317,7 @@ function openGame(id){
       if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){game.tvPath=[];game.tvSel=null;sfx("tile")}
       else if(prevD&&d.type==="batak"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="domino"&&prevD.seq!==d.seq)sfx("tile");
-      else if(prevD&&d.type==="kizma"&&prevD.seq!==d.seq){sfx("ball");if(d.last&&d.last.hit!=null)setTimeout(()=>sfx("win"),200)}
+      else if(prevD&&d.type==="kizma"&&prevD.seq!==d.seq)kzAnimate(prevD,d)
       else if(prevD&&d.type==="pisti"&&prevD.seq!==d.seq){sfx("tile");if(d.last&&d.last.pisti)setTimeout(()=>sfx("win"),250)}
       else if(prevD&&d.type!=="pool"&&d.type!=="pisti"&&JSON.stringify(prevD.discards)!==JSON.stringify(d.discards))sfx("tile")}
     renderGame();
@@ -2377,16 +2390,16 @@ function renderGame(){
   const stack=(arr)=>arr.length?arr.map((t,k)=>`<div class="st" style="--k:${k}">${tileHTML(t,ok,{sm:true})}</div>`).join(""):'<div class="st">'+tileHTML(null,null,{sm:true})+'</div>';
   d.seats.forEach((s,i)=>{const p=pos(i);
     if(p==="bottom")html+=`<div class="odisc od-me ${canDiscard?"drop":""}" id="gDropDiscard"><div class="stk">${stack(pileOf(i))}</div><span>${canDiscard?"Taşı buraya sürükle":"Attığın"}</span></div>`;
-    else if(i===leftSeat)html+=`<div class="odisc od-left ${canDraw&&pileOf(i).length?"take":""}" id="gLeftDisc"><div class="stk">${stack(pileOf(i))}</div><span>${canDraw&&pileOf(i).length?"Dokun, al":"Soldan"}</span></div>`;
-    else html+=`<div class="odisc od-${p}"><div class="stk">${stack(pileOf(i))}</div></div>`;
+    else if(i===leftSeat)html+=`<div class="odisc od-left ${canDraw&&pileOf(i).length?"take":""}" id="gLeftDisc"><div class="stk">${stack(pileOf(i))}</div><span>${canDraw&&pileOf(i).length?"Dokun, al":esc(seatName(d.seats[i]).split(" ").slice(-1)[0])+" attı"}</span></div>`;
+    else html+=`<div class="odisc od-${p}"><div class="stk">${stack(pileOf(i))}</div><span>${esc(seatName(d.seats[i]).split(" ").slice(-1)[0])} attı</span></div>`;
   });
   const flp=d.status==="play"&&game.flipR!==d.round?" flip":"";if(d.status==="play")game.flipR=d.round;
-  html+=`<div class="ocenter"><div class="odeck ${canDraw?"take":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":"Deste"}</span></div>
+  html+=`<div class="ocenter">${d.canak?`<div class="ocanakbox"><div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak</span></div></div>`:""}<div class="odeck ${canDraw?"take":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":"Deste"}</span></div>
     <div class="oind"><div class="indt${flp}">${tileHTML(d.indicator,null,{sm:true})}</div><span>Gösterge</span></div>
     <div class="oind"><div class="indt${flp} f2">${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><span>Okey</span></div>
     ${(()=>{if(my<0||d.status!=="play"||(d.shown||[]).includes(my)||((d.discards||{})[my]||[]).length)return"";const hs=game.hand||[];const tw=hs.some(t=>t!==d.indicator&&!tIsFake(t)&&tColor(t)===tColor(d.indicator)&&tNum(t)===tNum(d.indicator));return tw?`<button class="oshow" id="gShow">👁️ Göstergeyi göster (+1)</button>`:""})()}
     </div>`;
-  if(d.canak)html+=`<div class="ocanakbox"><div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak</span></div></div>`;
+
   if(d.status==="over"){
     const w=d.winner;
     html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}${d.payout.canak?` · çanağa: ${fmtCoin(d.payout.canak)}`:""}${d.payout.canakWin?` · 🍯 çanak kazancı: ${fmtCoin(d.payout.canakWin)}`:""}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
@@ -2413,7 +2426,7 @@ function renderGame(){
   syncSlots(game.hand);
   // yan yana duran geçerli perler/seriler yeşil çizgiyle işaretlenir
   const good=new Set();{const okv={c:ok.c,n:ok.n};for(const base of [0,SLOTS/2]){let seg=[];for(let k=base;k<=base+SLOTS/2;k++){const t=k<base+SLOTS/2?game.slots[k]:null;if(t!=null)seg.push(k);else{if(seg.length>=3&&OK.validRun(seg.map(x=>game.slots[x]),okv))seg.forEach(x=>good.add(x));seg=[]}}}}
-  const slot=(i)=>{const t=game.slots[i];return`<div class="slot ${good.has(i)?"okg":""}" data-slot="${i}">${t==null?"":tileHTML(t,ok,{sel:game.sel===t,cls:game.newTiles&&game.newTiles.has(t)?"new":""})}</div>`};
+  const slot=(i)=>{const t=game.slots[i];return`<div class="slot ${good.has(i)?"okg":""}" data-slot="${i}">${t==null?"":tileHTML(t,ok,{sel:game.sel===t,cls:(game.newTiles&&game.newTiles.has(t)?"new":"")+(ok&&tIsWild(t,ok)&&!(game.okSeen||(game.okSeen=new Set())).has(d.round+"-"+t)&&game.okSeen.add(d.round+"-"+t)?" fl":"")})}</div>`};
   const tier=(from)=>`<div class="tier">${Array.from({length:SLOTS/2},(_,k)=>slot(from+k)).join("")}</div>`;
   $("#gRack").innerHTML=my>=0?`<div class="rackwood">${tier(0)}${tier(SLOTS/2)}</div>`:"";
   $("#gRack").style.display=my>=0?"":"none";$("#gActions").style.display=my>=0&&d.status==="play"?"":"none";$("#pCtrl").style.display="none";
@@ -2456,7 +2469,7 @@ async function gameMove(body){
     if(r&&r.error&&game.pCardOut!=null&&!game.cards.includes(game.pCardOut)){game.cards=[...game.cards,game.pCardOut]}game.pCardOut=null;
     if(r&&r.error&&game.pendingOut!=null){const t=game.pendingOut;game.pendingOut=null;if(game.pendingSlot>=0&&game.slots[game.pendingSlot]==null)game.slots[game.pendingSlot]=t}
     if(r&&r.error==="nowin")toast("El bitmiyor. Taşlar seri ya da çift oluşturmalı.",3000);
-    else if(r&&r.error==="balance")toast(r.who&&r.who.includes(me)?"Bakiyen masa ücretine yetmiyor":"Masadaki birinin bakiyesi yetmiyor",3500);
+    else if(r&&r.error==="balance"){if(r.who&&r.who.includes(me))noFunds("Bakiyen masa ücretine yetmiyor.");else toast("Masadaki birinin bakiyesi yetmiyor",3500)}
     else if(r&&r.error&&r.error!=="busy")toast("Hamle yapılamadı ("+r.error+")");
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}
@@ -2636,8 +2649,8 @@ function renderPisti(d,my){
   const hc=d.handCounts||[0,0],tk=d.takenN||[0,0],pi=d.pisti||[0,0];
   const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>🂠 ${tk[i]} kart${pi[i]?` · <em>${pi[i]/10>=1?"PİŞTİ "+pi[i]:""}</em>`:""} · ${(d.scores||[])[i]||0}🏆</span></div></div>`;
   const opp=`<div class="phand opp">${Array.from({length:hc[op]||0},()=>cardHTML(null,{back:true})).join("")}</div>`;
-  const pileN=d.pileN||0;const lk=d.last?d.last.at+"-"+d.last.seat:"";const pNew=lk&&game.pLastK!==lk;game.pLastK=lk;
-  const stack=pileN?`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${cardHTML(d.top,{cls:"st1 "+(d.last&&d.last.card===d.top&&!d.last.captured?(pNew&&d.last.seat!==me2?"land opl":"land"):"")})}`:`<div class="pempty ${pNew&&d.last&&d.last.seat!==me2?"late":""}">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ!":"Alındı"):"Yer boş"}</div>`;
+  const pileN=d.pileN||0;const lk=d.last?d.last.at+"-"+d.last.seat:"";if(lk&&game.pLastK!==lk){game.pLastK=lk;game.pAnimUntil=Date.now()+2600;clearTimeout(game.pAnimT);game.pAnimT=setTimeout(()=>{if(game&&game.data===d)renderGame()},2700)}const pNew=!!lk&&Date.now()<(game.pAnimUntil||0);
+  const stack=pileN?`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${cardHTML(d.top,{cls:"st1 "+(d.last&&d.last.card===d.top&&!d.last.captured?(pNew&&d.last.seat!==me2?"land opl":"land"):"")})}`:(pNew&&d.last&&d.last.captured?`<span class="bkw ${d.last.seat===me2?"to-bottom":"to-top"}" style="animation-delay:${d.last.seat!==me2?1.5:0.9}s">${cardHTML(d.last.card,{cls:"st1 land"+(d.last.seat!==me2?" opl":"")})}</span>`:"")+`<div class="pempty ${pNew&&d.last&&d.last.captured?"late2":pNew&&d.last&&d.last.seat!==me2?"late":""}">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ! ":"")+(d.last.seat===me2?"Kartları sen aldın ⬇":esc(seatName(d.seats[d.last.seat]))+" aldı ⬆"):"Yer boş"}</div>`;
   const deck=d.deckN?`<div class="pdeck"><div class="pcard back"></div><span>${d.deckN}</span></div>`:`<div class="pdeck empty"><span>Deste bitti</span></div>`;
   const mine=(game.cards||[]).slice().sort((a,b)=>(pSuit(a)-pSuit(b))||(pRank(a)-pRank(b)));
   const hand=`<div class="phand me ${isMy?"can":""}">${mine.map(c=>cardHTML(c,{cls:"mine"})).join("")}</div>`;
@@ -2667,18 +2680,22 @@ function renderKizma(d,my){
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
   // zar elle atılır: sıra sende olunca "Zar at" düğmesine bas (sonuç sunucuda belirlenir)
-  const kdk=d.seq+"-"+d.turn,needRoll=d.status==="play"&&d.turn===my&&!!d.die&&game.kzRolled!==kdk;
-  const isMy=d.status==="play"&&d.turn===my&&!game.busy&&!needRoll,mv=isMy&&d.die?kzMoves(d.kz,my,d.die):[],mk=new Set(mv.map(m=>m.k));
+  const A=game.kzAnim;
+  const kdk=d.seq+"-"+d.turn,needRoll=!A&&d.status==="play"&&d.turn===my&&!!d.die&&game.kzRolled!==kdk;
+  const isMy=!A&&d.status==="play"&&d.turn===my&&!game.busy&&!needRoll,mv=isMy&&d.die?kzMoves(d.kz,my,d.die):[],mk=new Set(mv.map(m=>m.k));
+  const kzPos=A?A.pos:d.kz.pos;
   const cell={};const put=(rc,h)=>{cell[rc[0]+"_"+rc[1]]=(cell[rc[0]+"_"+rc[1]]||"")+h};
-  for(let p=0;p<4;p++){const P=d.kz.pos[p]||d.kz.pos[String(p)]||[];P.forEach((r,k)=>{const rc=r===-1?KZ_HOME[p][k]:r>=40?KZ_FIN[p][r-40]:KZ_PATH[(p*10+r)%40];
-    put(rc,`<i class="kzp ${p===my&&mk.has(k)?"can":""}" style="--c:${KZ_COL[p]}" ${p===my&&mk.has(k)?`data-kzk="${k}"`:""}></i>`)})}
+  for(let p=0;p<4;p++){const P=kzPos[p]||kzPos[String(p)]||[];P.forEach((r,k)=>{const rc=r===-1?KZ_HOME[p][k]:r>=40?KZ_FIN[p][r-40]:KZ_PATH[(p*10+r)%40];
+    const hop=A&&A.mv&&A.mv.p===p&&A.mv.k===k?" hop":A&&A.hit&&A.hit.p===p&&A.hit.k===k?" hit":"";
+    put(rc,`<i class="kzp ${p===my&&mk.has(k)?"can":""}${hop}" style="--c:${KZ_COL[p]}" ${p===my&&mk.has(k)?`data-kzk="${k}"`:""}></i>`)})}
   const kind={};KZ_PATH.forEach((rc,i)=>{kind[rc[0]+"_"+rc[1]]=i%10===0?"st s"+(i/10):"tr"});KZ_FIN.forEach((f,p)=>f.forEach(rc=>kind[rc[0]+"_"+rc[1]]="fin f"+p));KZ_HOME.forEach((h,p)=>h.forEach(rc=>kind[rc[0]+"_"+rc[1]]="home h"+p));
   let grid="";for(let r=0;r<11;r++)for(let c=0;c<11;c++){const k=r+"_"+c;grid+=`<div class="kzc ${kind[k]||"x"}">${cell[k]||""}</div>`}
   const PIP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
-  const die=needRoll?`<button class="kzroll" id="kzRoll">🎲 Zar at</button>`:d.die?`<span class="die ${game.kzSeq!==d.seq||game.kzJust?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${PIP[d.die].includes(k)?"on":""}"></i>`).join("")}</span>`:"";if(!needRoll){game.kzSeq=d.seq;game.kzJust=false}
-  const sides=d.seats.map((s,i)=>`<div class="kzs ${d.status==="play"&&d.turn===i?"turn":""}" style="--c:${KZ_COL[i]}"><i></i>${esc(seatName(s))}</div>`).join("");
+  const dv=A?A.die:d.die;
+  const die=needRoll?`<button class="kzroll" id="kzRoll">🎲 Zar at</button>`:dv?`<span class="die ${A?(A.rollNew?"roll":""):(game.kzSeq!==d.seq||game.kzJust?"roll":"")}" style="--c:${KZ_COL[A?A.seat:d.turn]}">${Array.from({length:9},(_,k)=>`<i class="${PIP[dv].includes(k)?"on":""}"></i>`).join("")}</span>`:"";if(A)A.rollNew=false;else if(!needRoll){game.kzSeq=d.seq;game.kzJust=false}
+  const sides=d.seats.map((s,i)=>`<div class="kzs ${(A?A.seat===i:d.status==="play"&&d.turn===i)?"turn":""}" style="--c:${KZ_COL[i]}"><i></i>${esc(seatName(s))}</div>`).join("");
   let over="";if(d.status==="over"){const w=d.winner;over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton</div>`):""}${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni oyun</button>`:""}</div>`}
-  $("#gTable").innerHTML=`<div class="kztable"><div class="kzside">${sides}</div><div class="kzboard">${grid}</div><div class="kzctl">${die}<div class="thint">${d.status!=="play"?"":needRoll?"Sıra sende · zarı at":isMy?(mv.length?"Parlayan piyonlardan birini seç":"…"):esc(seatName(d.seats[d.turn]))+" oynuyor…"}<small>${esc(d.log||"")}</small></div></div>${over}</div>`;
+  $("#gTable").innerHTML=`<div class="kztable"><div class="kzside">${sides}</div><div class="kzboard">${grid}</div><div class="kzctl">${die}<div class="thint">${A?esc(A.msg||""):d.status!=="play"?"":needRoll?"Sıra sende · zarı at":isMy?(mv.length?"Parlayan piyonlardan birini seç":"…"):esc(seatName(d.seats[d.turn]))+" oynuyor…"}<small>${A?"":esc(d.log||"")}</small></div></div>${over}</div>`;
   $("#gTable .kzboard").onclick=e=>{const b=e.target.closest("[data-kzk]");if(!b||!isMy)return;gameMove({action:"move",k:+b.dataset.kzk})};
   const kr=$("#kzRoll");if(kr)kr.onclick=()=>{game.kzRolled=kdk;game.kzJust=true;sfx("tile");renderGame()};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
@@ -2723,6 +2740,27 @@ function renderDomino(d,my){
   const ps=$("#dmPass");if(ps)ps.onclick=()=>gameMove({action:"pass"});
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
+// Kızma Birader: gelen hamleleri sırayla oynat (zar atılır, piyon kare kare zıplayarak gider)
+function kzAnimate(prevD,d){
+  const steps=(d.hist||[]).filter(h=>h.n>(prevD.seq||0)&&h.n<=d.seq);
+  if(!steps.length||prevD.status!=="play"||!prevD.kz)return;
+  const A0=game.kzAnim;if(A0&&A0.run){A0.queue.push(...steps.filter(h=>h.n>A0.lastN));A0.lastN=Math.max(A0.lastN,...steps.map(h=>h.n));return}
+  const clone=kz=>{const o={};for(let p=0;p<4;p++)o[p]=(kz.pos[p]||kz.pos[String(p)]||[]).slice();return o};
+  const A={run:true,pos:clone(prevD.kz),queue:steps.slice(),lastN:Math.max(...steps.map(h=>h.n)),die:null,seat:steps[0].seat,mv:null,hit:null,msg:""};
+  game.kzAnim=A;const gid=game.id,wait=ms=>new Promise(r=>setTimeout(r,ms));
+  (async()=>{
+    while(A.queue.length){if(!game||game.id!==gid)return;const h=A.queue.shift();const mine=h.seat===mySeatIdx(game.data);
+      const nm=mine?"Sen":seatName(game.data.seats[h.seat]);
+      if(!mine){A.seat=h.seat;A.die=h.die;A.rollNew=true;A.mv=null;A.hit=null;A.msg=`${nm} zar atıyor…`;renderGame();sfx("tile");await wait(900)}
+      A.seat=h.seat;A.die=h.die;A.msg=h.k==null?`${nm} ${h.die} attı · oynayacak piyon yok`:`${nm} ${h.die} attı`;
+      if(h.k!=null){const path=h.from===-1?[0]:[];if(h.from>=0)for(let x=h.from+1;x<=h.to;x++)path.push(x);
+        for(const x of path){if(!game||game.id!==gid)return;A.pos[h.seat][h.k]=x;A.mv={p:h.seat,k:h.k};renderGame();sfx("tile");await wait(260)}
+        if(h.hit!=null&&h.hitK!=null&&h.hitK>=0){A.pos[h.hit][h.hitK]=-1;A.hit={p:h.hit,k:h.hitK};A.msg=`${nm} bir piyonu eve yolladı! 😤`;renderGame();sfx("win");await wait(700)}}
+      else{renderGame()}
+      await wait(mine?250:550)}
+    A.run=false;if(game&&game.kzAnim===A){game.kzAnim=null;renderGame()}
+  })();
+}
 /* ---------- Batak ---------- */
 const BK_S=["♠","♥","♦","♣"],bkVal=c=>c%13===0?14:c%13+1;
 function bkLegal(hand,trick,trump,broken){const su=c=>Math.floor(c/13);
@@ -2748,7 +2786,9 @@ function renderBatak(d,my){
   const tkey=inLast?ltK:"t"+d.round+"-"+(d.tricks||[]).reduce((a,b)=>a+b,0);
   const seenN=inLast?(game.bkSeenK===tkey?game.bkSeenN:game.bkLtSeen):(game.bkSeenK===tkey?game.bkSeenN:0);
   game.bkSeenK=tkey;game.bkSeenN=showTrick.length;
-  const center=`<div class="bkcenter">${showTrick.map((t,i)=>`<div class="bkc bkc-${pos(t.p)}">${cardHTML(t.c,{cls:i>=seenN?"fly":""}).replace('class="pcard','style="animation-delay:'+(Math.max(0,i-seenN)*0.65)+'s" class="pcard')}</div>`).join("")}${d.trump!=null?`<div class="bktrump ${d.trump===1||d.trump===2?"red":""}">${BK_S[d.trump]}<small>koz</small></div>`:""}</div>`;
+  // el bitince kartlar toplanıp eli alan oyuncuya doğru kayar, kimin aldığı yazılır
+  const colW=inLast?pos(d.lastTrick.w):null,colDelay=inLast?Math.max(0,(game.bkLtUntil-Date.now())/1000-0.85):0;
+  const center=`<div class="bkcenter">${showTrick.map((t,i)=>`<div class="bkc bkc-${pos(t.p)}"><span class="bkw ${colW?"to-"+colW:""}" style="animation-delay:${colDelay}s">${cardHTML(t.c,{cls:i>=seenN?"fly":""}).replace('class="pcard','style="animation-delay:'+(Math.max(0,i-seenN)*0.65)+'s" class="pcard')}</span></div>`).join("")}${inLast?`<div class="bktake" style="animation-delay:${Math.max(0,colDelay-1.1)}s">${d.lastTrick.w===my?"Eli sen aldın":esc(seatName(d.seats[d.lastTrick.w]))+" aldı"} ${colW==="top"?"⬆":colW==="left"?"⬅":colW==="right"?"➡":"⬇"}</div>`:""}${d.trump!=null?`<div class="bktrump ${d.trump===1||d.trump===2?"red":""}">${BK_S[d.trump]}<small>koz</small></div>`:""}</div>`;
   const mine=(game.cards||[]).slice().sort((a,b)=>(Math.floor(a/13)-Math.floor(b/13))||(bkVal(a)-bkVal(b)));
   const legal=isMy&&d.phase==="play"&&!inLast?new Set(bkLegal(mine,d.trick||[],d.trump,d.broken)):new Set();
   const hand=`<div class="bkhand">${mine.map(c=>cardHTML(c,{cls:legal.has(c)?"ok":isMy&&d.phase==="play"?"no":""})).join("")}</div>`;
@@ -2894,7 +2934,7 @@ function playShots(list,done){
     const frames=[];P.simulate(sh.before,{x:sh.dx,y:sh.dy},sh.power,bs=>frames.push(bs),{x:sh.sx||0,y:sh.sy||0});
     let k=0;const d=game.data;
     $("#gMsg").innerHTML=`${esc(seatName(d.seats[sh.seat]))} vurdu…`;
-    const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=3;
+    const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=4;
       if(k<frames.length+2)game.raf=requestAnimationFrame(tick);
       else{if(sh.foul)$("#gMsg").innerHTML=`Faul: ${esc(sh.reason)}`;setTimeout(next,list.length?450:150)}};
     game.pview=sh.before;drawPool();setTimeout(()=>{game.raf=requestAnimationFrame(tick)},250);
@@ -2978,6 +3018,41 @@ function ballSprite(i,px){
   if(i===0){c.fillStyle="rgba(214,30,30,.7)";for(const [dx,dy] of [[0,0],[.55,.3],[-.5,-.35]]){c.beginPath();c.arc(r+dx*r,r+dy*r,r*.09,0,7);c.fill()}}
   c.restore();ballSprites[k]=cv;return cv;
 }
+function ball3DInit(b){const a=((b.i*2.399)%6.283),cs=Math.cos(a),sn=Math.sin(a);return{x:b.x,y:b.y,n:0,dirty:true,M:[cs,-sn,0,sn,cs,0,0,0,1]}}
+function rotM(M,ax,ay,ang){const c=Math.cos(ang),s=Math.sin(ang),t=1-c;
+  const Rm=[t*ax*ax+c,t*ax*ay,s*ay, t*ax*ay,t*ay*ay+c,-s*ax, -s*ay,s*ax,c];const o=new Array(9);
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++)o[i*3+j]=Rm[i*3]*M[j]+Rm[i*3+1]*M[3+j]+Rm[i*3+2]*M[6+j];return o}
+function orthoM(M){// sütunları yeniden dikleştir (yuvarlama hatası birikmesin)
+  let a=[M[0],M[3],M[6]],b=[M[1],M[4],M[7]];const n=v=>{const l=Math.hypot(v[0],v[1],v[2])||1;return v.map(x=>x/l)};a=n(a);const d=a[0]*b[0]+a[1]*b[1]+a[2]*b[2];b=n(b.map((x,k)=>x-d*a[k]));
+  const cz=[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];return[a[0],b[0],cz[0],a[1],b[1],cz[1],a[2],b[2],cz[2]]}
+const B3={};
+function ball3D(i,o,px,rot){
+  let e=B3[i];if(!e||e.px!==px){const cv=document.createElement("canvas");cv.width=cv.height=px;e=B3[i]={cv,px,img:cv.getContext("2d").createImageData(px,px)};o.dirty=true}
+  if(!o.dirty&&e.rot===rot)return e.cv;o.dirty=false;e.rot=rot;
+  const M=o.M,r=px/2,data=e.img.data,col=BALL_COL[i>8?i-8:i],stripe=i>8,cue=i===0;
+  const rgb=[parseInt(col.length===4?col[1]+col[1]:col.slice(1,3),16),parseInt(col.length===4?col[2]+col[2]:col.slice(3,5),16),parseInt(col.length===4?col[3]+col[3]:col.slice(5,7),16)];
+  // ışık ekranda sol üstten; masa yan çevrildiyse masa koordinatına çevir
+  let lx=-0.42,ly=-0.55;if(rot){const t=lx;lx=ly;ly=-t}const lz=0.72,ll=Math.hypot(lx,ly,lz);lx/=ll;ly/=ll;const lzn=lz/ll;
+  let hx=lx,hy=ly,hz=lzn+1;const hl=Math.hypot(hx,hy,hz);hx/=hl;hy/=hl;hz/=hl;
+  for(let py=0;py<px;py++)for(let qx=0;qx<px;qx++){
+    const k=(py*px+qx)*4,x=(qx+0.5-r)/r,y=(py+0.5-r)/r,d2=x*x+y*y;
+    if(d2>1){data[k+3]=0;continue}
+    const z=Math.sqrt(1-d2);
+    const b1=M[1]*x+M[4]*y+M[7]*z,b2=M[2]*x+M[5]*y+M[8]*z,b0=M[0]*x+M[3]*y+M[6]*z;
+    let cr=rgb[0],cg=rgb[1],cb=rgb[2];
+    if(cue){cr=cg=cb=246;if(b0>0.975||b0<-0.975||b1>0.975||b1<-0.975||b2>0.975||b2<-0.975){cr=214;cg=40;cb=40}}
+    else{if(stripe&&(b1>0.62||b1<-0.62)){cr=248;cg=246;cb=238}if(b2>0.84){cr=252;cg=251;cb=245}}
+    const dif=Math.max(0,x*lx+y*ly+z*lzn),sp=Math.pow(Math.max(0,x*hx+y*hy+z*hz),48);
+    const sh=0.32+0.78*dif,edge=d2>0.88?1-(d2-0.88)*2.2:1;
+    data[k]=Math.min(255,cr*sh*edge+sp*235);data[k+1]=Math.min(255,cg*sh*edge+sp*235);data[k+2]=Math.min(255,cb*sh*edge+sp*235);
+    data[k+3]=d2>0.94?Math.round(255*(1-(d2-0.94)/0.06)):255}
+  const c=e.cv.getContext("2d");c.setTransform(1,0,0,1,0,0);c.putImageData(e.img,0,0);
+  // numara: topun üstündeki beyaz daireye, perspektife uygun eğilerek yazılır
+  const pz=M[8];if(i>0&&pz>0.08){const k=r/25;c.save();c.beginPath();c.arc(r,r,r-0.5,0,7);c.clip();
+    c.setTransform(k*M[0],k*M[3],k*M[1],k*M[4],r+r*M[2],r+r*M[5]);c.globalAlpha=Math.min(1,pz*2.5);
+    c.fillStyle="#151515";c.font=`800 ${i>9?9.5:11}px system-ui,Arial`;c.textAlign="center";c.textBaseline="middle";c.fillText(String(i),0,0.6);c.restore()}
+  return e.cv;
+}
 // sabit ışık: gölge + parlama (top dönse de ışık yerinde kalır)
 function ballShade(px){
   const k="sh_"+px;if(ballSprites[k])return ballSprites[k];
@@ -3019,10 +3094,11 @@ function drawPool(){
     c.fillStyle="rgba(255,255,255,.85)";c.font="bold 16px Arial";c.textAlign="center";c.save();c.translate(game.place.x,game.place.y-R-16);if(L.rot)c.rotate(-Math.PI/2);c.fillText("✋",0,0);c.restore()}
   // toplar
   const px=Math.max(8,Math.round(2*R*L.s*L.dpr));
-  // toplar yuvarlanır: gidilen yola göre döner
-  game.brot=game.brot||{};const shp=ballShade(px);
-  for(const b of bs){const sp=ballSprite(b.i,px);const o=game.brot[b.i]||(game.brot[b.i]={x:b.x,y:b.y,a:0});const dl=Math.hypot(b.x-o.x,b.y-o.y);if(dl>0&&dl<200)o.a+=dl/R*(((b.x-o.x)+(b.y-o.y))>=0?1:-1);o.x=b.x;o.y=b.y;
-    c.save();c.translate(b.x,b.y);c.save();c.rotate(o.a);c.drawImage(sp,-R,-R,2*R,2*R);c.restore();if(L.rot)c.rotate(-Math.PI/2);c.drawImage(shp,-R,-R,2*R,2*R);c.restore()}
+  // toplar gerçekten yuvarlanır: her topun 3B yönü tutulur, gidilen yol kadar döner
+  game.brot=game.brot||{};
+  for(const b of bs){const o=game.brot[b.i]||(game.brot[b.i]=ball3DInit(b));const dx=b.x-o.x,dy=b.y-o.y,dl=Math.hypot(dx,dy);
+    if(dl>0.01&&dl<300){o.M=rotM(o.M,-dy/dl,dx/dl,dl/R);o.dirty=true;if(++o.n%40===0)o.M=orthoM(o.M)}o.x=b.x;o.y=b.y;
+    const cvb=ball3D(b.i,o,px,L.rot);c.drawImage(cvb,b.x-R,b.y-R,2*R,2*R)}
   // ıstaka
   if(myTurn&&cue&&game.aim)drawCue(c,cue,ux,uy,game.pull||0);
 }
@@ -3138,7 +3214,7 @@ async function callApi(path,body){
   const u=auth.currentUser;if(!u)throw new Error("auth");
   const t=await u.getIdToken();
   const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+t},body:JSON.stringify(body)});
-  if(!r.ok)throw Object.assign(new Error("api"),{status:r.status});
+  if(!r.ok){let body=null;try{body=await r.json()}catch(e){}throw Object.assign(new Error("api"),{status:r.status,body})}
   return r.json();
 }
 

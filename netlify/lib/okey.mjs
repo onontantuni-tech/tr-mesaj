@@ -249,7 +249,7 @@ export function arrange(tiles, okey) {
         const got = take(p, first.c, num);
         if (got) run.push(got.t);
         else { if (jw >= w) break; run.push(null); jw++; }
-        if (run.length >= 3 && run[run.length - 1] !== null) {
+        if (run.length >= 3) {
           const wl = useW(jw); let k = 0;
           rec(p.slice(), w - jw, [...groups, run.map((x) => (x === null ? wl[k++] : x))], rest, placed + run.length);
         }

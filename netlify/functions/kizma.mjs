@@ -119,7 +119,7 @@ export default async (req) => {
         Object.assign(st, {
           status: "play", settled: false, winner: null, kz: T.newGame(),
           turn: act === "start" ? Math.floor(Math.random() * 4) : ((g.starter ?? 0) + 1) % 4, round: (g.round || 0) + 1,
-          seq: (g.seq || 0) + 1, lastMoveAt: Date.now(), last: null, log: "Oyun başladı",
+          seq: (g.seq || 0) + 1, lastMoveAt: Date.now(), last: null, hist: [], log: "Oyun başladı",
         });
         st.starter = st.turn;
         st.die = T.roll();
@@ -173,13 +173,21 @@ export default async (req) => {
 const COLORS = ["Kırmızı", "Mavi", "Yeşil", "Sarı"];
 function doMove(st, seat, m) {
   const name = st.seats[seat].bot ? st.seats[seat].name : COLORS[seat];
+  const P = (kz, p) => (kz.pos[p] || kz.pos[String(p)] || []);
+  let h;
   if (m) {
+    const from = P(st.kz, seat)[m.k];
     const r = T.apply(st.kz, seat, m);
+    let hitK = null;
+    if (r.hit != null) { const a = P(st.kz, r.hit), b2 = P(r.s, r.hit); hitK = a.findIndex((x, i) => x !== b2[i]); }
     st.kz = r.s;
     st.last = { seat, k: m.k, to: m.to, die: st.die, hit: r.hit, at: Date.now() };
+    h = { seat, k: m.k, from, to: m.to, die: st.die, hit: r.hit ?? null, hitK };
     st.log = r.hit != null ? `${name} ${st.die} attı ve ${COLORS[r.hit]} piyonu eve yolladı! 😤` : m.to >= 40 && m.to - st.die < 40 ? `${name} bir piyonu eve soktu` : `${name} ${st.die} attı`;
-  } else { st.last = { seat, die: st.die, at: Date.now() }; st.log = `${name} ${st.die} attı · oynayacak piyon yok`; }
+  } else { st.last = { seat, die: st.die, at: Date.now() }; st.log = `${name} ${st.die} attı · oynayacak piyon yok`; h = { seat, die: st.die }; }
   st.seq = (st.seq || 0) + 1; st.lastMoveAt = Date.now();
+  // son hamleler: istemci bunları sırayla, piyonu kare kare zıplatarak oynatır
+  st.hist = [...(st.hist || []), { ...h, n: st.seq }].slice(-16);
   if (T.won(st.kz, seat)) {
     st.status = "over"; st.winner = seat; st.die = null;
     st.scores = (st.scores || [0, 0, 0, 0]).map((x, i) => x + (i === seat ? 1 : 0));

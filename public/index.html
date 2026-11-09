@@ -240,7 +240,7 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 .ppile .st3{left:2px;top:4px;transform:rotate(-9deg)}.ppile .st2{left:10px;top:4px;transform:rotate(6deg)}.ppile .st1{left:14px;top:8px;transform:rotate(-2deg)}
 .ppile .land{animation:pland .5s cubic-bezier(.2,.8,.25,1) both}.ppile .land.opl{animation:ploff .6s cubic-bezier(.2,.8,.25,1) .8s both}
 @keyframes ploff{0%{transform:translateY(-180px) rotate(14deg) scale(.7);opacity:0}100%{}}
-.pempty.late{animation:pfade .4s ease 1s both}@keyframes pfade{from{opacity:0}}
+.pempty.late2{animation:pfade .4s ease 1.6s both}.pempty.late{animation:pfade .4s ease 1s both}@keyframes pfade{from{opacity:0}}
 @keyframes pland{from{transform:translateY(60px) rotate(-12deg);opacity:.3}}
 .pempty{width:96px;height:120px;border:2px dashed rgba(255,255,255,.35);border-radius:10px;display:grid;place-items:center;font-weight:800;color:#FFD54F}
 .plog{text-align:center;font-weight:700;font-size:14px;min-height:36px}.plog small{display:block;font-weight:500;opacity:.85;font-size:12px}
@@ -251,7 +251,17 @@ body.dark .lock{background:#3A2F10;color:#F5DFA0}
 .gamescr.tavlag{background:radial-gradient(ellipse at 50% 35%,#3a2616 0%,#1c120a 80%)}
 .ttable{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 8px;height:calc(100dvh - 64px);justify-content:space-between;color:#fff;box-sizing:border-box}
 .ttable .pside{width:min(100%,var(--tbw));box-sizing:border-box}
-.ttable{--tbw:min(100vw - 16px,(100dvh - 330px) * 1.32,900px)}
+.ttable{--tbw:min(100cqw - 16px,(100cqh - 290px) * 1.32,900px)}
+/* geniş ekranda (bilgisayar, yatay telefon) tahta solda büyük, oyuncular ve düğmeler sağda */
+.gamescr.tavlag{container-type:size;container-name:gs}
+@container gs ((min-width:640px) and (min-aspect-ratio:11/10)) or ((max-height:560px) and (min-aspect-ratio:1/1)){
+  .ttable{display:grid;grid-template-columns:var(--tbw) minmax(170px,250px);grid-template-rows:auto 1fr auto;grid-template-areas:"board top" "board ctl" "board bot";--tbw:min(100cqw - 290px,(100cqh - 90px) * 1.32,1200px);height:calc(100cqh - 64px);}
+  .ttable{justify-content:center;align-content:center;column-gap:14px;row-gap:10px}
+  .ttable>.pside.top{grid-area:top;width:100%}.ttable>.tboard{grid-area:board;align-self:center}.ttable>.pside.bot{grid-area:bot;width:100%}
+  .ttable>.tctl{grid-area:ctl;width:auto;flex-direction:column;align-items:stretch;justify-content:center;text-align:center}
+  .ttable .thint{min-width:0}
+  @container gs (max-width:760px){.ttable{grid-template-columns:var(--tbw) 150px;--tbw:min(100cqw - 176px,(100cqh - 78px) * 1.32);column-gap:8px}.ttable .pside .av{width:30px;height:30px}.ttable .tmode{flex-direction:column}}
+}
 .tboard{position:relative;width:var(--tbw);aspect-ratio:1.32;display:grid;grid-template-columns:repeat(6,1fr) 7% repeat(6,1fr) 7%;grid-template-rows:1fr 1fr;padding:2.2% 2%;box-sizing:border-box;border-radius:14px;
   background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 3%,transparent 97%,rgba(0,0,0,.18)),repeating-linear-gradient(92deg,#7a4a24 0 7px,#6c401e 7px 13px,#83522b 13px 22px);
   box-shadow:0 14px 30px rgba(0,0,0,.6),inset 0 0 0 3px #3b220f,inset 0 0 0 6px #9b6a3a}
@@ -718,11 +728,11 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .odisc{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10.5px;font-weight:600;text-shadow:0 1px 2px #000;z-index:1}
 .odisc .stk{position:relative;width:40px;height:55px}
 .odisc .st{position:absolute;left:calc(var(--k,0)*3px);top:calc(var(--k,0)*-3px)}
-.od-me{right:14px;bottom:12px}.od-left{left:14px;bottom:12px}.od-top{left:14px;top:calc(17% + 96px)}
+.od-me{right:14px;bottom:12px}.od-left{left:14px;bottom:12px}.od-top{left:calc(50% + 150px);top:12px}
 .od-right{right:14px;top:calc(17% + 96px)}
 .indt.flip{animation:oflip .9s ease-out both .2s}.indt.flip.f2{animation-delay:.9s}
 @keyframes oflip{0%{transform:perspective(300px) rotateY(180deg) scale(1.3);filter:brightness(.2)}50%{transform:perspective(300px) rotateY(90deg) scale(1.35);filter:brightness(.2)}51%{filter:none}100%{transform:none}}
-.ocanakbox{position:absolute;left:50%;top:84px;transform:translateX(-50%);z-index:1;background:rgba(0,0,0,.28);border:1.5px solid rgba(255,213,79,.55);border-radius:14px;padding:4px 12px;box-shadow:inset 0 0 12px rgba(255,213,79,.15)}
+.ocanakbox{position:relative;margin-right:18px;align-self:center;background:rgba(0,0,0,.28);border:1.5px solid rgba(255,213,79,.55);border-radius:14px;padding:4px 12px;box-shadow:inset 0 0 12px rgba(255,213,79,.15)}
 .odisc.take .stk .st:last-child .tile,.odisc.drop .stk{box-shadow:0 0 0 3px #4FC3F7;border-radius:5px;animation:pulse2 1s infinite}
 .odisc.drop{padding:6px;border:2px dashed rgba(255,255,255,.55);border-radius:12px}
 .odisc.hov,.ofinish.hov{background:rgba(79,195,247,.3);transform:scale(1.08)}
@@ -814,8 +824,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   .gamescr.okeyg .o-left{left:10px;top:8px;transform:none;flex-direction:row;align-items:center}
   .gamescr.okeyg .o-right{right:10px;top:8px;transform:none;flex-direction:row-reverse;align-items:center}
   .gamescr.okeyg .oseat .oav .av{width:38px;height:38px}
-  .gamescr.okeyg .od-top{top:52px;left:100px;transform:none}
-  .gamescr.okeyg .ocanakbox{top:8px;left:calc(50% + 120px);transform:none}
+  .gamescr.okeyg .od-top{top:6px;left:calc(50% + 150px);transform:none}
   .gamescr.okeyg .od-left{left:14px;bottom:8px;top:auto}
   .gamescr.okeyg .od-right{right:114px;top:52px}
   .gamescr.okeyg .od-me{right:14px;bottom:8px}
@@ -887,6 +896,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .pspin{position:relative;width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#e8e4d8 60%,#b9b3a3);box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.2);touch-action:none;cursor:crosshair}
 .pspin::before,.pspin::after{content:"";position:absolute;background:rgba(0,0,0,.15)}.pspin::before{left:50%;top:6px;bottom:6px;width:1px}.pspin::after{top:50%;left:6px;right:6px;height:1px}
 .pspin i{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#e5263b;box-shadow:0 0 0 2px #fff,0 0 6px #e5263b}
+.pubcanak{background:linear-gradient(135deg,#b8860b,#6d4c00)!important;color:#fff!important}.pubcanak small{display:block;font-size:12px;opacity:.85}
 .pubdomino{background:linear-gradient(135deg,#37474f,#102027)!important;color:#fff!important}.pubdomino small{display:block;font-size:12px;opacity:.85}
 .gamescr.dominog{background:radial-gradient(ellipse at 50% 40%,#1d6b4a,#0b3324)}
 .dmtable{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 6px;box-sizing:border-box;color:#fff}
@@ -908,6 +918,22 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .dmt.land{animation:pland .5s cubic-bezier(.2,.8,.25,1) both}.dmt.land.opl{animation:ploff .6s cubic-bezier(.2,.8,.25,1) .3s both}
 .dmtable .overlay2{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.5);z-index:5;border-radius:12px}
 .dmrev{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}.dmrev .dmt{--s:8px}
+/* ıstakadaki okey (joker) otomatik ters çevrilir */
+#gRack .tile.wild{position:relative;background:repeating-linear-gradient(45deg,#c8102e 0 6px,#a50d26 6px 12px);box-shadow:inset 0 0 0 2px #fff,0 0 0 2px #FFC107,0 2px 8px rgba(255,193,7,.8)}
+#gRack .tile.wild.fl{animation:okflip .9s ease-out both .3s}
+#gRack .tile.wild b,#gRack .tile.wild i{visibility:hidden}
+#gRack .tile.wild::after{content:"OKEY";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:900;font-size:clamp(9px,1.4vw,13px);letter-spacing:.5px;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+#gRack .tile.wild::before{content:"★";position:absolute;top:12%;left:0;right:0;text-align:center;color:#ffd54f;font-size:clamp(10px,1.6vw,15px)}
+@keyframes okflip{0%{transform:perspective(300px) rotateY(0)}50%{transform:perspective(300px) rotateY(90deg)}100%{transform:none}}
+.bkw{display:block}.ppile .bkw{position:absolute;inset:0}
+.bkw.to-top{animation:bkTop .7s ease-in both}.bkw.to-bottom{animation:bkBot .7s ease-in both}.bkw.to-left{animation:bkLeft .7s ease-in both}.bkw.to-right{animation:bkRight .7s ease-in both}
+@keyframes bkTop{to{transform:translateY(-200px) scale(.45);opacity:0}}@keyframes bkBot{to{transform:translateY(200px) scale(.45);opacity:0}}
+@keyframes bkLeft{to{transform:translateX(-260px) scale(.45);opacity:0}}@keyframes bkRight{to{transform:translateX(260px) scale(.45);opacity:0}}
+.bktake{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);background:#FFD54F;color:#2b1d00;font-weight:800;font-size:13px;padding:4px 12px;border-radius:12px;white-space:nowrap;z-index:3;box-shadow:0 3px 10px rgba(0,0,0,.4);animation:bkTk .3s ease-out both}
+@keyframes bkTk{from{opacity:0;transform:translate(-50%,8px)}}
+.kzp.hop{animation:kzhop .26s ease-out;z-index:3}@keyframes kzhop{0%{transform:translateY(-70%) scale(1.25)}60%{transform:translateY(8%) scale(.95)}100%{transform:none}}
+.kzp.hit{animation:kzhit .7s ease-out}@keyframes kzhit{0%{transform:scale(1.8) rotate(180deg);opacity:.2}100%{transform:none}}
+.kztable .die{transition:box-shadow .2s;box-shadow:0 6px 14px rgba(0,0,0,.55),inset 0 -3px 0 #c3c8d6,0 0 0 3px var(--c,#fff)}
 </style>
 </head>
 <body>
@@ -1059,6 +1085,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="gitem" data-gift-open style="margin-bottom:6px"><div class="av" style="background:#E91E63">🎁</div><div class="gn"><b>Hediye gönder</b><span>Çay, gül, taç…</span></div></div>
     <p class="isub">Sohbetteki herkes masaya katılabilir. Boş yerlere bilgisayar oturur.</p>
     <div class="glist">
+      <div class="gitem" data-newgame="canak"><div class="av" style="background:#b8860b">🍯</div><div class="gn"><b>Çanak Okey</b><span>4 kişilik · okey atan çanağı alır</span></div></div>
       <div class="gitem" data-newgame="okey"><div class="av" style="background:#0E7C3A">🀄</div><div class="gn"><b>Okey</b><span>4 kişilik · seri ve çift</span></div></div>
       <div class="gitem" data-newgame="pool"><div class="av" style="background:#1d3d7a">🎱</div><div class="gn"><b>Bilardo</b><span>2 kişilik · 8 top</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
