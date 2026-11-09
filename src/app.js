@@ -1852,7 +1852,7 @@ function openPublic(type,variant){
     if(!$("#pubList")){pubUnsub&&pubUnsub();pubUnsub=null;return}
     rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(g=>g.type===type&&(type!=="okey"||!!g.canak===cnk)&&Date.now()-(g.at||0)<10*60e3&&g.seats.some(x=>!x)).sort((a,b)=>(a.stake-b.stake)||(b.at-a.at));
     rows.forEach(g=>g.seats.forEach(x=>x&&x.uid&&watchUser(x.uid)));
-    $("#pubList").innerHTML=rows.length?rows.map(g=>{const n=g.seats.filter(Boolean).length;return`<div class="pk pubrow"><div style="flex:1"><b>${g.stake?`<span class="coin"></span> ${fmtCoin(g.stake)}`:"Ücretsiz"}</b><div class="isub">${g.seats.map(x=>x?esc(x.uid===me?"Sen":realName(x.uid)):"boş").join(" · ")}</div></div><button class="pr" data-pubjoin="${esc(g.id)}" data-stake="${g.stake||0}">${n}/${g.seats.length} · Otur</button></div>`}).join(""):`<div class="empty">Şu an açık ${name} masası yok. İlk masayı sen kur!</div>`;
+    $("#pubList").innerHTML=rows.length?rows.map(g=>{const n=g.seats.filter(Boolean).length;return`<div class="pk pubrow"><div style="flex:1"><b>${g.stake?`<span class="coin"></span> ${fmtCoin(g.stake)}`:"Ücretsiz"}${(g.hands||1)>1?` · ${g.hands} el`:""}</b><div class="isub">${g.seats.map(x=>x?esc(x.uid===me?"Sen":realName(x.uid)):"boş").join(" · ")}</div></div><button class="pr" data-pubjoin="${esc(g.id)}" data-stake="${g.stake||0}">${n}/${g.seats.length} · Otur</button></div>`}).join(""):`<div class="empty">Şu an açık ${name} masası yok. İlk masayı sen kur!</div>`;
   },()=>{if($("#pubList"))$("#pubList").innerHTML='<div class="isub">Masalar yüklenemedi</div>'});
   const join=async(id,stake)=>{
     if(stake&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>openPublic(type,variant));return}
@@ -1862,7 +1862,7 @@ function openPublic(type,variant){
     if(r&&r.error){toast("Masaya oturulamadı, dolmuş olabilir");return}
     openGame(id);
   };
-  const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0,canak:cnk},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
+  const create=stake=>gameApi({action:"create",type,public:true,stake,turnSec:window.__turnSec||0,canak:cnk,hands:window.__hands||1},type).then(r=>{if(!r||!r.id){toast("Masa kurulamadı");return}openGame(r.id)});
   $("#eBody").onclick=e=>{const w=e.target.closest("[data-watch]");if(w){closeE();pubUnsub&&pubUnsub();pubUnsub=null;openGame(w.dataset.watch);return}const b=e.target.closest("[data-pubjoin]");if(b)join(b.dataset.pubjoin,+b.dataset.stake)};
   $("#pubNew").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>create(stake),type,variant)};
   $("#pubQuick").onclick=()=>{pubUnsub&&pubUnsub();pubUnsub=null;pickStake(stake=>{
@@ -2064,9 +2064,12 @@ function weeklySummary(){try{const wk=wallet&&wallet.week;if(!wk||localStorage.g
 function openRedeem(){openModal({title:"🎟️ Hediye kodu",text:"Elindeki hediye kodunu yaz.",placeholder:"örn. BAYRAM2026",ok:"Kullan"},async v=>{
   try{const r=await callApi("/api/wallet",{action:"redeem",code:v});applyWallet({...wallet,...r.wallet});sfx("coin");toast(`🎉 +${fmtCoin(r.gift.amount)} jeton`)}catch(e){toast(e.status===404?"Bu kod geçersiz":e.status===409?"Bu kodu zaten kullandın":e.status===410?"Bu kodun kullanım hakkı bitmiş":"Kullanılamadı",3000)}})}
 function openCity(){const C=catalog?.cities||[];const mo=new Date(Date.now()+3*3600e3).toISOString().slice(0,7).replace("-","");
-  openInfoModal("🏙️ Şehir sıralaması",`<p class="isub">Oyunlarda kazandığın lig puanları şehrine yazılır. Bu ay en çok puan toplayan şehirler:</p>
-    <div class="row2"><select id="ctSel" style="flex:1"><option value="">Şehrini seç…</option>${C.map(c=>`<option ${wallet.city===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div><div id="ctList"><div class="isub">Yükleniyor…</div></div>`);
-  $("#ctSel").onchange=async e=>{if(!e.target.value)return;try{const r=await callApi("/api/wallet",{action:"city",city:e.target.value});applyWallet({...wallet,...r.wallet});toast("Şehrin: "+e.target.value)}catch(err){toast("Kaydedilemedi")}};
+  openInfoModal("🏙️ Şehir sıralaması",`<div class="vipcard" style="background:linear-gradient(135deg,#b8860b,#6d4c00);margin-bottom:8px"><div class="vt" style="color:#fff">🏆 Ayın birinci şehrine büyük ödül</div><div class="vs">Ay sonunda en çok puan toplayan şehirde kayıtlı herkese <b><span class="coin"></span> 100.000 jeton</b> hediye!</div></div>
+    <p class="isub">Oyunlarda kazandığın lig puanları şehrine yazılır.</p>
+    ${wallet.city?`<div class="pk"><b style="flex:1">📍 Şehrin: ${esc(wallet.city)}</b><span class="isub">değiştirilemez</span></div>`:`<div class="row2"><select id="ctSel" style="flex:1"><option value="">Şehrini seç…</option>${C.map(c=>`<option>${esc(c)}</option>`).join("")}</select></div><p class="isub" style="color:#E53935">⚠️ Şehir yalnızca bir kez seçilir, sonra değiştirilemez.</p>`}
+    <div class="fl">Bu ayın sıralaması</div><div id="ctList"><div class="isub">Yükleniyor…</div></div>`);
+  {const cs=$("#ctSel");if(cs)cs.onchange=async e=>{const v=e.target.value;if(!v)return;if(!confirm(`Şehrin "${v}" olarak kaydedilsin mi?\nBu seçim daha sonra değiştirilemez.`)){e.target.value="";return}
+    try{const r=await callApi("/api/wallet",{action:"city",city:v});applyWallet({...wallet,...r.wallet});toast("Şehrin: "+v);openCity()}catch(err){toast(err.status===409?"Şehrin zaten seçilmiş, değiştirilemez":"Kaydedilemedi")}}}
   getDocs(query(collection(fs,"lb_city",mo,"c"),orderBy("points","desc"),limit(30))).then(s=>{const el=$("#ctList");if(!el)return;el.innerHTML=s.empty?'<div class="isub">Bu ay henüz puan yok</div>':s.docs.map((d,i)=>`<div class="lbrow ${d.data().name===wallet.city?"me":""}"><span class="rk">${i<3?["🥇","🥈","🥉"][i]:i+1}</span><span class="nm">${esc(d.data().name)}</span><span class="pt">${fmtCoin(d.data().points||0)} p</span></div>`).join("")}).catch(()=>{const el=$("#ctList");if(el)el.innerHTML=""})}
 async function openRecords(){openInfoModal("📜 Rekorlarım",'<div class="isub">Yükleniyor…</div>');let h=[];try{h=await loadHistory()}catch(e){}
   const best=h.reduce((a,x)=>x.delta>a?x.delta:a,0),G={};h.forEach(x=>{G[x.type]=G[x.type]||{p:0,w:0};G[x.type].p++;if(x.won)G[x.type].w++});
@@ -2178,6 +2181,7 @@ function openAdmin(){
   $("#adReps").onclick=adminReports;
   if(!window.__isMod)$("#adOut").insertAdjacentHTML("beforebegin",`<div class="row2"><button id="adNotice" style="background:#555">📢 Duyuru / bakım</button><button id="adStats" style="background:#555">📈 Hata ve görüşler</button></div>
     <div class="row2"><button id="adCodeMk" style="background:#555">🎟️ Hediye kodu</button><button id="adAlerts" style="background:#555">🚨 Jeton alarmı</button></div>
+    <div class="row2"><button id="adHouse" style="background:#b8860b">💰 Kasa geliri (gün / hafta / ay)</button></div>
     <div class="row2"><button id="adCsv" style="background:#555">📊 Kasa raporu (Excel)</button><button id="adMod" style="background:#555">🛡️ Moderatörler</button></div>`);
   if(window.__isMod){$("#adOut").insertAdjacentHTML("beforebegin",'<p class="isub">Moderatör olarak şikâyetleri inceleyebilir, en fazla 7 gün askıya alabilir ve not ekleyebilirsin.</p>');return}
   $("#adOut").insertAdjacentHTML("beforebegin",`<div class="row2"><button id="adEvent" style="background:#555">🎉 Mevsimlik etkinlik</button><button id="adCafe" style="background:#555">☕ Bütün açık masalar</button></div>`);
@@ -2189,6 +2193,10 @@ function openAdmin(){
   $("#adAlerts").onclick=async()=>{$("#adOut").innerHTML='<div class="isub">Yükleniyor…</div>';try{const r=await callApi("/api/admin",{action:"alerts"});const nm=u=>{const x=r.names[u]||{};return esc((x.name||"?")+" ("+fmtCode(x.code||"")+")")};
     $("#adOut").innerHTML=`<div class="fl">Son 24 saatte 1.000.000+ hareketler</div>${r.big.map(x=>`<div class="hist"><span>${nm(x.uid)} · ${esc(x.reason)}</span><b style="color:${x.delta<0?"#E53935":"#0E7C3A"}">${x.delta>0?"+":""}${fmtCoin(x.delta)}</b></div>`).join("")||'<div class="isub">Yok</div>'}
       <div class="fl">24 saatte en çok net değişim</div>${r.top.map(([u,v])=>`<div class="hist"><span>${nm(u)}</span><b style="color:${v<0?"#E53935":"#0E7C3A"}">${v>0?"+":""}${fmtCoin(v)}</b></div>`).join("")}`}catch(e){$("#adOut").innerHTML='<div class="isub">Yüklenemedi</div>'}};
+  $("#adHouse").onclick=async()=>{try{const r=await callApi("/api/admin",{action:"houseSummary"});
+    const col=(t,o)=>`<div class="pk" style="display:block"><b style="font-size:15px">${t}</b><div style="font-size:22px;font-weight:800;color:${o.net>=0?"#0E7C3A":"#E53935"};margin:4px 0"><span class="coin"></span> ${o.net>=0?"+":""}${fmtCoin(o.net)}</div>
+      <div class="isub">Masa kesintisi (%5): ${fmtCoin(o.rake)}<br>Bilgisayara kaybedilen: ${fmtCoin(o.botWin)}<br>Bilgisayarın ödediği pay: −${fmtCoin(o.botStake)}<br>Biten oyun: ${o.hands}</div></div>`;
+    openInfoModal("💰 Kasaya düşen jeton",`<p class="isub">Kullanıcılardan kasaya giren net jeton (Türkiye saatiyle). Net = kesinti + bilgisayarın kazandığı − bilgisayarın masaya koyduğu pay.</p>`+col("Bugün",r.day)+col("Bu hafta (pazartesiden beri)",r.week)+col("Bu ay",r.month)+(r.truncated?'<p class="isub">Not: kayıt çok fazla, ilk 30.000 sayıldı.</p>':""))}catch(e){toast("Kasa bilgisi alınamadı")}};
   $("#adCsv").onclick=async()=>{try{const r=await callApi("/api/admin",{action:"houseRows",days:30});const lines=[["Tarih","Net","Kesinti","Bilgisayar kazancı","Bilgisayar payı"].join(";"),...r.rows.map(x=>[new Date(x.at).toLocaleString("tr-TR"),x.net||0,x.rake||0,x.botWin||0,x.botStake||0].join(";"))];
     const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tr-kasa-raporu-30-gun.csv";a.click();toast("Rapor indirildi (Excel ile açılır)")}catch(e){toast("Rapor alınamadı")}};
   $("#adMod").onclick=()=>{$("#adOut").innerHTML=`<input id="mdC" inputmode="numeric" placeholder="Moderatörün TR ID'si"><div class="row2"><button id="mdOn" style="background:#0E7C3A">Moderatör yap</button><button id="mdOff" style="background:#777">Moderatörlüğü al</button></div>`;
@@ -2253,10 +2261,13 @@ function pickStake(cb,type="okey",variant){
   const html=tiers.map((t,k)=>{const open=k<=ti;return`<div class="fl" style="margin-top:10px">${t.icon} ${esc(t.name)} <span class="isub">${k<tiers.length-1?fmtCoin(t.min)+" – "+fmtCoin(tiers[k+1].min-1):fmtCoin(t.min)+" ve üzeri"}</span></div><div class="stk">${t.stakes.map(v=>`<button data-stake="${v}" ${!open?"disabled":""} ${v>bal?'data-poor="1"':""}>${v?fmtCoin(v):"Ücretsiz"}<small>${!open?fmtCoin(t.min)+" jetonla açılır":v>bal?"Bakiye yetmez":v?"Pot ≈ "+fmtCoin(v*4):"Jetonsuz oyun"}</small></button>`).join("")}</div>`}).join("");
   const isOk=type==="okey";if(!isOk){window.__turnSec=0;window.__canak=false}
   const html2=cnkMode?html.replace(/data-stake="0"( )/g,'data-stake="0" disabled$1'):html;
+  const isM=type==="pisti"||type==="domino";if(!isM)window.__hands=1;else if(!window.__hands)window.__hands=3;
+  const hsel=!isM?"":`<div class="fl">Kaç el oynansın?</div><div class="seg" id="hSeg">${[1,2,3,4,5].map(v=>`<button data-hn="${v}" class="${(window.__hands||1)===v?"on":""}">${v} el</button>`).join("")}</div><p class="isub" style="margin:4px 0 8px">Puanlar her elde toplanır, son elden sonra toplamı yüksek olan kazanır. Masa ücreti bir kez alınır.</p>`;
   const spd=!isOk?"":`<div class="fl">Okey tur süresi</div><div class="seg" id="tsSeg">${[[0,"Normal · 45 sn"],[30,"Hızlı · 30 sn"],[15,"Şimşek · 15 sn"]].map(([v,l])=>`<button data-ts="${v}" class="${(window.__turnSec||0)===v?"on":""}">${l}</button>`).join("")}</div>`;
   const cnk=cnkMode?`<p class="isub">🍯 <b>Çanak Okey:</b> her elden %5 kasaya, %5 çanağa gider. Okey atarak biten çanaktakinin hepsini alır. Sadece jetonlu masa.</p>`:"";
-  openInfoModal(cnkMode?"🍯 Çanak Okey · masa ücreti":"Masa ücreti",spd+cnk+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html2}`);
-  $("#eBody").onclick=e=>{const ts=e.target.closest("[data-ts]");if(ts){window.__turnSec=+ts.dataset.ts;$("#tsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===ts));return}
+  openInfoModal(cnkMode?"🍯 Çanak Okey · masa ücreti":"Masa ücreti",hsel+spd+cnk+`<p class="isub">Oturan herkesten alınır, kazanan potu alır (%${rk} kesinti). Bilgisayar kazanırsa pot kasaya gider. Berabere biterse ücretler iade edilir.</p>${html2}`);
+  $("#eBody").onclick=e=>{const hn=e.target.closest("[data-hn]");if(hn){window.__hands=+hn.dataset.hn;$("#hSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===hn));return}
+    const ts=e.target.closest("[data-ts]");if(ts){window.__turnSec=+ts.dataset.ts;$("#tsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===ts));return}
     const b=e.target.closest("[data-stake]");if(!b||b.disabled)return;const v=+b.dataset.stake;
     if(b.dataset.poor){noFunds("Bu masa için "+fmtCoin(v)+" jeton gerekiyor, bakiyen "+fmtCoin(wallet?.balance||0)+".");return}
     if(v&&!wallet?.adult){closeE();if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>pickStake(cb,type,variant));return}
@@ -2289,7 +2300,7 @@ $("#gpick").addEventListener("click",async e=>{
   const conv=cur,variant=it.dataset.newgame==="canak"?"canak":undefined,type=variant?"okey":it.dataset.newgame;$("#gpick").classList.remove("show");overlay.classList.remove("show");
   pickStake(async stake=>{
     toast("Masa kuruluyor…",2500);
-    const r=await gameApi({action:"create",type,conv,stake,turnSec:window.__turnSec||0,canak:!!window.__canak},type);
+    const r=await gameApi({action:"create",type,conv,stake,turnSec:window.__turnSec||0,canak:!!window.__canak,hands:window.__hands||1},type);
     if(r&&r.error==="balance"){noFunds();return}
     if(!r||!r.id){toast(r&&r.error==="balance"?"Bakiyen yetmiyor":r&&r.error==="stake"?"Bu masa için seviyen yetmiyor":"Masa kurulamadı, tekrar dene");return}
     await sendContent(conv,{t:"game",gid:r.id,kind:type,stake});
@@ -2314,7 +2325,7 @@ function openGame(id){
       if(prevD&&d.status==="play"&&d.turn===my&&(prevD.turn!==my||prevD.status!=="play"))setTimeout(()=>sfx("turn"),d.type==="pool"?1500:0);
       if(prevD&&prevD.status==="play"&&d.status==="over"&&d.winner===my)setTimeout(()=>sfx("win"),d.type==="pool"?2500:300);
       if(prevD&&prevD.status!=="over"&&d.status==="over")postResult(d);
-      if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){game.tvPath=[];game.tvSel=null;sfx("tile")}
+      if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){const path=game.tvPath||[];game.tvPath=[];game.tvSel=null;tvAnimate(prevD,d,path)}
       else if(prevD&&d.type==="batak"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="domino"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="kizma"&&prevD.seq!==d.seq)kzAnimate(prevD,d)
@@ -2447,7 +2458,7 @@ function renderLobby(d,my){
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
   const host=d.host===me,free=d.seats.some(s=>!s),pool=d.type==="pool"||d.type==="pisti"||d.type==="tavla";
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?"Pişti masası · 2 kişilik":d.type==="tavla"?"Tavla masası · 2 kişilik":d.type==="batak"?"İhaleli Batak · 4 kişilik":d.type==="kizma"?"Kızma Birader · 4 kişilik":d.type==="domino"?"Domino · 2 kişilik":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?`Pişti masası · 2 kişilik · ${d.hands||1} el`:d.type==="tavla"?"Tavla masası · 2 kişilik":d.type==="batak"?"İhaleli Batak · 4 kişilik":d.type==="kizma"?"Kızma Birader · 4 kişilik":d.type==="domino"?`Domino · 2 kişilik · ${d.hands||1} el`:"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>{if(d.stake&&!wallet?.adult){if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>gameMove({action:"join"}));return}gameMove({action:"join"})};
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
   if(d.public&&d.status==="lobby"){const lb=$("#gTable .lobby");if(lb&&!$("#gInvite")){const b=document.createElement("button");b.id="gInvite";b.className="ghostbtn";b.textContent="🔗 Davet bağlantısı";lb.appendChild(b);
@@ -2639,9 +2650,17 @@ function cardHTML(c,{cls="",back=false}={}){
   if(back||c==null)return`<div class="pcard back ${cls}"></div>`;
   const su=pSuit(c),r=P_RANKS[pRank(c)],red=su===1||su===2;
   return`<div class="pcard ${red?"red":""} ${cls}" data-c="${c}"><span class="tl">${r}<br>${P_SUITS[su]}</span><span class="mid${pRank(c)>10?" face":""}">${pRank(c)>10?r+"<small style='font-size:.55em'>"+P_SUITS[su]+"</small>":P_SUITS[su]}</span><span class="br">${r}<br>${P_SUITS[su]}</span></div>`}
+function matchSub(d,my){const me2=my>=0?my:0,mp=d.matchPts||[0,0],H=d.hands||1;
+  if(d.status==="lobby")return`Oyuncular bekleniyor · ${H} ellik`;if(H<=1)return d.round?`${d.round}. maç`:"";
+  return`El ${Math.min(d.handNo||1,H)}/${H} · toplam ${mp[me2]}-${mp[1-me2]}`}
+// çok elli maçta el bitince kısa bir özet göster
+function handSummary(d,my,txt){const pf=d.prevFinal;if(!pf||!pf.at||game.hsSeen===pf.at)return"";
+  if(game.hsSeen===undefined){game.hsSeen=pf.at;return""}
+  if(!game.hsUntil||game.hsKey!==pf.at){game.hsKey=pf.at;game.hsUntil=Date.now()+3800;setTimeout(()=>{if(game){game.hsSeen=pf.at;renderGame()}},3900)}
+  return`<div class="hsum"><b>${pf.handNo}. el bitti</b><div>${txt}</div><small>Toplam: ${(d.matchPts||[0,0])[my>=0?my:0]} - ${(d.matchPts||[0,0])[my>=0?1-my:1]} · ${(d.handNo||1)}. el başlıyor…</small></div>`}
 function renderPisti(d,my){
   $("#gTitleTxt").textContent="Pişti";
-  $("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
+  $("#gSub").textContent=matchSub(d,my);
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
@@ -2660,9 +2679,11 @@ function renderPisti(d,my){
     over=`<div class="overlay2"><div class="overbox"><b style="font-size:18px">${w==null?"Berabere":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b>
       <table class="pfin"><tr><th></th><th>${esc(seatName(d.seats[me2]))}</th><th>${esc(seatName(d.seats[op]))}</th></tr>
       <tr><td>Kart</td><td>${f.cards[me2]}</td><td>${f.cards[op]}</td></tr><tr><td>Pişti</td><td>${f.pisti[me2]}</td><td>${f.pisti[op]}</td></tr>
-      <tr><td><b>Puan</b></td><td><b>${f.pts[me2]}</b></td><td><b>${f.pts[op]}</b></td></tr></table>
+      ${f.hand?`<tr><td>Son el</td><td>${f.hand[me2]}</td><td>${f.hand[op]}</td></tr>`:""}
+      <tr><td><b>${(d.hands||1)>1?"Toplam ("+d.hands+" el)":"Puan"}</b></td><td><b>${f.pts[me2]}</b></td><td><b>${f.pts[op]}</b></td></tr></table>
       ${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
-      ${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div></div>`}
+      ${d.host===me?`<button id="gAgain">${(d.hands||1)>1?"Yeni maç":"Yeni el"}</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div></div>`}
+  {const pf=d.prevFinal;if(pf&&d.status==="play")over+=handSummary(d,my,`${esc(seatName(d.seats[me2]))} <b>${pf.pts[me2]}</b> · ${esc(seatName(d.seats[op]))} <b>${pf.pts[op]}</b>`)}
   $("#gTable").innerHTML=`<div class="ptable">${side(op,true)}${opp}<div class="pcenter">${deck}<div class="ppile">${stack}</div></div>${flash}<div class="plog">${esc(d.status==="play"?(isMy?"Sıra sende · bir kart seç":d.turn===my?"…":esc(seatName(d.seats[d.turn]))+" düşünüyor…"):"")}${d.log&&d.status==="play"?`<small>${esc(d.log)}</small>`:""}</div>${hand}${side(me2,false)}${over}</div>`;
   const hb=$(".phand.me");if(hb)hb.onclick=e=>{const c=e.target.closest(".pcard[data-c]");if(!c||!isMy)return;const v=+c.dataset.c;
     c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),320)};
@@ -2703,19 +2724,23 @@ function renderKizma(d,my){
 /* ---------- Domino ---------- */
 const DM_T=(()=>{const t=[];for(let a=0;a<=6;a++)for(let b=a;b<=6;b++)t.push([a,b]);return t})();
 const DM_PIP={0:[],1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
-const dmHalf=n=>`<span class="dh">${Array.from({length:9},(_,k)=>`<i class="${DM_PIP[n].includes(k)?"on":""}"></i>`).join("")}</span>`;
+const dmHalf=n=>`<span class="dh n${n}">${Array.from({length:9},(_,k)=>`<i class="${DM_PIP[n].includes(k)?"on":""}"></i>`).join("")}</span>`;
 function dmTile(a,b,{vert,cls="",attr=""}={}){return`<div class="dmt ${vert?"v":"h"} ${cls}" ${attr}>${dmHalf(a)}<b></b>${dmHalf(b)}</div>`}
 function dmSides(chain,id){if(!chain.length)return["R"];const[x,y]=DM_T[id],l=chain[0].a,r=chain[chain.length-1].b,o=[];if(x===l||y===l)o.push("L");if(x===r||y===r)o.push("R");return o}
 function renderDomino(d,my){
-  $("#gTitleTxt").textContent="Domino";$("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
+  $("#gTitleTxt").textContent="Domino";$("#gSub").textContent=matchSub(d,my);
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
   const me2=my>=0?my:0,op=1-me2,chain=d.chain||[],hand=(game.hand||[]).filter(x=>x>=0&&x<28);
   const isMy=d.status==="play"&&d.turn===my&&!game.busy;
   const can=isMy?hand.filter(id=>dmSides(chain,id).length):[];const canS=new Set(can);
-  const newK=d.last&&d.last.tile!=null?d.last.at+"-"+d.last.tile:"";const fresh=newK&&game.dmLastK!==newK;game.dmLastK=newK;
-  const chainH=chain.map((t,i)=>dmTile(t.a,t.b,{vert:t.a===t.b,cls:(fresh&&t.id===d.last.tile?"land"+(d.last.seat!==my?" opl":""):"")})).join("");
+  const newK=d.last&&d.last.tile!=null?d.last.at+"-"+d.last.tile:"";if(newK&&game.dmLastK!==newK){game.dmLastK=newK;game.dmAnimUntil=Date.now()+2200;clearTimeout(game.dmAnimT);game.dmAnimT=setTimeout(()=>{if(game&&game.data===d)renderGame()},2300)}const fresh=!!newK&&Date.now()<(game.dmAnimUntil||0);
+  // zincirin iki ucu: açık sayılar görünür, taş seçilince uyduğu uç parlar ve dokununca oraya konur
+  const selS=game.dmSel!=null&&canS.has(game.dmSel)?dmSides(chain,game.dmSel):[];
+  const lastSide=fresh&&d.last?d.last.side:null;
+  const endM=(sd)=>chain.length?`<div class="dmend ${selS.includes(sd)?"go":""} ${lastSide===sd?"hit":""}" data-side="${sd}"><span>${sd==="L"?"◀":""}${sd==="L"?chain[0].a:chain[chain.length-1].b}${sd==="R"?"▶":""}</span><small>${sd==="L"?"Sol uç":"Sağ uç"}</small></div>`:"";
+  const chainH=endM("L")+chain.map((t,i)=>dmTile(t.a,t.b,{vert:t.a===t.b,cls:(fresh&&t.id===d.last.tile?"land"+(d.last.seat!==my?" opl":"")+(d.last.side==="L"?" fromL":" fromR"):"")})).join("")+endM("R");
   const opN=(d.handCounts||[0,0])[op]||0;
   const opH=`<div class="dmop"><div class="dmname ${d.status==="play"&&d.turn===op?"turn":""}">${esc(seatName(d.seats[op]))} · ${opN} taş · ${(d.scores||[0,0])[op]} galibiyet</div><div class="dmback">${Array.from({length:Math.min(opN,12)},()=>`<div class="dmt v back"></div>`).join("")}</div></div>`;
   const sel=game.dmSel!=null&&hand.includes(game.dmSel)&&canS.has(game.dmSel)?game.dmSel:null;if(sel==null)game.dmSel=null;
@@ -2723,22 +2748,41 @@ function renderDomino(d,my){
   let ctl="";
   if(isMy&&!can.length)ctl=(d.boneN||0)>0?`<button class="kzroll" id="dmDraw">🀫 Pazardan çek (${d.boneN})</button>`:`<button class="kzroll" id="dmPass">Pas geç</button>`;
   if(sel!=null){const sd=dmSides(chain,sel);ctl=`<button class="dmside" data-side="L">◀ Sola koy</button><button class="dmside" data-side="R">Sağa koy ▶</button>`}
-  const msg=d.status!=="play"?"":isMy?(sel!=null?"Taşı hangi uca koyacaksın?":can.length?"Parlayan taşlardan birini seç":(d.boneN?"Uyan taşın yok · pazardan çek":"Uyan taşın yok · pas geç")):esc(seatName(d.seats[d.turn]))+" düşünüyor…";
+  const msg=d.status!=="play"?"":isMy?(sel!=null?"Parlayan uca dokun ya da aşağıdan seç":can.length?"Parlayan taşlardan birini seç":(d.boneN?"Uyan taşın yok · pazardan çek":"Uyan taşın yok · pas geç")):esc(seatName(d.seats[d.turn]))+" düşünüyor…";
   let over="";if(d.status==="over"){const w=d.winner,f=d.final||{};const oh=f.hands?(f.hands[op]||f.hands[String(op)]||[]):[];
-    over=`<div class="overlay2"><div class="overbox"><b style="font-size:18px">${w==null?"Berabere":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.9">${esc(d.log||"")}</div>
+    over=`<div class="overlay2"><div class="overbox"><b style="font-size:18px">${w==null?"Berabere":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.9">${esc(d.log||"")}</div>${f.match&&(d.hands||1)>1?`<div style="font-size:15px">Toplam: <b>${f.match[me2]}</b> - <b>${f.match[op]}</b></div>`:""}
       ${oh.length?`<div class="dmrev">${oh.map(id=>dmTile(DM_T[id][0],DM_T[id][1],{vert:true})).join("")}</div>`:""}
       ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:d.payout.refund?`<div>Masa ücreti iade edildi</div>`:`<div><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton</div>`):""}${rateHTML(d)}
-      ${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div></div>`}
-  $("#gTable").innerHTML=`<div class="dmtable">${opH}<div class="dmchain">${chainH||'<div class="dmempty">İlk taşı koy</div>'}</div><div class="dmbone">Pazar: ${d.boneN||0} taş</div><div class="dmmsg">${msg}<small>${esc(d.log||"")}</small></div><div class="dmctl">${ctl}</div><div class="dmhand ${isMy?"my":""}">${myH}</div>${over}</div>`;
+      ${d.host===me?`<button id="gAgain">${(d.hands||1)>1?"Yeni maç":"Yeni el"}</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div></div>`}
+  {const pf=d.prevFinal;if(pf&&d.status==="play")over+=handSummary(d,my,pf.w==null?"El berabere":`${pf.w===me2?"Eli sen aldın":esc(seatName(d.seats[pf.w]))+" eli aldı"} · <b>+${pf.gain}</b> puan`)}
+  $("#gTable").innerHTML=`<div class="dmtable">${opH}<div class="dmchain">${chainH||'<div class="dmempty">İlk taşı koy</div>'}</div><div class="dmbone">🀫 Pazar: <b>${d.boneN||0}</b> taş${fresh&&d.last?` · <span class="dmlast">${d.last.seat===my?"Sen":esc(seatName(d.seats[d.last.seat]))} ${DM_T[d.last.tile].join("|")} taşını ${d.last.side==="L"?"◀ sola":"sağa ▶"} koydu</span>`:""}</div><div class="dmmsg">${msg}<small>${esc(d.log||"")}</small></div><div class="dmctl">${ctl}</div><div class="dmhand ${isMy?"my":""}">${myH}</div>${over}</div>`;
   const ch=$("#gTable .dmchain");if(ch)ch.scrollTop=ch.scrollHeight;
   $("#gTable .dmhand").onclick=e=>{const t=e.target.closest("[data-dm]");if(!t||!isMy)return;const id=+t.dataset.dm;if(!canS.has(id))return;
     const sd=dmSides(chain,id);const ends=chain.length?[chain[0].a,chain[chain.length-1].b]:null;
     if(sd.length===1||(ends&&ends[0]===ends[1])){game.dmSel=null;gameMove({action:"play",tile:id,side:sd[0]});return}
     game.dmSel=sel===id?null:id;renderGame()};
-  $("#gTable .dmctl").onclick=e=>{const b=e.target.closest("[data-side]");if(b&&game.dmSel!=null){const id=game.dmSel;game.dmSel=null;gameMove({action:"play",tile:id,side:b.dataset.side})}};
+  const sideClick=e=>{const b=e.target.closest("[data-side]");if(b&&game.dmSel!=null&&dmSides(chain,game.dmSel).includes(b.dataset.side)){const id=game.dmSel;game.dmSel=null;gameMove({action:"play",tile:id,side:b.dataset.side})}};
+  $("#gTable .dmctl").onclick=sideClick;$("#gTable .dmchain").onclick=sideClick;
   const dr=$("#dmDraw");if(dr)dr.onclick=()=>gameMove({action:"draw"});
   const ps=$("#dmPass");if(ps)ps.onclick=()=>gameMove({action:"pass"});
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
+}
+// Tavla: rakibin zarı görünür, hamleleri tek tek (pul pul) oynanır
+function tvAnimate(prevD,d,path){
+  const L=d.last,my=mySeatIdx(d);
+  if(!L||L.seat===my||!prevD.tv||prevD.status!=="play"||!L.seq){sfx("tile");return}
+  if(game.tvAnim&&game.tvAnim.run)return;
+  // başlangıç: benim az önce oynadığım hamleler uygulanmış hâl
+  let base=JSON.parse(JSON.stringify(prevD.tv));if(path&&path.length&&prevD.turn===my){try{base=TV.applySeq(base,my,path.map(m=>({from:m.from,to:m.to})))}catch(e){}}
+  const A={run:true,tv:base,dice:L.dice,seat:L.seat,rollNew:true,hl:null,msg:`${seatName(d.seats[L.seat])} zar atıyor…`};
+  game.tvAnim=A;const gid=game.id,wait=ms=>new Promise(r=>setTimeout(r,ms)),me2=my>=0?my:0;
+  (async()=>{renderGame();sfx("ball");setTimeout(()=>sfx("ball"),180);await wait(1300);
+    A.msg=`${seatName(d.seats[L.seat])} ${L.dice[0]}-${L.dice[1]} attı`;renderGame();await wait(600);
+    if(!L.seq.length){A.msg+=" · oynayacak hamle yok";renderGame();await wait(1200)}
+    for(const m of L.seq){if(!game||game.id!==gid)return;
+      try{A.tv=TV.applySeq(A.tv,L.seat,[{from:TV.absPt(L.seat,m.from),to:TV.absPt(L.seat,m.to)}])}catch(e){break}
+      A.hl=m.to<0?null:TV.absPt(me2,m.to);renderGame();sfx("tile");await wait(850)}
+    await wait(400);A.run=false;if(game&&game.tvAnim===A){game.tvAnim=null;renderGame()}})();
 }
 // Kızma Birader: gelen hamleleri sırayla oynat (zar atılır, piyon kare kare zıplayarak gider)
 function kzAnimate(prevD,d){
@@ -2780,7 +2824,7 @@ function renderBatak(d,my){
   const seatBox=i=>`<div class="bkseat bk-${pos(i)} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div><b>${esc(seatName(d.seats[i]))}${d.bidder===i?" 🎯":""}</b><span>${d.phase==="bid"?(bids[i]==null?"…":bids[i]?bids[i]+" dedi":"pas"):`${tk[i]} el`}${pos(i)!=="bottom"?` · 🂠 ${hc[i]}`:""} · ${(d.scores||[])[i]||0}p</span></div></div>`;
   // kartlar tek tek, gerçekçi hızda düşer; biten el bir süre masada kalır
   const ltK=d.lastTrick?"l"+d.lastTrick.at:"";
-  if(ltK&&game.bkLtK!==ltK){const seen=game.bkLtK===undefined?d.lastTrick.cards.length:(game.bkSeenK&&game.bkSeenK[0]==="t"?game.bkSeenN:0);game.bkLtK=ltK;game.bkLtSeen=seen;game.bkLtUntil=Date.now()+1900+Math.max(0,d.lastTrick.cards.length-seen)*650}
+  if(ltK&&game.bkLtK!==ltK){const seen=game.bkLtK===undefined?d.lastTrick.cards.length:(game.bkSeenK&&game.bkSeenK[0]==="t"?game.bkSeenN:0);game.bkLtK=ltK;game.bkLtSeen=seen;game.bkLtUntil=Date.now()+1450+Math.max(0,d.lastTrick.cards.length-seen)*650}
   const inLast=!!d.lastTrick&&Date.now()<(game.bkLtUntil||0);
   const showTrick=inLast?d.lastTrick.cards:(d.trick||[]);
   const tkey=inLast?ltK:"t"+d.round+"-"+(d.tricks||[]).reduce((a,b)=>a+b,0);
@@ -2819,40 +2863,41 @@ function renderTavla(d,my){
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
-  const me2=my>=0?my:0,op=1-me2;
+  const me2=my>=0?my:0,op=1-me2;const A=game.tvAnim,tvS=A?A.tv:d.tv;
   // zar: otomatik ya da elle atılır (sonuç sunucuda belirlenir, burada gösterilir)
   const tmode=localStorage.getItem("tr-tvmode")||"auto",dkey=d.seq+"-"+d.turn;
   let needRoll=false,animDice=false;
-  if(d.status==="play"&&d.dice){
+  if(A){animDice=!!A.rollNew;A.rollNew=false}
+  else if(d.status==="play"&&d.dice){
     if(d.turn===my){if(game.tvRolled!==dkey){if(tmode==="auto"){game.tvRolled=dkey;animDice=true}else needRoll=true}}
     else if(game.tvSeen!==dkey){game.tvSeen=dkey;animDice=true}}
-  const isMy=d.status==="play"&&d.turn===my&&!game.busy&&!needRoll;
+  const isMy=!A&&d.status==="play"&&d.turn===my&&!game.busy&&!needRoll;
   game.tvPath=game.tvPath||[];
-  let r=TV.rel(d.tv,me2);for(const m of game.tvPath)r=TV.applyRel(r,m);
+  let r=TV.rel(tvS,me2);for(const m of game.tvPath)r=TV.applyRel(r,m);
   const nx=isMy?tvNext(d,my):{next:[],done:false};
   const srcs=new Set(nx.next.map(m=>m.from)),tgts=new Set(nx.next.filter(m=>m.from===game.tvSel).map(m=>m.to));
   const chk=(n,mine)=>{const a=Math.abs(n),show=Math.min(a,5);return Array.from({length:show},(_,i)=>`<i class="ck ${mine?"w":"b"}">${i===show-1&&a>5?a:""}</i>`).join("")};
-  const pt=(i,top,col)=>{const v=r.b[i];return`<div style="grid-column:${col}" class="tp ${top?"t":"u"} ${(i%2)^(top?1:0)?"d":"l"} ${srcs.has(i)&&game.tvSel==null?"src":""} ${game.tvSel===i?"sel":""} ${tgts.has(i)?"tgt":""}" data-p="${i}">${v?chk(v,v>0):""}</div>`};
+  const pt=(i,top,col)=>{const v=r.b[i];return`<div style="grid-column:${col}" class="tp ${top?"t":"u"} ${(i%2)^(top?1:0)?"d":"l"} ${srcs.has(i)&&game.tvSel==null?"src":""} ${game.tvSel===i?"sel":""} ${tgts.has(i)?"tgt":""} ${A&&A.hl===i?"mv":""}" data-p="${i}">${v?chk(v,v>0):""}</div>`};
   const row=(arr,top,c0)=>arr.map((i,k)=>pt(i,top,c0+k)).join("");
   const bar=`<div class="tvbar"><div class="bo">${r.obar?chk(-r.obar,false):""}</div><div class="bm ${srcs.has(24)&&game.tvSel==null?"src":""} ${game.tvSel===24?"sel":""}" data-p="24">${r.bar?chk(r.bar,true):""}</div></div>`;
-  const offT=`<div class="toff"><div class="oo"><b>${d.tv.off[op]}</b><span>${Array.from({length:Math.min(d.tv.off[op],15)},()=>'<u class="b"></u>').join("")}</span></div><div class="om ${tgts.has(-1)?"tgt":""}" data-p="-1"><span>${Array.from({length:Math.min(r.off,15)},()=>'<u class="w"></u>').join("")}</span><b>${r.off}</b></div></div>`;
-  const usedN=game.tvPath.length,dice=d.dice||[];const dl=dice.length?(dice[0]===dice[1]?[dice[0],dice[0],dice[0],dice[0]]:dice):[];
+  const offT=`<div class="toff"><div class="oo"><b>${tvS.off[op]}</b><span>${Array.from({length:Math.min(tvS.off[op],15)},()=>'<u class="b"></u>').join("")}</span></div><div class="om ${tgts.has(-1)?"tgt":""}" data-p="-1"><span>${Array.from({length:Math.min(r.off,15)},()=>'<u class="w"></u>').join("")}</span><b>${r.off}</b></div></div>`;
+  const usedN=game.tvPath.length,dice=(A?A.dice:d.dice)||[];const dl=dice.length?(dice[0]===dice[1]?[dice[0],dice[0],dice[0],dice[0]]:dice):[];
   const usedVals=game.tvPath.map(m=>m.d);const dUsed=dl.map(()=>false);usedVals.forEach(v=>{const k=dl.findIndex((x,i)=>x===v&&!dUsed[i]);if(k>=0)dUsed[k]=true});
-  const pipsTxt=`${TV.pips(d.tv,me2)} / ${TV.pips(d.tv,op)}`;
+  const pipsTxt=`${TV.pips(tvS,me2)} / ${TV.pips(tvS,op)}`;
   const PIP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
   const dieH=(v,used,hide)=>`<span class="die ${used?"used":""} ${animDice?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${!hide&&PIP[v]&&PIP[v].includes(k)?"on":""}"></i>`).join("")}</span>`;
-  const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>${i===me2?"⚪ beyaz":"⚫ siyah"} · ${(d.scores||[])[i]||0} sayı</span></div></div>`;
+  const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${(A?A.seat===i:d.status==="play"&&d.turn===i)?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>${i===me2?"⚪ beyaz":"⚫ siyah"} · ${(d.scores||[])[i]||0} sayı</span></div></div>`;
   let over="";
   if(d.status==="over"){const w=d.winner;over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}${d.mars?" · MARS!":""}</b><div style="font-size:13px;opacity:.85">Skor ${(d.scores||[0,0])[me2]} - ${(d.scores||[0,0])[op]}</div>
     ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
     ${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`}
-  const hint=d.status!=="play"?"":isMy?(game.tvSel==null?(nx.next.length?"Oynatacağın pulu seç":""):"Gideceği haneyi seç"):esc(seatName(d.seats[d.turn]))+" oynuyor…";
+  const hint=A?esc(A.msg||""):d.status!=="play"?"":isMy?(game.tvSel==null?(nx.next.length?"Oynatacağın pulu seç":""):"Gideceği haneyi seç"):esc(seatName(d.seats[d.turn]))+" oynuyor…";
   $("#gTable").innerHTML=`<div class="ttable">${side(op,true)}
     <div class="tboard"><div class="trow top">${row([12,13,14,15,16,17],true,1)}</div><div class="trow top r">${row([18,19,20,21,22,23],true,8)}</div>${bar}
       <div class="trow bot">${row([11,10,9,8,7,6],false,1)}</div><div class="trow bot r">${row([5,4,3,2,1,0],false,8)}</div>${offT}
-      ${dl.length||needRoll?`<div class="tbdice ${d.turn===my?"r":"l"} ${animDice?"throw":""}">${(needRoll?[]:dl.slice(0,dice[0]===dice[1]?4:2)).map((v,i)=>dieH(v,!needRoll&&dUsed[i],false)).join("")}</div>`:""}</div>
+      ${dl.length||needRoll?`<div class="tbdice ${A?"l op":d.turn===my?"r":"l"} ${animDice?"throw":""}">${(needRoll?[]:dl.slice(0,dice[0]===dice[1]?4:2)).map((v,i)=>dieH(v,!needRoll&&dUsed[i],false)).join("")}</div>`:""}</div>
     <div class="tctl">
-      ${needRoll?`<button id="tRoll">🎲 Zar at</button>`:`<div class="thint">${hint}<small>${esc(d.log||"")} · pip ${pipsTxt}</small></div>`}${isMy&&usedN?`<button id="tUndo">↶ Geri al</button>`:""}
+      ${needRoll?`<button id="tRoll">🎲 Zar at</button>`:`<div class="thint">${hint}<small>${A?"":esc(d.log||"")+" · "}pip ${pipsTxt}</small></div>`}${isMy&&usedN?`<button id="tUndo">↶ Geri al</button>`:""}
       ${my>=0?`<div class="tmode"><button data-tm="auto" class="${tmode==="auto"?"on":""}">Otomatik zar</button><button data-tm="manual" class="${tmode==="manual"?"on":""}">Elle zar at</button></div>`:""}</div>
     ${side(me2,false)}${over}</div>`;
   const bd=$(".tboard");if(bd)bd.onclick=e=>{if(!isMy)return;const el=e.target.closest("[data-p]");if(!el)return;const p=+el.dataset.p;

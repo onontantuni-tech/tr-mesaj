@@ -50,7 +50,7 @@ export default async (req) => {
       const ref = db.collection("games").doc();
       await ref.set({
         type: "pisti", conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [],
-        botSkill: Math.min(2, E.botSkillForLevel(lvl)), seats: [{ uid, bot: false }, null],
+        botSkill: Math.min(2, E.botSkillForLevel(lvl)), seats: [{ uid, bot: false }, null], hands: Math.max(1, Math.min(5, Math.floor(Number(b.hands) || 1))),
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0], seq: 0, v: 1,
       });
       return json(200, { id: ref.id });
@@ -125,6 +125,7 @@ export default async (req) => {
           seq: (g.seq || 0) + 1, lastMoveAt: Date.now(), last: null, log: "Kartlar dağıtıldı",
         });
         st.dealer = 1 - st.turn;
+        st.firstTurn = st.turn; st.handNo = 1; st.matchPts = [0, 0]; st.prevFinal = null;
         const hands = {};
         runBots(st, sec);
         commit(tx, db, gref, sref, id, st, sec, wallets, hands);
@@ -186,13 +187,26 @@ function move(st, sec, seat, card) {
   st.seq = (st.seq || 0) + 1;
   st.lastMoveAt = Date.now();
   if (K.handOver(sec)) {
-    const pts = K.finish(sec);
-    st.final = { pts, cards: sec.taken.map((t) => t.length), pisti: sec.pisti };
+    const hp = K.finish(sec);
+    // çok elli maç: puanlar toplanır, son elden sonra toplamı yüksek olan kazanır
+    st.matchPts = (st.matchPts || [0, 0]).map((x, i) => x + hp[i]);
+    const total = st.hands || 1, hn = st.handNo || 1;
+    if (hn < total) {
+      st.prevFinal = { pts: hp, cards: sec.taken.map((t) => t.length), pisti: sec.pisti.slice(), handNo: hn, at: Date.now() };
+      st.handNo = hn + 1;
+      Object.assign(sec, K.deal());
+      st.turn = ((st.firstTurn ?? 0) + hn) % 2;
+      st.last = null;
+      st.log = `${hn}. el bitti (${hp[0]}-${hp[1]}) · ${hn + 1}. el dağıtıldı`;
+      return;
+    }
+    const pts = st.matchPts;
+    st.final = { pts, hand: hp, cards: sec.taken.map((t) => t.length), pisti: sec.pisti };
     st.scores = (st.scores || [0, 0]).map((x, i) => x + (pts[i] > pts[1 - i] ? 1 : 0));
     st.winner = pts[0] === pts[1] ? null : pts[0] > pts[1] ? 0 : 1;
     st.points = Math.max(1, Math.min(10, Math.round(Math.abs(pts[0] - pts[1]) / 5) + 1));
     st.status = "over";
-    st.log = st.winner == null ? `Berabere bitti (${pts[0]}-${pts[1]})` : `El bitti: ${pts[0]} - ${pts[1]}`;
+    st.log = (total > 1 ? `Maç bitti (${total} el): ` : "El bitti: ") + `${pts[0]} - ${pts[1]}`;
   } else st.turn = 1 - seat;
 }
 

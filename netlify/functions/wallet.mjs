@@ -291,6 +291,8 @@ export default async (req) => {
       if (act === "city") {
         const city = E.CITIES.includes(b.city) ? b.city : null;
         if (!city) return { status: 400, body: { error: "city" } };
+        // şehir bir kez seçilir, sonra değiştirilemez (şehir ödülü hilesini önler)
+        if (w.city) return { status: 409, body: { error: "locked", wallet: view(w) } };
         w.city = city;
       }
       // Harcama iadesi (dünkü harcamaya göre)

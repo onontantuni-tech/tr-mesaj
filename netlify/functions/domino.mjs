@@ -51,7 +51,7 @@ export default async (req) => {
       const ref = db.collection("games").doc();
       await ref.set({
         type: TYPE, conv: pub ? null : b.conv, public: pub, members, host: uid, status: "lobby", stake, pot: 0, paid: [],
-        botSkill: Math.min(2, E.botSkillForLevel(lvl)), seats: [{ uid, bot: false }, null],
+        botSkill: Math.min(2, E.botSkillForLevel(lvl)), seats: [{ uid, bot: false }, null], hands: Math.max(1, Math.min(5, Math.floor(Number(b.hands) || 1))),
         at: Date.now(), updatedAt: Date.now(), round: 0, scores: [0, 0], seq: 0, v: 1,
       });
       return json(200, { id: ref.id });
@@ -126,6 +126,7 @@ export default async (req) => {
           seq: (g.seq || 0) + 1, lastMoveAt: Date.now(), last: null, log: "Taşlar dağıtıldı",
         });
         st.dealer = 1 - st.turn;
+        st.firstTurn = st.turn; st.handNo = 1; st.matchPts = [0, 0]; st.prevFinal = null;
         const hands = {};
         runBots(st, sec);
         commit(tx, db, gref, sref, id, st, sec, wallets, hands);
@@ -220,13 +221,28 @@ function end(st, sec, seat, how) {
   const p = [K.handPips(S.hands[0]), K.handPips(S.hands[1])];
   let w = seat;
   if (how === "block") w = p[0] === p[1] ? null : p[0] < p[1] ? 0 : 1;
-  st.final = { pips: p, how, hands: { 0: S.hands[0].slice(), 1: S.hands[1].slice() } };
-  st.winner = w;
-  st.scores = (st.scores || [0, 0]).map((x, i) => x + (w === i ? 1 : 0));
   const gain = w == null ? 0 : p[1 - w];
-  st.points = Math.max(1, Math.min(10, Math.round(gain / 5) + 1));
+  // çok elli maç: eli kazanan rakibin elinde kalan puanı alır, son elden sonra toplamı yüksek olan kazanır
+  st.matchPts = (st.matchPts || [0, 0]).map((x, i) => x + (w === i ? gain : 0));
+  const total = st.hands || 1, hn = st.handNo || 1;
+  const handLog = w == null ? `El kilitlendi, berabere (${p[0]}-${p[1]})` : how === "out" ? `${st.seats[w].bot ? st.seats[w].name : "Oyuncu"} taşlarını bitirdi, +${gain} puan` : `El kilitlendi, az puanlı kazandı: +${gain}`;
+  if (hn < total) {
+    st.prevFinal = { pips: p, how, w, gain, handNo: hn, hands: { 0: S.hands[0].slice(), 1: S.hands[1].slice() }, at: Date.now() };
+    st.handNo = hn + 1;
+    Object.assign(sec, K.deal());
+    st.chain = []; st.passes = 0; st.last = null;
+    st.turn = ((st.firstTurn ?? 0) + hn) % 2;
+    st.log = `${hn}. el: ${handLog} · ${hn + 1}. el başladı`;
+    return;
+  }
+  const mp = st.matchPts;
+  const mw = total > 1 ? (mp[0] === mp[1] ? null : mp[0] > mp[1] ? 0 : 1) : w;
+  st.final = { pips: p, how, hands: { 0: S.hands[0].slice(), 1: S.hands[1].slice() }, match: mp };
+  st.winner = mw;
+  st.scores = (st.scores || [0, 0]).map((x, i) => x + (mw === i ? 1 : 0));
+  st.points = Math.max(1, Math.min(10, Math.round((total > 1 ? Math.abs(mp[0] - mp[1]) : gain) / 5) + 1));
   st.status = "over";
-  st.log = w == null ? `Oyun kilitlendi, berabere (${p[0]}-${p[1]})` : how === "out" ? `Taşlar bitti! Rakipte ${gain} puan kaldı` : `Oyun kilitlendi: ${p[0]} - ${p[1]}`;
+  st.log = total > 1 ? `Maç bitti (${total} el): ${mp[0]} - ${mp[1]}` : mw == null ? `Oyun kilitlendi, berabere (${p[0]}-${p[1]})` : handLog;
 }
 
 // Bilgisayarın sırası: oynayabiliyorsa oynar, yoksa pazardan çeker, o da yoksa pas

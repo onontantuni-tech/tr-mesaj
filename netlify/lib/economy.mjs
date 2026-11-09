@@ -202,6 +202,7 @@ export function addStats(tx, db, uid, points, won) {
 }
 
 // ---- Oyun sonrası: istatistik, seri bonusu, günlük görev sayaçları, oyun geçmişi ----
+export const CITY_PRIZE = 100000; // ayın birinci şehrinde kayıtlı herkese
 export const STREAK_BONUS = { every: 3, amount: 5000 };
 export const TASKS = [
   { id: "play3", text: "3 oyun oyna", need: (t) => t.played >= 3, goal: (t) => [t.played, 3], prize: 3000 },

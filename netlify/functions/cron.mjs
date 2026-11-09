@@ -73,6 +73,39 @@ async function payRefTop(db, month) {
   return { kind: "ref", month, paid };
 }
 
+// Ayın şehir şampiyonu: o şehri seçmiş herkese 100.000 jeton. Çok kullanıcı olabilir:
+// 300'lük parçalar halinde ödenir, kalan olursa ertesi gün kaldığı yerden devam eder.
+async function payCityTop(db, month) {
+  const flag = db.doc(`rewards/city_${month}`);
+  const fs0 = await flag.get();
+  let st = fs0.exists ? fs0.data() : null;
+  if (st && st.done) return { kind: "city", month, skipped: true };
+  if (!st) {
+    const q = await db.collection(`lb_city/${month}/c`).orderBy("points", "desc").limit(1).get();
+    if (q.empty) { await flag.set({ done: true, none: true, at: Date.now() }); return { kind: "city", month, none: true }; }
+    st = { city: q.docs[0].data().name, points: q.docs[0].data().points || 0, paid: 0, last: null, done: false, at: Date.now() };
+    await flag.set(st);
+  }
+  const amount = E.CITY_PRIZE;
+  for (let round = 0; round < 10; round++) {
+    let q = db.collection("wallets").where("city", "==", st.city).orderBy(FieldPath.documentId()).limit(300);
+    if (st.last) q = q.startAfter(st.last);
+    const ws = await q.get();
+    if (ws.empty) { st.done = true; break; }
+    const batch = db.batch();
+    for (const d of ws.docs) {
+      batch.update(d.ref, { balance: FieldValue.increment(amount) });
+      batch.set(db.collection("ledger").doc(), { uid: d.id, delta: amount, reason: `Ayın şehir şampiyonu ödülü (${st.city})`, by: "system", at: Date.now() });
+    }
+    await batch.commit();
+    st.paid += ws.size; st.last = ws.docs[ws.docs.length - 1].id;
+    await flag.set(st);
+    if (ws.size < 300) { st.done = true; break; }
+  }
+  await flag.set(st);
+  return { kind: "city", month, city: st.city, paid: st.paid, done: st.done };
+}
+
 // Kaybolan mesajlar: süresi dolan mesajları ve şifreli medya parçalarını sil
 async function purgeExpired(db) {
   const q = await db.collection("msgs").where("exp", "<", Date.now()).limit(400).get();
@@ -168,6 +201,9 @@ export default async (req) => {
   const out = [await payTop(db, "day", y.day, E.DAILY_PRIZES)];
   out.push(await settleTour(db, y.day));
   if (today.dom === 1) out.push(await payTop(db, "month", y.month, E.MONTHLY_PRIZES));
+  if (today.dom === 1) { try { out.push(await payRefTop(db, y.month)); } catch (e) { out.push({ kind: "ref", error: String(e.message || e).slice(0, 100) }); } }
+  // şehir ödülü: ayın 1'inde başlar, çok kişi varsa sonraki günlerde devam eder
+  if (today.dom <= 5) { try { out.push(await payCityTop(db, E.trDate(Date.now() - today.dom * 86400000).month)); } catch (e) { out.push({ kind: "city", error: String(e.message || e).slice(0, 100) }); } }
   if (today.dow === 0) out.push(await settleLeague(db, E.weekId(Date.now() - 10 * 60 * 1000)));
   out.push(await refundStale(db));
   try { out.push(await purgeExpired(db)); } catch (e) { out.push({ kind: "purge", error: String(e.message || e).slice(0, 100) }); }

@@ -58,6 +58,25 @@ export default async (req) => {
     const q = await db.collection("house_ledger").where("at", ">", since).orderBy("at", "desc").limit(5000).get();
     return json(200, { rows: q.docs.map((d) => d.data()) });
   }
+  // Kasaya düşen jeton: bugün, bu hafta (pazartesiden beri), bu ay — Türkiye saatiyle
+  if (act === "houseSummary") {
+    const TR = 3 * 3600000, now = Date.now(), t = new Date(now + TR);
+    const dayStart = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - TR;
+    const weekStart = dayStart - ((t.getUTCDay() + 6) % 7) * 86400000;
+    const monthStart = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1) - TR;
+    const since = Math.min(weekStart, monthStart);
+    const q = await db.collection("house_ledger").where("at", ">=", since).limit(30000).get();
+    const z = () => ({ net: 0, rake: 0, botWin: 0, botStake: 0, hands: 0 });
+    const out = { day: z(), week: z(), month: z() };
+    for (const d of q.docs) {
+      const r = d.data(), at = r.at || 0;
+      for (const [k, from] of [["day", dayStart], ["week", weekStart], ["month", monthStart]]) {
+        if (at < from) continue;
+        const o = out[k]; o.net += r.net || 0; o.rake += r.rake || 0; o.botWin += r.botWin || 0; o.botStake += r.botStake || 0; o.hands++;
+      }
+    }
+    return json(200, { ...out, truncated: q.size >= 30000 });
+  }
   // Moderatör ekle / çıkar (TR ID ile)
   if (act === "mod") {
     const code = String(b.code || "").replace(/\D/g, "");
