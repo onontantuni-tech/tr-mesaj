@@ -1,5 +1,5 @@
 // TR service worker: çevrimdışı kabuk + bildirimler
-const C = "tr-v46";
+const C = "tr-v47";
 const SHELL = ["/", "/index.html", "/app.js", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -10,10 +10,15 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== "GET" || u.origin !== location.origin || u.pathname.startsWith("/api/") || u.pathname.startsWith("/.netlify/") || u.pathname.startsWith("/__/")) return;
+  // Hızlı açılış: önce cihazdaki kopyayı hemen göster, arka planda yenisini indirip sakla.
+  // (Yeni sürüm çıkınca bu dosyanın adı değişir; yeni kopya kurulur ve "Yeni sürüm hazır" çıkar.)
+  const key = e.request.mode === "navigate" ? "/index.html" : e.request;
   e.respondWith(
-    fetch(e.request)
-      .then((r) => { const cp = r.clone(); caches.open(C).then((c) => c.put(e.request, cp)); return r; })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("/index.html")))
+    caches.open(C).then((c) => c.match(key).then((hit) => {
+      const net = fetch(e.request).then((r) => { if (r.ok && r.type === "basic") c.put(key, r.clone()); return r; }).catch(() => hit || c.match("/index.html"));
+      if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+      return net;
+    }))
   );
 });
 
