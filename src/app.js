@@ -1695,6 +1695,8 @@ async function endCall(state){
   if(state!==null){
     const patch={state:state||"ended",endedAt:Date.now()};
     try{await setDoc(doc(fs,"calls",c.id),patch,{merge:true})}catch(e){}
+    // aranan kişi cevap vermediyse: telefonuna "Cevapsız arama" bildirimi gitsin (çalma bildirimi geç düştüyse bile görür)
+    if(state==="missed"&&c.role==="caller")callApi("/api/notify",{missed:c.id}).catch(()=>{});
   }
 }
 $("#csAccept").onclick=acceptCall;
@@ -3312,7 +3314,8 @@ function notifMenu(){
   if(!notifSupported()){openModal({title:"Bildirimler",text:"Bu cihaz ya da tarayıcı bildirimleri desteklemiyor.",input:false,cancel:false});return}
   const p=Notification.permission;
   if(p==="granted"){setupPush(false);getDoc(doc(fs,"private",me,"data","push")).then(s=>{const x=s.exists()?s.data():{};
-    openInfoModal("🔔 Bildirim ayarları",[["noDm","Birebir mesajlar"],["noGroup","Grup mesajları (senden bahsedilirse yine gelir)"],["noCall","Gelen aramalar"]].map(([k,l])=>`<label class="tgl"><span><b>${l}</b></span><input type="checkbox" data-np="${k}" ${x[k]?"":"checked"}></label>`).join("")+'<p class="isub">Belirli bir sohbeti sessize almak için sohbete uzun bas.</p>');
+    openInfoModal("🔔 Bildirim ayarları",[["noDm","Birebir mesajlar"],["noGroup","Grup mesajları (senden bahsedilirse yine gelir)"],["noCall","Gelen aramalar"]].map(([k,l])=>`<label class="tgl"><span><b>${l}</b></span><input type="checkbox" data-np="${k}" ${x[k]?"":"checked"}></label>`).join("")+'<p class="isub">Belirli bir sohbeti sessize almak için sohbete uzun bas.</p><div class="row2"><button id="npTest" style="background:#0E7C3A">🔔 Test bildirimi gönder</button></div><p class="isub">Düğmeye bas, sonra uygulamayı hemen kapat (ya da ana ekrana dön). 8 saniye içinde bildirim gelmeli. Gelmezse telefon ayarlarında: <b>Uygulamalar → TR → Bildirimler: açık</b>, <b>Chrome → Bildirimler: açık</b>, <b>Chrome → Pil: Kısıtlama yok</b>. Xiaomi/Huawei/Oppo telefonlarda ayrıca <b>Otomatik başlatma</b>yı aç.</p>');
+    {const nt=$("#npTest");if(nt)nt.onclick=async()=>{nt.disabled=true;await setupPush(false).catch(()=>{});toast("8 saniye içinde test bildirimi gelecek, uygulamayı kapat",4000);try{const r=await callApi("/api/notify",{test:1});if(!r.sent)toast("Bu cihaz bildirim için kayıtlı değil. Bildirimlere izin ver.",4000)}catch(e){toast("Test gönderilemedi")}nt.disabled=false}}
     $("#eBody").onchange=e=>{const k=e.target.dataset.np;if(k)setDoc(doc(fs,"private",me,"data","push"),{[k]:!e.target.checked},{merge:true}).catch(()=>toast("Kaydedilemedi"))}}).catch(()=>{});return}
   if(p==="denied"){openModal({title:"Bildirimler kapalı",text:"Bildirim izni daha önce reddedilmiş. Telefonda <b>Ayarlar → Uygulamalar → TR Mesaj → Bildirimler</b>'den açabilirsin. Bilgisayarda adres çubuğundaki kilit simgesinden izin verebilirsin.",input:false,cancel:false});return}
   setupPush(true).then(ok=>toast(ok?"Bildirimler açıldı 🔔":"Bildirim izni verilmedi")).catch(()=>toast("Bildirimler açılamadı"));

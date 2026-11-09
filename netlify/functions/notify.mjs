@@ -15,6 +15,8 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return json(400, { error: "body" }); }
   if (body?.call) return notifyCall(uid, String(body.call));
+  if (body?.missed) return notifyMissed(uid, String(body.missed));
+  if (body?.test) return notifyTest(uid);
   if (body?.friend) return notifyFriend(uid, String(body.friend));
   const id = String(body?.id || "");
   if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
@@ -102,6 +104,49 @@ async function notifyCall(uid, id) {
     android: { priority: "high", ttl: 45000 },
   });
   return json(200, { ok: true, sent: res.successCount });
+}
+
+// Cevapsız arama: arayan kişi kapatınca/zaman aşınca aranana kalıcı bildirim (çalma bildirimini değiştirir)
+async function notifyMissed(uid, id) {
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
+  if (recent.has("m" + id)) return json(200, { ok: true, dup: true });
+  recent.set("m" + id, Date.now());
+  const { db, messaging } = admin();
+  const snap = await db.doc(`calls/${id}`).get();
+  if (!snap.exists) return json(404, { error: "call" });
+  const c = snap.data();
+  if (c.from !== uid || c.state !== "missed") return json(403, { error: "state" });
+  const ps = await db.doc(`private/${c.to}/data/push`).get();
+  if (ps.exists && ps.data().noCall) return json(200, { ok: true, sent: 0, off: true });
+  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  if (!tokens.length) return json(200, { ok: true, sent: 0 });
+  const sender = await db.doc(`users/${uid}`).get();
+  const name = (sender.exists && sender.data().nick) || "Biri";
+  const res = await messaging.sendEachForMulticast({
+    tokens,
+    data: { kind: "missed", title: name, body: c.video ? "📹 Cevapsız görüntülü arama" : "📞 Cevapsız arama", conv: uid, call: id, url: `${SITE}/?c=${encodeURIComponent(uid)}` },
+    webpush: { headers: { Urgency: "high", TTL: "86400" } },
+    android: { priority: "high" },
+  });
+  return json(200, { ok: true, sent: res.successCount });
+}
+
+// Kullanıcının kendi cihazlarına test bildirimi (8 sn sonra; uygulamayı kapatıp denemek için)
+async function notifyTest(uid) {
+  if (recent.has("t" + uid) && Date.now() - recent.get("t" + uid) < 20000) return json(200, { ok: true, dup: true });
+  recent.set("t" + uid, Date.now());
+  const { db, messaging } = admin();
+  const ps = await db.doc(`private/${uid}/data/push`).get();
+  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  if (!tokens.length) return json(200, { ok: true, sent: 0 });
+  await new Promise((r) => setTimeout(r, 8000));
+  const res = await messaging.sendEachForMulticast({
+    tokens,
+    data: { kind: "call", title: "TR test", body: "📞 Bildirimler çalışıyor! Aramalar böyle gelecek.", conv: "", call: "test" + Date.now(), url: `${SITE}/` },
+    webpush: { headers: { Urgency: "high", TTL: "120" } },
+    android: { priority: "high" },
+  });
+  return json(200, { ok: true, sent: res.successCount, devices: tokens.length });
 }
 
 // Arkadaşlık isteği / kabul bildirimi
