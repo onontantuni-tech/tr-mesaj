@@ -42,6 +42,13 @@ Mesajlaşma: bağlantı kartı (103), tek seferlik fotoğraf (52), kaydedilen me
 Oyun/sosyal: izleyici modu (5), masa davet bağlantısı (141), alkış (200), çay ısmarlama (66), sohbete sonuç kartı (204), aranızdaki skor (212), haftanın oyuncusu (68), rövanş isteği (4).
 Uygulama: tanıtım turu (190), duyuru/bakım bandı (90, 28), hata raporu (171), görüş + sıradaki oyun oylaması (112), puan isteme (176), yeni sürüm uyarısı (173), günün ödülü bandı (41), seni özledik hediyesi (138), yönetim paneline hata/görüş istatistiği (113).
 
+## 9 Kasım 2026 (yayında, tr-v40)
+- Okey: köşe köşe atılan taşlar, ayrı çanak kutusu, kaydırarak at / el bitince otomatik bitiş, gösterge çevirme, ☕ çay molası (142), 🚫 oylamayla atma (178)
+- Modern kartlar ve gerçekçi kart hızı (Pişti/Batak), Kızma Birader elle zar + modern tahta
+- Bilardo: daha hızlı, dönen toplar, falso (140)
+- Domino (117), sohbetlerde toplu seçme/silme (194), arkadaş grupları (198)
+- Yönetici paneli 423816 için açık
+
 ## Kullanıcının yapacakları (bekleyen)
 1. Yeni Firestore kurallarını (firestore-kurallari.txt) Firebase Konsolu → Firestore → Kurallar sekmesine yapıştırıp Yayınla
 2. Vercel kurulumu: GitHub ile giriş → tr-mesaj'ı içe aktar → ortam değişkenleri (FIREBASE_SERVICE_ACCOUNT, CF_TURN_KEY_ID, CF_TURN_API_TOKEN, CRON_SECRET) → Deploy → adresi Claude'a gönder
