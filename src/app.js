@@ -1466,6 +1466,7 @@ getRedirectResult(auth).catch(e=>{$("#loginErr").textContent="Giriş yapılamad�
 
 async function logout(){
   toast("Çıkış yapılıyor…",4000);
+  try{await Promise.race([dropNative(),new Promise(r=>setTimeout(r,1500))])}catch(e){}
   stopAll();me=null;ready=false;cur=null;
   try{await Promise.race([signOut(auth),new Promise(r=>setTimeout(r,3000))])}catch(e){}
   try{Object.keys(localStorage).filter(k=>k.startsWith("firebase:")).forEach(k=>localStorage.removeItem(k))}catch(e){}
@@ -1500,7 +1501,7 @@ onAuthStateChanged(auth,async u=>{
   else if(!mineU.pub||mineU.pub.x!==myPub.x||mineU.pub.y!==myPub.y)saveMe({pub:myPub});
   updateIdLabel();renderAll();
   syncPhone().catch(()=>{});
-  setupPush(false).catch(()=>{});
+  setupPush(false).catch(()=>{});syncNative();
   initWallet();
 
   watchUser(me);
@@ -1539,7 +1540,7 @@ onAuthStateChanged(auth,async u=>{
     const next={};s.docs.forEach(d=>{const x=d.data();if(!x||!x.from||!x.to)return;next[d.id]={from:x.from,to:x.to,video:!!x.video,state:String(x.state||""),at:+x.at||0,answeredAt:+x.answeredAt||0,endedAt:+x.endedAt||0,offer:x.offer||null};watchUser(x.from===me?x.to:x.from)});
     callLog=next;
     s.docChanges().forEach(ch=>{if(ch.type!=="removed"){const x=next[ch.doc.id];if(x)onIncoming(ch.doc.id,x)}});
-    if(pendingCallId&&next[pendingCallId]){onIncoming(pendingCallId,next[pendingCallId]);pendingCallId=null}
+    if(pendingCallId&&next[pendingCallId]){onIncoming(pendingCallId,next[pendingCallId]);if(autoAccept&&call&&call.id===pendingCallId&&call.phase==="ringing"){autoAccept=false;acceptCall()}pendingCallId=null}
     renderCalls();
   },()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"reads"),where("members","array-contains",me)),s=>{
@@ -1601,10 +1602,36 @@ function updateCallUI(){
   $("#callscr").classList.toggle("inc",c.phase==="ringing");
   $("#csIncoming").classList.toggle("show",c.phase==="ringing");
   $("#csActive").classList.toggle("show",c.phase!=="ringing"&&c.phase!=="ended");
-  $("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";$("#csScreen").style.display=c.video&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia?"":"none";$("#csPip").style.display=c.video&&document.pictureInPictureEnabled?"":"none";
+  updateSpk();$("#csCam").style.display=c.video?"":"none";$("#csFlip").style.display=c.video?"":"none";$("#csScreen").style.display=c.video&&navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia?"":"none";$("#csPip").style.display=c.video&&document.pictureInPictureEnabled?"":"none";
 }
 async function getMedia(video,facing="user"){
   return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:video?{facingMode:facing,width:{ideal:640},height:{ideal:480}}:false});
+}
+// Ahize / hoparlör: Android Chrome'da ses çıkışı, seçilen mikrofon aygıtıyla birlikte değişir
+// ("Headset earpiece" = ahize, "Speakerphone" = hoparlör). Sesli aramada ahize, görüntülüde hoparlör varsayılan.
+async function audioRoutes(){try{const ins=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="audioinput");return{ear:ins.find(d=>/earpiece/i.test(d.label)),spk:ins.find(d=>/speakerphone/i.test(d.label))}}catch(e){return{}}}
+function updateSpk(){const b=$("#csSpk"),c=call;if(!b)return;b.style.display=c&&c.canRoute?"":"none";b.classList.toggle("on",!!(c&&c.speaker));b.querySelector("span").textContent=c&&c.speaker?"Hoparlör":"Ahize"}
+async function setSpeaker(on,quiet){
+  const c=call;if(!c||!c.stream||c.routing)return;
+  const r=await audioRoutes(),dev=on?r.spk:r.ear;
+  if(!dev){if(!quiet)toast("Bu cihazda ses çıkışı değiştirilemiyor");return}
+  c.routing=true;
+  try{
+    const ns=await navigator.mediaDevices.getUserMedia({audio:{deviceId:{exact:dev.deviceId},echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    if(call!==c){ns.getTracks().forEach(t=>t.stop());return}
+    const nt=ns.getAudioTracks()[0],ot=c.stream.getAudioTracks()[0];
+    if(ot)nt.enabled=ot.enabled;
+    const sender=c.pc&&c.pc.getSenders().find(s=>s.track&&s.track.kind==="audio");
+    if(sender)await sender.replaceTrack(nt);
+    if(ot){c.stream.removeTrack(ot);ot.stop()}
+    c.stream.addTrack(nt);c.speaker=on;
+  }catch(e){if(!quiet)toast("Ses çıkışı değiştirilemedi")}
+  finally{c.routing=false;updateSpk()}
+}
+async function initRoute(c){
+  const r=await audioRoutes();c.canRoute=!!(r.ear&&r.spk);c.speaker=true;
+  if(c.canRoute&&!c.video&&call===c)await setSpeaker(false,true);
+  updateSpk();
 }
 function attachLocal(stream){const v=$("#localVideo");v.srcObject=stream;v.play().catch(()=>{})}
 async function makePC(id,role){
@@ -1640,6 +1667,7 @@ async function startCall(peer,video){
   call={id:ref.id,peer,video,role:"caller",phase:"dialing",stream,facing:"user",seenCands:new Set(),unsubs:[]};
   if(video)attachLocal(stream);
   showCallScreen();startRing(false);
+  {const c=call;await initRoute(c);if(call!==c)return;stream=c.stream}
   try{
     const {pc,unsub,flush,markReady}=await makePC(ref.id,"caller");call.pc=pc;call.unsubs.push(unsub);
     stream.getTracks().forEach(t=>pc.addTrack(t,stream));
@@ -1662,6 +1690,8 @@ function onIncoming(id,d){
   handledCalls.add(id);
   call={id,peer:d.from,video:!!d.video,role:"callee",phase:"ringing",offer:d.offer,seenCands:new Set(),unsubs:[],facing:"user"};
   showCallScreen();startRing(true);
+  // uygulama bu telefonda ekranda açık: Android tarafındaki zil ayrıca çalmasın
+  if(nativeTok&&document.visibilityState==="visible")callApi("/api/notify",{stop:id,tok:nativeTok}).catch(()=>{});
   if(!users[d.from]||!users[d.from].nick)getDoc(doc(fs,"users",d.from)).then(s=>{if(s.exists()){users[d.from]=cleanUser(s.data());updateCallUI()}}).catch(()=>{});
   call.unsubs.push(onSnapshot(doc(fs,"calls",id),s=>{const x=s.data();if(!x||!call||call.id!==id)return;if(x.state==="ended"||x.state==="missed"){if(call.phase==="ringing")toast("Cevapsız arama",2500);endCall(null)}},()=>{}));
   call.timeout=setTimeout(()=>{if(call&&call.id===id&&call.phase==="ringing")endCall(null)},RING_MS);
@@ -1669,7 +1699,9 @@ function onIncoming(id,d){
 async function acceptCall(){
   const c=call;if(!c||c.phase!=="ringing")return;
   stopRing();c.phase="connecting";updateCallUI();
+  callApi("/api/notify",{stop:c.id}).catch(()=>{});
   try{c.stream=await getMedia(c.video)}catch(e){toast("Mikrofon/kamera izni verilmedi",3500);declineCall();return}
+  await initRoute(c);if(call!==c)return;
   if(c.video)attachLocal(c.stream);
   try{
     const {pc,unsub,flush}=await makePC(c.id,"callee");c.pc=pc;c.unsubs.push(unsub);
@@ -1682,6 +1714,7 @@ async function acceptCall(){
 async function declineCall(){
   const c=call;if(!c)return;
   try{await setDoc(doc(fs,"calls",c.id),{state:"declined",endedAt:Date.now()},{merge:true})}catch(e){}
+  callApi("/api/notify",{stop:c.id}).catch(()=>{});
   endCall(null);
 }
 async function endCall(state){
@@ -1711,6 +1744,7 @@ $("#csDeclineMsg").onclick=()=>{const c=call;if(!c)return;const peer=c.peer;
   $("#eBody").onclick=async e=>{const r=e.target.closest("[data-q]");if(!r)return;closeE();await declineCall();if(peer)sendContent(peer,{t:"text",text:Q[+r.dataset.q]})}};
 $("#csHang").onclick=()=>endCall(call&&call.phase==="dialing"?"missed":"ended");
 $("#csMute").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csMute").classList.toggle("on",!t.enabled)};
+$("#csSpk").onclick=()=>{if(call)setSpeaker(!call.speaker)};
 $("#csCam").onclick=()=>{if(!call||!call.stream)return;const t=call.stream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled;$("#csCam").classList.toggle("on",!t.enabled)};
 $("#csFlip").onclick=async()=>{
   const c=call;if(!c||!c.video||!c.stream)return;
@@ -3285,7 +3319,20 @@ async function callApi(path,body){
 }
 
 /* ---------- bildirimler ---------- */
-let messaging=null;
+let messaging=null,myWebTok=null;
+// Bu telefonda Android uygulaması varsa: uygulamanın jetonunu (ntokens) ve bu cihazın tarayıcı jetonunu (nweb) kaydet.
+// Sunucu arama bildirimini doğrudan uygulamaya yollar (ekran kapalıyken de çalar), tarayıcıya ayrıca yollamaz.
+async function syncNative(){
+  if(!me||!nativeTok)return;
+  try{const ref=doc(fs,"private",me,"data","push");const s=await getDoc(ref);const x=s.exists()?s.data():{};const patch={};
+    const nt=Array.isArray(x.ntokens)?x.ntokens:[];if(!nt.includes(nativeTok))patch.ntokens=[...nt,nativeTok].slice(-5);
+    if(myWebTok){const nw=Array.isArray(x.nweb)?x.nweb:[];if(!nw.includes(myWebTok))patch.nweb=[...nw,myWebTok].slice(-5)}
+    if(Object.keys(patch).length)await setDoc(ref,patch,{merge:true})}catch(e){}
+}
+async function dropNative(){
+  if(!me||!nativeTok)return;
+  try{const ref=doc(fs,"private",me,"data","push");const s=await getDoc(ref);if(!s.exists())return;const nt=Array.isArray(s.data().ntokens)?s.data().ntokens:[];if(nt.includes(nativeTok))await setDoc(ref,{ntokens:nt.filter(t=>t!==nativeTok)},{merge:true})}catch(e){}
+}
 const notifSupported=()=>"Notification" in window&&"serviceWorker" in navigator&&"PushManager" in window;
 async function setupPush(ask){
   if(!me||!notifSupported())return false;
@@ -3304,8 +3351,12 @@ async function setupPush(ask){
   const ref=doc(fs,"private",me,"data","push");
   let tokens=[];try{const s=await getDoc(ref);if(s.exists()&&Array.isArray(s.data().tokens))tokens=s.data().tokens}catch(e){}
   if(!tokens.includes(token)){tokens=[...tokens.filter(t=>t!==token),token].slice(-10);await setDoc(ref,{tokens},{merge:true})}
+  myWebTok=token;syncNative();
   return true;
 }
+function nativeStatus(){let er="";try{er=localStorage.getItem("tr-nerr")||""}catch(e){}
+  if(nativeTok)return '<p class="isub">📱 <b>Telefon araması: bu cihaz kayıtlı ✓</b> Aramalar ekran kapalıyken de çalar.</p>';
+  if(er)return '<p class="isub">📱 Telefon araması kaydı yapılamadı: '+esc(er)+'</p>';return ""}
 function showNotifBar(){let d=false;try{d=localStorage.getItem("tr-notif-x")==="1"}catch(e){}if(!d)$("#notifbar").classList.add("show")}
 function hideNotifBar(remember){$("#notifbar").classList.remove("show");if(remember)try{localStorage.setItem("tr-notif-x","1")}catch(e){}}
 $("#notifOn").onclick=async()=>{try{const ok=await setupPush(true);toast(ok?"Bildirimler açıldı 🔔":"Bildirimler açılamadı")}catch(e){toast("Bildirimler açılamadı")}};
@@ -3314,7 +3365,7 @@ function notifMenu(){
   if(!notifSupported()){openModal({title:"Bildirimler",text:"Bu cihaz ya da tarayıcı bildirimleri desteklemiyor.",input:false,cancel:false});return}
   const p=Notification.permission;
   if(p==="granted"){setupPush(false);getDoc(doc(fs,"private",me,"data","push")).then(s=>{const x=s.exists()?s.data():{};
-    openInfoModal("🔔 Bildirim ayarları",[["noDm","Birebir mesajlar"],["noGroup","Grup mesajları (senden bahsedilirse yine gelir)"],["noCall","Gelen aramalar"]].map(([k,l])=>`<label class="tgl"><span><b>${l}</b></span><input type="checkbox" data-np="${k}" ${x[k]?"":"checked"}></label>`).join("")+'<p class="isub">Belirli bir sohbeti sessize almak için sohbete uzun bas.</p><div class="row2"><button id="npTest" style="background:#0E7C3A">🔔 Test bildirimi gönder</button></div><p class="isub">Düğmeye bas, sonra uygulamayı hemen kapat (ya da ana ekrana dön). 8 saniye içinde bildirim gelmeli. Gelmezse telefon ayarlarında: <b>Uygulamalar → TR → Bildirimler: açık</b>, <b>Chrome → Bildirimler: açık</b>, <b>Chrome → Pil: Kısıtlama yok</b>. Xiaomi/Huawei/Oppo telefonlarda ayrıca <b>Otomatik başlatma</b>yı aç.</p>');
+    openInfoModal("🔔 Bildirim ayarları",[["noDm","Birebir mesajlar"],["noGroup","Grup mesajları (senden bahsedilirse yine gelir)"],["noCall","Gelen aramalar"]].map(([k,l])=>`<label class="tgl"><span><b>${l}</b></span><input type="checkbox" data-np="${k}" ${x[k]?"":"checked"}></label>`).join("")+'<p class="isub">Belirli bir sohbeti sessize almak için sohbete uzun bas.</p>'+nativeStatus()+'<div class="row2"><button id="npTest" style="background:#0E7C3A">🔔 Test bildirimi gönder</button></div><p class="isub">Düğmeye bas, sonra uygulamayı hemen kapat (ya da ana ekrana dön). 8 saniye içinde bildirim gelmeli. Gelmezse telefon ayarlarında: <b>Uygulamalar → TR → Bildirimler: açık</b>, <b>Chrome → Bildirimler: açık</b>, <b>Chrome → Pil: Kısıtlama yok</b>. Xiaomi/Huawei/Oppo telefonlarda ayrıca <b>Otomatik başlatma</b>yı aç.</p>');
     {const nt=$("#npTest");if(nt)nt.onclick=async()=>{nt.disabled=true;await setupPush(false).catch(()=>{});toast("8 saniye içinde test bildirimi gelecek, uygulamayı kapat",4000);try{const r=await callApi("/api/notify",{test:1});if(!r.sent)toast("Bu cihaz bildirim için kayıtlı değil. Bildirimlere izin ver.",4000)}catch(e){toast("Test gönderilemedi")}nt.disabled=false}}
     $("#eBody").onchange=e=>{const k=e.target.dataset.np;if(k)setDoc(doc(fs,"private",me,"data","push"),{[k]:!e.target.checked},{merge:true}).catch(()=>toast("Kaydedilemedi"))}}).catch(()=>{});return}
   if(p==="denied"){openModal({title:"Bildirimler kapalı",text:"Bildirim izni daha önce reddedilmiş. Telefonda <b>Ayarlar → Uygulamalar → TR Mesaj → Bildirimler</b>'den açabilirsin. Bilgisayarda adres çubuğundaki kilit simgesinden izin verebilirsin.",input:false,cancel:false});return}
@@ -3325,6 +3376,9 @@ let deepLink=null,pendingCallId=null,deepGame=null,deepJoin=null;
 let deepAdd=null;try{const a=new URLSearchParams(location.search).get("add");if(a&&/^\d{6}$/.test(a))deepAdd=a}catch(e){}
 try{const j=new URLSearchParams(location.search).get("j");if(j&&/^[A-Za-z0-9]{10,40}\.[A-Za-z0-9]{8,32}$/.test(j))deepJoin=j}catch(e){}
 try{deepGame=new URLSearchParams(location.search).get("g");if(deepGame&&!/^[A-Za-z0-9]{10,40}$/.test(deepGame))deepGame=null}catch(e){}
+// Android uygulaması açılışta kendi bildirim jetonunu (?ntok=) ya da kayıt hatasını (?nerr=) iletir; "Aç" düğmesi ?acc=1 ekler.
+let nativeTok=null,autoAccept=false;
+try{const q=new URLSearchParams(location.search);const t=q.get("ntok");if(t&&/^[A-Za-z0-9_:\-]{50,400}$/.test(t)){nativeTok=t;localStorage.setItem("tr-ntok",t);localStorage.removeItem("tr-nerr")}else nativeTok=localStorage.getItem("tr-ntok");const er=q.get("nerr");if(er)localStorage.setItem("tr-nerr",er.slice(0,200));autoAccept=q.get("acc")==="1"}catch(e){}
 try{pendingCallId=new URLSearchParams(location.search).get("call");deepLink=new URLSearchParams(location.search).get("c");if(deepLink||location.search)history.replaceState(null,"","/")}catch(e){}
 let goParam=null,shareText=null;try{const q=new URLSearchParams(location.search);goParam=q.get("go");const st=[q.get("st"),q.get("sx"),q.get("su")].filter(Boolean).join(" ").trim();if(st)shareText=st.slice(0,2000)}catch(e){}
 async function checkReturnGame(){try{const id=localStorage.getItem("tr-lastgame");if(!id||game)return;const s=await getDoc(doc(fs,"games",id));if(!s.exists())return;const d=s.data();

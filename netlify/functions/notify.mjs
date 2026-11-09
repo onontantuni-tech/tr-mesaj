@@ -3,17 +3,43 @@
 // Mesaj içeriği uçtan uca şifreli olduğu için bildirimde içerik yer almaz, sadece gönderenin adı.
 import { activeBan } from "../lib/moderation.mjs";
 import { admin, json, requireUser, SITE } from "../lib/admin.mjs";
+import { createHmac, createHash, timingSafeEqual } from "node:crypto";
+
+// Android uygulamasındaki "Reddet" düğmesi giriş jetonu olmadan çalışır; bunun yerine aramaya özel,
+// sunucunun ürettiği imzalı anahtar kullanılır (yalnızca aranan cihaza giden bildirimin içinde).
+const declineKey = (id, to) =>
+  createHmac("sha256", createHash("sha256").update(process.env.FIREBASE_SERVICE_ACCOUNT || "tr").digest())
+    .update(`decline:${id}:${to}`).digest("hex").slice(0, 40);
+const strs = (d, k) => (d && Array.isArray(d[k]) ? d[k].filter((t) => typeof t === "string") : []);
+// Arama bildirimi hedefleri: Android uygulaması kayıtlı cihazlarda (ntokens) bildirim doğrudan uygulamaya gider;
+// aynı cihazın tarayıcı jetonu (nweb) atlanır ki telefon iki kez çalmasın.
+function callTargets(ps) {
+  const d = ps.exists ? ps.data() : {};
+  const native = strs(d, "ntokens").slice(-5);
+  const nweb = new Set(strs(d, "nweb"));
+  const web = strs(d, "tokens").slice(-10).filter((t) => !native.length || !nweb.has(t));
+  return { web, native, all: [...web, ...native] };
+}
+async function dropStale(db, uid, res, tokens) {
+  const bad = tokens.filter((_, i) => !res.responses[i].success && /registration-token-not-registered|invalid-registration-token/.test(res.responses[i].error?.code || ""));
+  if (!bad.length) return;
+  const ref = db.doc(`private/${uid}/data/push`);
+  const cur = (await ref.get()).data() || {};
+  await ref.set({ tokens: strs(cur, "tokens").filter((x) => !bad.includes(x)), ntokens: strs(cur, "ntokens").filter((x) => !bad.includes(x)) }, { merge: true });
+}
 
 const recent = new Map(); // basit tekrar koruması (aynı mesaj için bir kez)
 
 export default async (req) => {
   if (req.method !== "POST") return json(405, { error: "method" });
+  let body;
+  try { body = await req.json(); } catch { return json(400, { error: "body" }); }
+  if (body?.decline) return declineNative(String(body.decline), String(body.key || ""));
   const uid = await requireUser(req);
   if (!uid) return json(401, { error: "auth" });
   if (await activeBan(admin().db, uid)) return json(403, { error: "banned" });
 
-  let body;
-  try { body = await req.json(); } catch { return json(400, { error: "body" }); }
+  if (body?.stop) return notifyStop(uid, String(body.stop), body.tok ? String(body.tok) : "");
   if (body?.call) return notifyCall(uid, String(body.call));
   if (body?.missed) return notifyMissed(uid, String(body.missed));
   if (body?.test) return notifyTest(uid);
@@ -90,7 +116,7 @@ async function notifyCall(uid, id) {
   if (c.from !== uid || c.state !== "ringing") return json(403, { error: "owner" });
   const ps = await db.doc(`private/${c.to}/data/push`).get();
   if (ps.exists && ps.data().noCall) return json(200, { ok: true, sent: 0, off: true });
-  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  const tokens = callTargets(ps).all;
   if (!tokens.length) return json(200, { ok: true, sent: 0 });
   const sender = await db.doc(`users/${uid}`).get();
   const name = (sender.exists && sender.data().nick) || "Biri";
@@ -99,10 +125,12 @@ async function notifyCall(uid, id) {
     data: {
       kind: "call", title: name, body: c.video ? "📹 Görüntülü arama" : "📞 Sesli arama",
       conv: uid, call: id, url: `${SITE}/?call=${id}&c=${encodeURIComponent(uid)}`,
+      video: c.video ? "1" : "0", at: String(c.at || Date.now()), key: declineKey(id, c.to),
     },
     webpush: { headers: { Urgency: "high", TTL: "45" } },
     android: { priority: "high", ttl: 45000 },
   });
+  await dropStale(db, c.to, res, tokens).catch(() => {});
   return json(200, { ok: true, sent: res.successCount });
 }
 
@@ -118,7 +146,7 @@ async function notifyMissed(uid, id) {
   if (c.from !== uid || c.state !== "missed") return json(403, { error: "state" });
   const ps = await db.doc(`private/${c.to}/data/push`).get();
   if (ps.exists && ps.data().noCall) return json(200, { ok: true, sent: 0, off: true });
-  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  const tokens = callTargets(ps).all;
   if (!tokens.length) return json(200, { ok: true, sent: 0 });
   const sender = await db.doc(`users/${uid}`).get();
   const name = (sender.exists && sender.data().nick) || "Biri";
@@ -137,16 +165,47 @@ async function notifyTest(uid) {
   recent.set("t" + uid, Date.now());
   const { db, messaging } = admin();
   const ps = await db.doc(`private/${uid}/data/push`).get();
-  const tokens = ps.exists && Array.isArray(ps.data().tokens) ? ps.data().tokens.filter((t) => typeof t === "string").slice(-10) : [];
+  const tg = callTargets(ps);
+  const tokens = tg.all;
   if (!tokens.length) return json(200, { ok: true, sent: 0 });
   await new Promise((r) => setTimeout(r, 8000));
   const res = await messaging.sendEachForMulticast({
     tokens,
-    data: { kind: "call", title: "TR test", body: "📞 Bildirimler çalışıyor! Aramalar böyle gelecek.", conv: "", call: "test" + Date.now(), url: `${SITE}/` },
+    data: { kind: "call", title: "TR test", body: "📞 Bildirimler çalışıyor! Aramalar böyle gelecek.", conv: "", call: "test" + Date.now(), url: `${SITE}/`, video: "0", at: String(Date.now()), key: "" },
     webpush: { headers: { Urgency: "high", TTL: "120" } },
     android: { priority: "high" },
   });
-  return json(200, { ok: true, sent: res.successCount, devices: tokens.length });
+  return json(200, { ok: true, sent: res.successCount, devices: tokens.length, native: tg.native.length });
+}
+
+// Aranan kişi aramayı uygulamanın içinden gördü/cevapladı/reddetti: Android uygulamasındaki zil sussun.
+// tok verilirse yalnızca o cihaz susturulur (uygulama o telefonda zaten ekranda açık demektir).
+async function notifyStop(uid, id, tok) {
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) return json(400, { error: "id" });
+  const { db, messaging } = admin();
+  const snap = await db.doc(`calls/${id}`).get();
+  if (!snap.exists) return json(404, { error: "call" });
+  if (snap.data().to !== uid) return json(403, { error: "owner" });
+  let tokens = callTargets(await db.doc(`private/${uid}/data/push`).get()).native;
+  if (tok) tokens = tokens.filter((t) => t === tok);
+  if (!tokens.length) return json(200, { ok: true, sent: 0 });
+  const res = await messaging.sendEachForMulticast({ tokens, data: { kind: "callstop", call: id }, android: { priority: "high", ttl: 45000 } });
+  return json(200, { ok: true, sent: res.successCount });
+}
+
+// Android uygulamasındaki "Reddet": kimlik jetonu yok, aramaya özel imzalı anahtar doğrulanır.
+async function declineNative(id, key) {
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !/^[a-f0-9]{40}$/.test(key)) return json(400, { error: "id" });
+  const { db } = admin();
+  const ref = db.doc(`calls/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) return json(404, { error: "call" });
+  const c = snap.data();
+  const want = Buffer.from(declineKey(id, String(c.to)));
+  if (!timingSafeEqual(want, Buffer.from(key))) return json(403, { error: "key" });
+  if (c.state !== "ringing") return json(200, { ok: true, state: c.state });
+  await ref.set({ state: "declined", endedAt: Date.now() }, { merge: true });
+  return json(200, { ok: true });
 }
 
 // Arkadaşlık isteği / kabul bildirimi

@@ -4,4 +4,9 @@
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://tr-mesaj.vercel.app\"}}]</string>
     <string name="sc_okey">Okey oyna</string>
     <string name="sc_tavla">Tavla oyna</string>
+    <!-- Firebase (trtr-f0f6d): web uygulamasındaki herkese açık yapılandırmayla aynı değerler; gizli anahtar değildir -->
+    <string name="google_app_id" translatable="false">1:676722970002:web:93b9e98f8bfff1e3ee054b</string>
+    <string name="gcm_defaultSenderId" translatable="false">676722970002</string>
+    <string name="google_api_key" translatable="false">AIzaSyCjT6jaye-XKeBVI-GI_E-qpyAa_w9XzCo</string>
+    <string name="project_id" translatable="false">trtr-f0f6d</string>
 </resources>

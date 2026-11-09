@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut android:shortcutId="okey" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/sc_okey">
-        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.trtr.mesaj" android:targetClass="com.google.androidbrowserhelper.trusted.LauncherActivity" android:data="https://tr-mesaj.vercel.app/?go=okey" />
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.trtr.mesaj" android:targetClass="com.trtr.mesaj.TrLauncherActivity" android:data="https://tr-mesaj.vercel.app/?go=okey" />
     </shortcut>
     <shortcut android:shortcutId="tavla" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/sc_tavla">
-        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.trtr.mesaj" android:targetClass="com.google.androidbrowserhelper.trusted.LauncherActivity" android:data="https://tr-mesaj.vercel.app/?go=tavla" />
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="com.trtr.mesaj" android:targetClass="com.trtr.mesaj.TrLauncherActivity" android:data="https://tr-mesaj.vercel.app/?go=tavla" />
     </shortcut>
 </shortcuts>

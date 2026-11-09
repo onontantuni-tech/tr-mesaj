@@ -1,6 +1,6 @@
 # TR — Devir notu (Claude Code için)
 
-Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v49** (`public/sw.js` içindeki `C`)
+Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v50** (`public/sw.js` içindeki `C`)
 
 Kullanıcıyla **her zaman Türkçe** konuş. Kullanıcı teknik değil; kısa, net, adım adım anlat.
 
@@ -87,7 +87,15 @@ Kontrol adresi (gizli bilgi döndürmez): `https://tr-mesaj.vercel.app/api/turn-
 4. **Google Play Faturalandırma.** Jeton/VIP satın alma henüz kapalı (`/api/wallet buyVip` → 402). TWA için Digital Goods API + Play Billing.
 5. **Mobil veriyle arama testi.**
 
-### B. Şimdi yapılacak büyük iş: **Android'de gerçek gelen arama ekranı**
+### B0. Android gelen arama ekranı — YAZILDI (9 Kasım, APK 1.1.0 / versionCode 11), telefonda test bekliyor
+- `android/` (Java, Kotlin yok): `TrLauncherActivity` (TWA'yı `?ntok=<FCM jetonu>` ile açar; hata olursa `?nerr=`), `PushService` (FCM veri mesajı: `kind=call|callstop|missed`), `Calls` (zil = bildirim kanalı `calls_v1`, telefon zil sesi + FLAG_INSISTENT, tam ekran intent), `IncomingCallActivity` (kilit ekranı üstünde Aç/Reddet), `CallActionReceiver` (bildirimden Reddet).
+- Firebase Android uygulaması **kaydedilmedi**; `google-services.json` yok. `strings.xml` içinde web uygulamasının herkese açık yapılandırması (appId `…:web:…`) kullanılıyor. Firebase Installations bunu kabul ediyor (curl ile denendi); FCM jetonunun telefonda gerçekten üretildiği henüz doğrulanmadı. Olmazsa: Firebase konsolunda Android uygulaması ekle, `google_app_id`'yi değiştir.
+- Web: `src/app.js` → `nativeTok`, `syncNative()` (`private/{uid}/data/push.ntokens` + aynı cihazın web jetonu `nweb`), `?acc=1` otomatik cevap, Ayarlar → Bildirimler'de "Telefon araması: bu cihaz kayıtlı ✓" satırı.
+- Sunucu: `notify.mjs` → `callTargets()` (arama/cevapsız/test bildirimi `ntokens`'a da gider, `nweb` atlanır), `{stop:id[,tok]}` (zili sustur), `{decline:id,key}` (girişsiz; anahtar = HMAC, `declineKey`). Mesaj bildirimleri hâlâ web push.
+- Ahize/hoparlör: arama ekranında `#csSpk`. Android Chrome'da çıkış, mikrofon aygıtı seçimiyle değişiyor ("Headset earpiece"/"Speakerphone" etiketleri); sesli aramada ahize varsayılan. Aygıt etiketleri yoksa düğme gizli.
+- Derleme: `cd android && KEYSTORE_FILE=… KEYSTORE_PASSWORD=… KEY_ALIAS=tr KEY_PASSWORD=… gradle assembleRelease bundleRelease` (JDK 17+, Android SDK 36; bulut ortamında `dl.google.com` izinli olmalı).
+
+### B. (eski plan, başvuru için) **Android'de gerçek gelen arama ekranı**
 Sorun: uygulama kapalıyken arama bildirimi web push ile Chrome üzerinden geliyor, telefon pil tasarrufunda düşürüyor. Kullanıcı native çözüm istedi.
 
 Plan (TWA projesine native parça eklemek, web uygulaması aynen kalır):
