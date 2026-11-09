@@ -224,10 +224,11 @@ function hydrateMedia(){
 }
 
 /* ---------- görünüm ve sohbet ayarları (cihazda saklanır) ---------- */
-const SET_DEF={fs:16,theme:"kirmizi",wall:"nokta",left:false,vspeed:1,autoImg:true,vib:true,hidePush:false};
+const SET_DEF={fs:16,theme:"kirmizi",wall:"desen",left:false,vspeed:1,autoImg:true,vib:true,hidePush:false};
 let SET={...SET_DEF};try{SET={...SET_DEF,...JSON.parse(localStorage.getItem("tr-set")||"{}")}}catch(e){}
+if(SET.wall==="nokta"&&!SET.w2){SET.wall="desen";SET.w2=1;try{localStorage.setItem("tr-set",JSON.stringify(SET))}catch(e){}}
 const THEMES={kirmizi:["#D7261E","Kırmızı"],lacivert:["#1d4ed8","Lacivert"],yesil:["#0E7C3A","Yeşil"],mor:["#7c3aed","Mor"],turuncu:["#ea580c","Turuncu"],siyah:["#27272a","Siyah"]};
-const WALLS={nokta:"Noktalı",duz:"Düz",cini:"Çini",gece:"Gece",kahve:"Kahve",ay:"Ay yıldız"};
+const WALLS={desen:"Desenli (yeni)",nokta:"Noktalı",duz:"Düz",cini:"Çini",gece:"Gece",kahve:"Kahve",ay:"Ay yıldız"};
 function applySet(){const b=document.body;b.style.setProperty("--msgfs",SET.fs+"px");
   const th=THEMES[SET.theme]||THEMES.kirmizi;b.style.setProperty("--brand",th[0]);b.style.setProperty("--brand2",th[0]);
   Object.keys(WALLS).forEach(k=>b.classList.toggle("wall-"+k,SET.wall===k));b.classList.toggle("lefty",!!SET.left);
@@ -364,9 +365,19 @@ function openLockSettings(){openInfoModal("🔒 Uygulama kilidi",`<p class="isub
   $("#pinSet").onclick=()=>{closeE();askPin("Yeni PIN (4 hane)",async v=>{const first=v;setTimeout(()=>askPin("PIN'i tekrar gir",async w=>{if(w!==first){toast("PIN'ler uyuşmadı");return true}localStorage.setItem("tr-pin",await pinHash(w));toast("🔒 Uygulama kilidi açıldı");return true}),50);return true})};
   if($("#pinOff"))$("#pinOff").onclick=()=>{closeE();askPin("Mevcut PIN",async v=>{if(!(await checkPin(v)))return false;localStorage.removeItem("tr-pin");localStorage.removeItem("tr-lockc");toast("Kilit kapatıldı");return true})}}
 /* ---------- sohbete özel bildirim sesi (uygulama açıkken) ---------- */
-const TONES=[["Klasik",[880,1320]],["Damla",[1200,900,600]],["Zil",[1568,1568,2093]],["Kuş",[2000,2400,2000,2600]],["Sessiz",[]]];
+// Bildirim ve arama sesleri: yumuşak marimba / çan tınısı (dosya indirmeden, cihazda üretilir)
+// note(ctx, zaman, frekans, süre, tını, ses)
+function synthNote(ctx,t,f,d,kind="marimba",v=.18,dest){
+  const out=ctx.createGain();out.gain.value=1;out.connect(dest||ctx.destination);
+  const parts=kind==="bell"?[[1,1],[2.76,.45],[5.4,.22],[8.93,.1]]:kind==="drop"?[[1,1]]:kind==="soft"?[[1,1],[2,.2]]:[[1,1],[3.99,.32],[10.65,.08]];
+  parts.forEach(([m,a])=>{const o=ctx.createOscillator(),g=ctx.createGain();o.type="sine";o.frequency.setValueAtTime(f*m,t);
+    if(kind==="drop")o.frequency.exponentialRampToValueAtTime(f*1.9,t+.09);
+    const dd=d*(m>1?.45:1);g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(v*a,t+.008);g.gain.exponentialRampToValueAtTime(0.0001,t+dd);
+    o.connect(g).connect(out);o.start(t);o.stop(t+dd+.05)});
+}
+const TONES=[["Tıng",[[1318.5,0,.5],[1975.5,.12,.7]],"marimba"],["Damla",[[700,0,.25],[900,.16,.3]],"drop"],["Çan",[[1046.5,0,1.4]],"bell"],["Kuş",[[2093,0,.12],[2637,.09,.12],[2349,.18,.12],[3136,.27,.18]],"soft"],["Sessiz",[]]];
 const tonesMap=()=>{try{return JSON.parse(localStorage.getItem("tr-tones")||"{}")}catch(e){return{}}};
-function playTone(i){const t=TONES[i]||TONES[0];if(!t[1].length)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const now=actx.currentTime;t[1].forEach((f,k)=>{const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;g.gain.setValueAtTime(.1,now+k*.11);g.gain.exponentialRampToValueAtTime(.001,now+k*.11+.12);o.connect(g).connect(actx.destination);o.start(now+k*.11);o.stop(now+k*.11+.13)})}catch(e){}}
+function playTone(i){const t=TONES[i]||TONES[0];if(!t[1].length)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")actx.resume();const now=actx.currentTime+.02;t[1].forEach(([f,at,d])=>synthNote(actx,now+at,f,d,t[2],.2))}catch(e){}}
 let seenMsgIds=null;
 function notifyIncoming(){const ids=new Set(raw.map(m=>m.id));if(!seenMsgIds){seenMsgIds=ids;return}
   const fresh=raw.filter(m=>!seenMsgIds.has(m.id)&&m.from!==me&&Date.now()-m.at<60000);seenMsgIds=ids;
@@ -1157,7 +1168,7 @@ $("#mInput").onkeydown=e=>{if(e.key==="Enter")$("#mOk").click()};
 $("#mOk").onclick=async()=>{const v=$("#mInput").value.trim();const cb=modalCb;
   if($("#mInput").style.display!=="none"&&!v)return;
   modal.dataset.locked="";closeAll();if(cb)await cb(v)};
-$("#btnMenu").onclick=()=>{menu.classList.add("show");overlay.classList.add("show");overlay.style.background="transparent"};
+$("#btnMenu").onclick=()=>{menu.style.maxHeight=(window.innerHeight-70)+"px";menu.scrollTop=0;menu.classList.add("show");overlay.classList.add("show");overlay.style.background="transparent"};
 function qrSVG(text){const q=qrcode(0,"M");q.addData(text);q.make();return q.createSvgTag({cellSize:5,margin:2,scalable:true})}
 async function scanQR(){
   if(!("BarcodeDetector" in window)){toast("Telefonunun kamerasıyla QR'ı okut, açılan bağlantı arkadaş ekler",4000);return}
@@ -1565,8 +1576,11 @@ function startRing(incoming){
   stopRing();
   try{
     ringCtx=new (window.AudioContext||window.webkitAudioContext)();
-    const beep=()=>{if(!ringCtx)return;const o=ringCtx.createOscillator(),g=ringCtx.createGain();o.type="sine";o.frequency.value=incoming?880:440;g.gain.value=0.0001;o.connect(g);g.connect(ringCtx.destination);const t=ringCtx.currentTime;g.gain.exponentialRampToValueAtTime(incoming?0.25:0.12,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+(incoming?0.9:1.4));o.start(t);o.stop(t+1.5)};
-    beep();ringTimer=setInterval(beep,incoming?2000:3000);
+    // gelen arama: yumuşak marimba melodisi; giden arama: Türkiye'deki gerçek çalma sesi (425 Hz, 1 sn çalar 4 sn susar)
+    const ring=()=>{if(!ringCtx)return;const t=ringCtx.currentTime+.03;
+      if(incoming){[[1318.5,0],[1568,.18],[1975.5,.36],[1568,.54],[2093,.78],[1975.5,.96]].forEach(([f,at])=>synthNote(ringCtx,t+at,f,.55,"marimba",.22))}
+      else{const o=ringCtx.createOscillator(),g=ringCtx.createGain();o.type="sine";o.frequency.value=425;g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(.09,t+.03);g.gain.setValueAtTime(.09,t+.97);g.gain.linearRampToValueAtTime(0.0001,t+1);o.connect(g).connect(ringCtx.destination);o.start(t);o.stop(t+1.05)}};
+    ring();ringTimer=setInterval(ring,incoming?2600:5000);
   }catch(e){}
   if(incoming&&navigator.vibrate)try{navigator.vibrate([400,300,400,300,400])}catch(e){}
 }
