@@ -12,6 +12,11 @@ export default async () => {
       if (r.ok) { const d = await r.json(); const l = Array.isArray(d.iceServers) ? d.iceServers : [d.iceServers]; out.turnUrls = l.flatMap((s) => [].concat(s?.urls || [])).filter((u) => /^turns?:/.test(u)).length; }
     } catch (e) { out.cfStatus = "hata: " + e.message; }
   }
+  // Firebase anahtarı: hangi anahtarın kullanıldığı (kimliğin ilk 6 hanesi, gizli değil) ve veritabanına erişilebiliyor mu
+  if (sa) {
+    try { const j = JSON.parse(sa); out.fbKey = String(j.private_key_id || "").slice(0, 6); } catch (e) { out.fbKey = "okunamadı"; }
+    try { const { admin } = await import("../lib/admin.mjs"); await admin().db.doc("config/app").get(); out.fbOk = true; } catch (e) { out.fbOk = false; out.fbErr = String(e.message || e).slice(0, 80); }
+  }
   return new Response(JSON.stringify(out), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
 };
 export const config = { path: "/api/turn-check" };
