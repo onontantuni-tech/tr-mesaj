@@ -3,6 +3,9 @@
   "target": {
     "namespace": "android_app",
     "package_name": "com.trtr.mesaj",
-    "sha256_cert_fingerprints": ["A5:B5:60:32:78:14:BE:91:9E:27:87:BA:D6:09:C1:76:E2:65:DA:B0:D0:EC:0A:A5:C5:1D:A6:AA:20:7B:00:DD"]
+    "sha256_cert_fingerprints": [
+      "3E:3C:59:BF:ED:1B:CC:C2:00:AB:7F:B8:BB:14:30:31:F1:3D:DD:70:81:9B:4F:C2:31:AB:45:4C:8A:1F:B7:BA",
+      "A5:B5:60:32:78:14:BE:91:9E:27:87:BA:D6:09:C1:76:E2:65:DA:B0:D0:EC:0A:A5:C5:1D:A6:AA:20:7B:00:DD"
+    ]
   }
 }]
