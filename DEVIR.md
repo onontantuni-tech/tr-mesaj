@@ -1,6 +1,6 @@
 # TR — Devir notu (Claude Code için)
 
-Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v48** (`public/sw.js` içindeki `C`)
+Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v49** (`public/sw.js` içindeki `C`)
 
 Kullanıcıyla **her zaman Türkçe** konuş. Kullanıcı teknik değil; kısa, net, adım adım anlat.
 
@@ -24,7 +24,7 @@ Kullanıcıyla **her zaman Türkçe** konuş. Kullanıcı teknik değil; kısa, 
 | Firebase | proje `trtr-f0f6d` (Google hesabı telekomnetharun, konsol `/u/1/`), Firestore europe-west3, Auth (Google), FCM |
 | Eski site | luminous-syrniki-b2dc9b.netlify.app — **ölü**, kullanma (kredisi bitti, eski Firebase anahtarı silindi) |
 | Android | paket `com.trtr.mesaj`, PWABuilder/Bubblewrap TWA. İmza paketi kullanıcıda: `İndirilenler\TR-Mesaj-GooglePlay-paketi.zip` (keystore + şifreler + .aab + .apk) |
-| assetlinks | `public/assetlinks.json` → `/.well-known/assetlinks.json` (vercel.json rewrite). Parmak izleri: `3E:3C:59:…:B7:BA` (yeni), `A5:B5:60:…:00:DD` (eski) |
+| assetlinks | `public/assetlinks.json` → `/.well-known/assetlinks.json` (vercel.json rewrite). Parmak izleri: `3E:3C:59:…:B7:BA` (yeni), `A5:B5:60:…:00:DD` (eski), `8B:00:BF:…:3D:8D` (9 Kasım'da bulut oturumunda üretilen yeni anahtar; `android/` projesiyle derlenen APK bununla imzalı, keystore kullanıcıda: `tr-yeni-imza.keystore`) |
 
 ### Vercel ortam değişkenleri
 `FIREBASE_SERVICE_ACCOUNT` (10 Kasım'da yenilendi, anahtar kimliği `986996…`; eskiler silindi), `CF_TURN_KEY_ID`, `CF_TURN_API_TOKEN`, `CRON_SECRET`. İsteğe bağlı: `ADMIN_CODES` (virgüllü TR ID).

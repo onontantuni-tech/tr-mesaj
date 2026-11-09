@@ -1,0 +1,43 @@
+plugins { id 'com.android.application' }
+
+// İmza bilgileri ortam değişkenlerinden gelir; depoya asla yazılmaz.
+def ksFile = System.getenv("KEYSTORE_FILE")
+
+android {
+    namespace "com.trtr.mesaj"
+    compileSdk 36
+    defaultConfig {
+        applicationId "com.trtr.mesaj"
+        minSdk 23
+        targetSdk 35
+        versionCode 10
+        versionName "1.0.10"
+    }
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            if (ksFile) signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    lint { checkReleaseBuilds false }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
+}
