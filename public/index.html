@@ -952,6 +952,15 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
 .hsum{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:8;background:rgba(10,20,15,.92);border:2px solid #FFD54F;border-radius:18px;padding:14px 22px;text-align:center;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:hsIn .4s ease-out both;min-width:220px}
 .hsum b{font-size:18px}.hsum div{margin:6px 0;font-size:15px}.hsum small{opacity:.8}
 @keyframes hsIn{from{opacity:0;transform:translate(-50%,-40%) scale(.9)}}
+.ocanakbox{position:relative}.ocanakbox.grow{animation:cnGrow 1.2s ease-out}
+@keyframes cnGrow{0%,100%{transform:none}30%{transform:scale(1.18);box-shadow:0 0 26px rgba(255,213,79,.9)}}
+.cnplus{position:absolute;left:50%;top:-6px;transform:translateX(-50%);color:#FFD54F;font-style:normal;font-weight:900;font-size:15px;text-shadow:0 2px 6px rgba(0,0,0,.6);animation:cnPlus 2.2s ease-out both;pointer-events:none;white-space:nowrap}
+@keyframes cnPlus{0%{opacity:0;transform:translate(-50%,10px)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-34px)}}
+.ocanak span{font-size:10px}
+.odeck.fin{box-shadow:0 0 0 3px #FFD54F,0 0 22px rgba(255,213,79,.85);border-radius:10px;animation:tglow .8s infinite alternate}
+.odeck.fin span{color:#FFD54F;font-weight:800;text-align:center;line-height:1.15}
+.odeck.hov{transform:scale(1.08)}
+.cnwin{font-size:17px;font-weight:900;color:#FFD54F;text-shadow:0 0 12px rgba(255,213,79,.7);animation:cnGrow 1.2s ease-out 2}
 </style>
 </head>
 <body>

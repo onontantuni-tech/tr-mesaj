@@ -278,7 +278,7 @@ export default async (req) => {
         if (idx < 0) return { status: 400, body: { error: "tile" } };
         const rest0 = hand.filter((_, i) => i !== idx);
         // el bitiyorsa atılan taş otomatik olarak bitiriş sayılır
-        const autoWin = act === "discard" ? O.winKind(rest0, okey) : false;
+        const autoWin = false; // oyuncu bitirmek isterse taşı desteye koyar (finish); atmak her zaman serbest
         if (act === "finish" || autoWin) {
           const rest = rest0;
           const kind = autoWin || O.winKind(rest, okey);
@@ -360,8 +360,11 @@ function settle(tx, db, st, wallets) {
       st.payout = { uid: winnerUid, amount, rake, canak: toCanak, canakWin };
       houseLog(tx, db, rake - (st.botStake || 0), { rake, botStake: st.botStake || 0 });
     } else if (w != null) {
-      st.payout = { house: true, amount: humanPot };
-      houseLog(tx, db, humanPot, { botWin: humanPot });
+      // bilgisayar kazandı: çanaklı masada payın bir kısmı yine çanağa gider (çanağı sadece okey atan oyuncu alır)
+      const toCanak = st.canak ? Math.min(humanPot, Math.round((humanPot + (st.botStake || 0)) * E.RAKE)) : 0;
+      st.canakPot = (st.canakPot || 0) + toCanak;
+      st.payout = { house: true, amount: humanPot - toCanak, canak: toCanak };
+      houseLog(tx, db, humanPot - toCanak, { botWin: humanPot - toCanak });
     } else {
       const seated = new Set(st.seats.filter((s) => !s.bot).map((s) => s.uid));
       for (const u of st.paid || []) if (seated.has(u) && wallets[u]) E.credit(tx, db, u, wallets[u], st.stake, "Okey iade (berabere)");

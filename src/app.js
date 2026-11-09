@@ -2405,7 +2405,10 @@ function renderGame(){
     else html+=`<div class="odisc od-${p}"><div class="stk">${stack(pileOf(i))}</div><span>${esc(seatName(d.seats[i]).split(" ").slice(-1)[0])} attı</span></div>`;
   });
   const flp=d.status==="play"&&game.flipR!==d.round?" flip":"";if(d.status==="play")game.flipR=d.round;
-  html+=`<div class="ocenter">${d.canak?`<div class="ocanakbox"><div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak</span></div></div>`:""}<div class="odeck ${canDraw?"take":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":"Deste"}</span></div>
+  // el bitebiliyorsa: biten taşı ortadaki desteye kaydırınca biter (okeyle bitirmek için okeyi kaydır)
+  const finTile=canDiscard&&game.hand&&game.hand.length===15?OK.findFinish(game.hand,ok):null;game.canFinish=!!finTile;
+  const cnUp=d.canak&&game.cnPrev!=null&&(d.canakPot||0)>game.cnPrev?(d.canakPot||0)-game.cnPrev:0;if(d.canak)game.cnPrev=d.canakPot||0;
+  html+=`<div class="ocenter">${d.canak?`<div class="ocanakbox ${cnUp?"grow":""}"><div class="ocanak">🍯<b>${fmtCoin(d.canakPot||0)}</b><span>Çanak · okey atan alır</span></div>${cnUp?`<i class="cnplus">+${fmtCoin(cnUp)}</i>`:""}</div>`:""}<div class="odeck ${canDraw?"take":""} ${finTile?"fin":""}" id="gPile"><div class="dstack">${backHTML(3)}</div><b>${d.pileCount}</b><span>${canDraw?"Dokun, çek":finTile?"🏁 Bitirmek için<br>taşı buraya":"Deste"}</span></div>
     <div class="oind"><div class="indt${flp}">${tileHTML(d.indicator,null,{sm:true})}</div><span>Gösterge</span></div>
     <div class="oind"><div class="indt${flp} f2">${tileHTML(ok.c*26+(ok.n-1)*2,ok,{sm:true})}</div><span>Okey</span></div>
     ${(()=>{if(my<0||d.status!=="play"||(d.shown||[]).includes(my)||((d.discards||{})[my]||[]).length)return"";const hs=game.hand||[];const tw=hs.some(t=>t!==d.indicator&&!tIsFake(t)&&tColor(t)===tColor(d.indicator)&&tNum(t)===tNum(d.indicator));return tw?`<button class="oshow" id="gShow">👁️ Göstergeyi göster (+1)</button>`:""})()}
@@ -2413,7 +2416,7 @@ function renderGame(){
 
   if(d.status==="over"){
     const w=d.winner;
-    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}${d.payout.canak?` · çanağa: ${fmtCoin(d.payout.canak)}`:""}${d.payout.canakWin?` · 🍯 çanak kazancı: ${fmtCoin(d.payout.canakWin)}`:""}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
+    html+=`<div class="overbox"><b style="font-size:18px">${w==null?(d.aborted?"Oyun yarım kaldı":"El berabere bitti"):(w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı")}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}${d.points?" · +"+d.points+" puan":""}</div>${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti${d.payout.canak?` · 🍯 çanağa +${fmtCoin(d.payout.canak)}`:""}</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>${d.payout.canakWin?`<div class="cnwin">🍯 OKEY ATTI, ÇANAĞI ALDI! +${fmtCoin(d.payout.canakWin)}</div>`:d.canak?`<div style="font-size:12.5px">🍯 Çanakta ${fmtCoin(d.canakPot||0)} jeton birikti · okey atarak biten alır</div>`:""}<div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}${d.payout.canak?` · çanağa: ${fmtCoin(d.payout.canak)}`:""}${d.payout.canakWin?` · 🍯 çanak kazancı: ${fmtCoin(d.payout.canakWin)}`:""}</div>`):""}${d.winHand?winHandHTML(d,ok):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${rateHTML(d)}${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div>`;
   }
   html+='</div>';
   $("#gTable").innerHTML=html;
@@ -2422,7 +2425,7 @@ function renderGame(){
   if(d.status==="play"){
     if(my<0)msg="İzliyorsun";
     else if(canDraw)msg="Sıra sende: desteden çek ya da soldan gelen taşı al";
-    else if(canDiscard)msg="Atacağın taşı sağ alttaki yere kaydır · el bitiyorsa otomatik biter";
+    else if(canDiscard)msg=game.canFinish?"Elin bitiyor! Bitirmek için taşı ortadaki desteye kaydır (okeyle bitirirsen ×2"+(d.canak?" + çanak":"")+") · istersen sağ alta atıp devam et":"Atacağın taşı sağ alttaki yere kaydır";
     else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
     const pz=(d.pauseUntil||0)-Date.now();
     if(pz>0){msg=`☕ Çay molası · ${Math.floor(pz/60000)}:${String(Math.ceil(pz/1000)%60).padStart(2,"0")}`;clearTimeout(game.teaT);game.teaT=setTimeout(()=>{if(game&&game.data===d)renderGame()},1000)}
@@ -2602,7 +2605,7 @@ function dropTarget(x,y){
   const el=document.elementFromPoint(x,y);
   if(rackDrag&&rackDrag.ghost)rackDrag.ghost.style.display="";
   if(!el)return null;
-  return el.closest(".slot")||(game.canDiscard?el.closest("#gDropDiscard,#gDropFinish"):null);
+  return el.closest(".slot")||(game.canDiscard?el.closest("#gDropDiscard,#gDropFinish"+(game.canFinish?",#gPile":"")):null);
 }
 function endRackDrag(e,cancel){
   const g=rackDrag;rackDrag=null;if(!g)return;
@@ -2617,7 +2620,7 @@ function endRackDrag(e,cancel){
   }
   const tgt=dropTarget(e.clientX,e.clientY);if(!tgt){renderGame();return}
   if(tgt.id==="gDropDiscard"){discardTile(g.t);return}
-  if(tgt.id==="gDropFinish"){game.sel=g.t;gameMove({action:"finish",tile:g.t});return}
+  if(tgt.id==="gDropFinish"||tgt.id==="gPile"){game.sel=g.t;gameMove({action:"finish",tile:g.t});return}
   const to=+tgt.dataset.slot,from=game.slots.indexOf(g.t);
   if(from<0||to===from){renderGame();return}
   // hedef doluysa: taşları kaydırarak araya sok (aynı kat içinde), olmazsa yer değiştir
@@ -2681,7 +2684,7 @@ function renderPisti(d,my){
       <tr><td>Kart</td><td>${f.cards[me2]}</td><td>${f.cards[op]}</td></tr><tr><td>Pişti</td><td>${f.pisti[me2]}</td><td>${f.pisti[op]}</td></tr>
       ${f.hand?`<tr><td>Son el</td><td>${f.hand[me2]}</td><td>${f.hand[op]}</td></tr>`:""}
       <tr><td><b>${(d.hands||1)>1?"Toplam ("+d.hands+" el)":"Puan"}</b></td><td><b>${f.pts[me2]}</b></td><td><b>${f.pts[op]}</b></td></tr></table>
-      ${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
+      ${d.payout?(d.payout.refund?`<div>Berabere: masa ücretleri iade edildi</div>`:d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti${d.payout.canak?` · 🍯 çanağa +${fmtCoin(d.payout.canak)}`:""}</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>${d.payout.canakWin?`<div class="cnwin">🍯 OKEY ATTI, ÇANAĞI ALDI! +${fmtCoin(d.payout.canakWin)}</div>`:d.canak?`<div style="font-size:12.5px">🍯 Çanakta ${fmtCoin(d.canakPot||0)} jeton birikti · okey atarak biten alır</div>`:""}<div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
       ${d.host===me?`<button id="gAgain">${(d.hands||1)>1?"Yeni maç":"Yeni el"}</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div></div>`}
   {const pf=d.prevFinal;if(pf&&d.status==="play")over+=handSummary(d,my,`${esc(seatName(d.seats[me2]))} <b>${pf.pts[me2]}</b> · ${esc(seatName(d.seats[op]))} <b>${pf.pts[op]}</b>`)}
   $("#gTable").innerHTML=`<div class="ptable">${side(op,true)}${opp}<div class="pcenter">${deck}<div class="ppile">${stack}</div></div>${flash}<div class="plog">${esc(d.status==="play"?(isMy?"Sıra sende · bir kart seç":d.turn===my?"…":esc(seatName(d.seats[d.turn]))+" düşünüyor…"):"")}${d.log&&d.status==="play"?`<small>${esc(d.log)}</small>`:""}</div>${hand}${side(me2,false)}${over}</div>`;
@@ -2889,7 +2892,7 @@ function renderTavla(d,my){
   const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${(A?A.seat===i:d.status==="play"&&d.turn===i)?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>${i===me2?"⚪ beyaz":"⚫ siyah"} · ${(d.scores||[])[i]||0} sayı</span></div></div>`;
   let over="";
   if(d.status==="over"){const w=d.winner;over=`<div class="overbox"><b style="font-size:18px">${w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}${d.mars?" · MARS!":""}</b><div style="font-size:13px;opacity:.85">Skor ${(d.scores||[0,0])[me2]} - ${(d.scores||[0,0])[op]}</div>
-    ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
+    ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti${d.payout.canak?` · 🍯 çanağa +${fmtCoin(d.payout.canak)}`:""}</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>${d.payout.canakWin?`<div class="cnwin">🍯 OKEY ATTI, ÇANAĞI ALDI! +${fmtCoin(d.payout.canakWin)}</div>`:d.canak?`<div style="font-size:12.5px">🍯 Çanakta ${fmtCoin(d.canakPot||0)} jeton birikti · okey atarak biten alır</div>`:""}<div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}
     ${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`}
   const hint=A?esc(A.msg||""):d.status!=="play"?"":isMy?(game.tvSel==null?(nx.next.length?"Oynatacağın pulu seç":""):"Gideceği haneyi seç"):esc(seatName(d.seats[d.turn]))+" oynuyor…";
   $("#gTable").innerHTML=`<div class="ttable">${side(op,true)}
@@ -2961,7 +2964,7 @@ function renderPool(d,my){
     const ov=$("#pOver");
     if(d.status==="over"){
       const w=d.winner;
-      ov.innerHTML=`<div class="overbox"><b style="font-size:18px">${w==null?"Oyun yarım kaldı":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}</div>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div><div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`;
+      ov.innerHTML=`<div class="overbox"><b style="font-size:18px">${w==null?"Oyun yarım kaldı":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.85">${esc(d.log||"")}</div>${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti${d.payout.canak?` · 🍯 çanağa +${fmtCoin(d.payout.canak)}`:""}</div>`:`<div style="font-size:16px"><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton ${d.payout.uid===me?"senin!":""}</div>${d.payout.canakWin?`<div class="cnwin">🍯 OKEY ATTI, ÇANAĞI ALDI! +${fmtCoin(d.payout.canakWin)}</div>`:d.canak?`<div style="font-size:12.5px">🍯 Çanakta ${fmtCoin(d.canakPot||0)} jeton birikti · okey atarak biten alır</div>`:""}<div style="font-size:11.5px;opacity:.75">%5 kesinti: ${fmtCoin(d.payout.rake||0)}</div>`):""}<div class="sc">${d.seats.map((s,i)=>`<span>${esc(seatName(s))}: <b>${(d.scores||[])[i]||0}</b></span>`).join("")}</div>${d.host===me?`<button id="gAgain">Yeni oyun</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni oyunu masa sahibi başlatır</div>`}</div>`;
       const ag=$("#gAgain");if(ag)ag.onclick=()=>{game.aim=null;gameMove({action:"again"})};
       $("#pCtrl").style.visibility="hidden";$("#gamescr").classList.remove("myturn");
     }else ov.innerHTML="";
