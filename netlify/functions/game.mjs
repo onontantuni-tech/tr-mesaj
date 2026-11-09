@@ -131,7 +131,7 @@ export default async (req) => {
         g.paid = [];
         g.pot = 0;
         // Bilgisayarların masa ücretini kasa öder
-        g.botStake = stake * g.seats.filter((s) => s.bot).length;
+        g.botStake = g.seats.some((s) => s && s.bot) ? Math.round(stake * E.BOT_BONUS) : 0; // bilgisayar masaya para koymaz, kasa küçük bir ödül ekler
         for (const u of humansNow) {
           if (stake) { E.credit(tx, db, u, wallets[u], -stake, "Okey masa ücreti"); g.pot += stake; g.paid.push(u); }
         }

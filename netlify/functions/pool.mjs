@@ -126,7 +126,7 @@ export default async (req) => {
         }
         st.seats = g.seats.map((s, i) => s || { uid: null, bot: true, name: BOT_NAMES[i] });
         st.paid = []; st.pot = 0; st.payout = null;
-        st.botStake = stake * st.seats.filter((s) => s.bot).length;
+        st.botStake = st.seats.some((s) => s && s.bot) ? Math.round(stake * E.BOT_BONUS) : 0; // bilgisayar masaya para koymaz, kasa küçük bir ödül ekler
         for (const u of seated) if (stake) { E.credit(tx, db, u, wallets[u], -stake, "Bilardo masa ücreti"); st.pot += stake; st.paid.push(u); }
         Object.assign(st, {
           status: "play", balls: P.rack(), groups: null, broken: false, ballInHand: "kitchen", settled: false, winner: null,

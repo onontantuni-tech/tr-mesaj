@@ -205,6 +205,8 @@ export function addStats(tx, db, uid, points, won) {
 }
 
 // ---- Oyun sonrası: istatistik, seri bonusu, günlük görev sayaçları, oyun geçmişi ----
+// Bilgisayarlı masada oyuncu kazanırsa: kendi ücretleri + ücretin %25'i kadar kasa ödülü (bilgisayar sayısından bağımsız)
+export const BOT_BONUS = 0.25;
 export const CITY_PRIZE = 100000; // ayın birinci şehrinde kayıtlı herkese
 export const STREAK_BONUS = { every: 3, amount: 5000 };
 export const TASKS = [
