@@ -51,7 +51,8 @@ let friends={};
 let vipU={};const bdg={};   // uid -> {ach:[], gifts:{}} (badges/{uid})
 
 let blocked={};
-let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all",oncev:[]};
+let prefs={mute:{},arch:[],pin:[],fav:[],star:[],pinMsg:{},noRead:false,vis:"all",oncev:[],hid:{},fgr:{}};
+let selMode=false,selSet=new Set(),game_selList=[];
 const readsHidden={},ctSeen={};
 let chatFilter="all",msgQuery="",replyTo=null;
 let hidMsgs=new Set();try{hidMsgs=new Set(JSON.parse(localStorage.getItem("tr-hid")||"[]"))}catch(e){}
@@ -432,7 +433,7 @@ function tick(m){
 const contentOf=m=>m.pending?m.content:(plain[m.id]??null);
 const GIFT_FALLBACK=[{id:"cay",icon:"☕",name:"Çay",price:500},{id:"gul",icon:"🌹",name:"Gül",price:2000},{id:"pasta",icon:"🎂",name:"Pasta",price:5000},{id:"kupa",icon:"🏆",name:"Kupa",price:15000},{id:"tac",icon:"👑",name:"Taç",price:25000},{id:"elmas",icon:"💎",name:"Elmas",price:100000}];
 const giftList=()=>catalog?.gifts||GIFT_FALLBACK,giftOf=id=>giftList().find(x=>x.id===id);
-const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],batak:["♠️","Batak"],kizma:["🎯","Kızma Birader"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
+const GKIND={pool:["🎱","Bilardo"],pisti:["🃏","Pişti"],tavla:["🎲","Tavla"],batak:["♠️","Batak"],kizma:["🎯","Kızma Birader"],domino:["🁫","Domino"],okey:["🀄","Okey"]};const gk=k=>GKIND[k]||GKIND.okey;
 function previewText(c){if(!c)return"🔒 Mesaj";if(c.t==="game")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" daveti";if(c.t==="gift"){const G=giftOf(c.id);return G?G.icon+" "+G.name+" hediyesi":"🎁 Hediye"}if(c.t==="ttl")return"⏱️ Kaybolan mesajlar: "+ttlLabel(+c.v||0);if(c.t==="gres")return gk(c.kind)[0]+" "+gk(c.kind)[1]+" sonucu";if(c.t==="poll")return"📊 "+String(c.q||"Anket");if(c.t==="list")return"📝 "+String(c.title||"Liste");if(c.t==="contact")return"👤 Kişi: "+String(c.name||"");if(c.t==="file")return"📄 "+String(c.name||"Belge");if(c.t==="card")return"💌 "+((CARDS[c.k]||[])[1]||"Kart");if(c.t==="stk")return"🧿 "+((STK[c.k]||[])[1]||"Çıkartma");if(c.t==="loc")return"📍 Konum";if(c.t==="vnote")return"🎥 Video mesaj";if(c.t==="event")return"📅 "+String(c.title||"Etkinlik");if(c.t==="img")return"📷 Fotoğraf";if(c.t==="voice")return"🎤 Sesli mesaj"+(c.dur?" ("+fmtDur(c.dur)+")":"");if(c.t==="sys")return c.text;return c.text||""}
 function toast(t,ms=2200){const el=$("#toast");el.textContent=t;el.classList.add("show");clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove("show"),ms)}
 function banner(t){const b=$("#banner");if(t){b.textContent=t;b.classList.add("show")}else b.classList.remove("show")}
@@ -464,7 +465,7 @@ function renderChats(){
   if(q)list=list.filter(e=>e.title.toLocaleLowerCase("tr").includes(q)||(!isGroupConv(e.c)&&(users[e.c]?.code||"").includes(q.replace(/\s/g,"")))||convMsgs(e.c).some(m=>(contentOf(m)?.text||"").toLocaleLowerCase("tr").includes(q)));
   const reqs=Object.keys(friends).filter(u=>incomingReq(u)&&!isBlocked(u));
   const reqSet=new Set(reqs);
-  list=list.filter(e=>!reqSet.has(e.c));
+  list=list.filter(e=>!reqSet.has(e.c)&&!(prefs.hid[e.c]&&e.at<=prefs.hid[e.c]&&e.c!==cur));
   const arch=new Set(prefs.arch),archN=list.filter(e=>arch.has(e.c)).length;
   if(!q){
     if(chatFilter==="arch")list=list.filter(e=>arch.has(e.c));else list=list.filter(e=>!arch.has(e.c));
@@ -481,10 +482,12 @@ function renderChats(){
     if(drafts[e.c]&&e.c!==cur)prev=`<span class="prev"><b style="color:#E53935">Taslak:</b> ${esc(drafts[e.c].slice(0,60))}</span>`;
     else if(l){const who=l.from===me?tick(l)+" ":(g?esc(realName(l.from).split(" ")[0])+": ":"");prev=`<span class="prev">${who}${esc(previewText(contentOf(l)))}</span>`}
     else prev=`<span class="prev">${g?"Grup oluşturuldu":(isBlocked(e.c)?"Engellendi":isFriend(e.c)?"Mesaj göndermek için dokun":esc(friendNote(e.c)))}</span>`;
-    return`<div class="row" data-open="${esc(e.c)}"${e.c===cur?' style="background:var(--bg)"':''}>${avHTML(e.c)}
+    return`<div class="row${selMode?" selm":""}${selSet.has(e.c)?" sel":""}" data-open="${esc(e.c)}"${e.c===cur?' style="background:var(--bg)"':''}>${selMode?`<span class="selck">${selSet.has(e.c)?"✓":""}</span>`:""}${avHTML(e.c)}
       <div class="meta"><div class="l1"><span class="name">${esc(e.title)}${g?"":vipMark(e.c)}</span><span class="time ${e.unread?"unread":""}">${(prefs.mute[e.c]||0)>Date.now()?"🔕 ":""}${prefs.pin.includes(e.c)?"📌 ":""}${e.at?when(e.at):""}</span></div>
       <div class="l2">${prev}${e.unread?`<span class="badge">${e.unread>99?"99+":e.unread}</span>`:""}</div></div></div>`}).join("");
-  $("#pane-chats").innerHTML=(q?"":chips)+(html||(q?`<div class="empty">Sonuç bulunamadı</div>`:chatFilter!=="all"?`<div class="empty">Bu filtrede sohbet yok</div>`:
+  const selBar=selMode?`<div class="selbar"><b>${selSet.size} seçili</b><button data-sa="read">✔️ Okundu</button><button data-sa="arch">🗄️ Arşivle</button><button data-sa="mute">🔕 Sessiz</button><button data-sa="del">🗑️ Sil</button><button data-sa="all">Tümü</button><button data-sa="x">✕</button></div>`:"";
+  game_selList=list.map(e=>e.c);
+  $("#pane-chats").innerHTML=selBar+(q||selMode?"":chips)+(html||(q?`<div class="empty">Sonuç bulunamadı</div>`:chatFilter!=="all"?`<div class="empty">Bu filtrede sohbet yok</div>`:
     `<div class="empty">Henüz sohbetin yok.<br><br>Senin TR ID'n:<div class="idbox" style="margin:12px auto;max-width:220px">${esc(fmtCode(users[me]?.code)||"…")}</div>Arkadaşının ID'sini eklemek için <b>+</b> düğmesine dokun.</div>`));
 }
 
@@ -621,6 +624,18 @@ async function addById(input){
 }
 
 /* ---------- mesaj işlemleri: yanıtla, ilet, düzenle, sil, tepki, yıldız, sabitle ---------- */
+/* toplu seçme / sohbet silme (yalnız bu hesaptan gizler; yeni mesaj gelince sohbet geri gelir) */
+function hideChats(cs){if(!cs.length)return;if(!confirm(cs.length+" sohbet listenden silinsin mi? Mesajlar karşı taraftan silinmez."))return;
+  const h={...prefs.hid},now=Date.now();cs.forEach(c=>h[c]=now);if(cs.includes(cur))closeChat();selMode=false;selSet=new Set();savePrefs({hid:h});toast("Silindi")}
+function selAction(a){const cs=[...selSet];
+  if(a==="x"){selMode=false;selSet=new Set();renderChats();return}
+  if(a==="all"){selSet=selSet.size===game_selList.length?new Set():new Set(game_selList);renderChats();return}
+  if(!cs.length){toast("Önce sohbet seç");return}
+  if(a==="del"){hideChats(cs);return}
+  if(a==="read")cs.forEach(markRead);
+  if(a==="arch")savePrefs({arch:[...new Set([...prefs.arch,...cs])].slice(-200)});
+  if(a==="mute"){const mu={...prefs.mute};cs.forEach(c=>mu[c]=Date.now()+8*3600e3);savePrefs({mute:mu})}
+  toast(a==="read"?"Okundu sayıldı":a==="arch"?"Arşivlendi":"8 saat sessize alındı");selMode=false;selSet=new Set();renderChats()}
 async function savePrefs(patch){prefs={...prefs,...patch};renderAll();try{await setDoc(doc(fs,"private",me,"data","prefs"),patch,{merge:true})}catch(e){toast("Kaydedilemedi")}}
 function saveDraft(){if(!cur)return;try{const d=JSON.parse(localStorage.getItem("tr-drafts")||"{}");const v=$("#msgInput").value.trim();if(v)d[cur]=v.slice(0,500);else delete d[cur];localStorage.setItem("tr-drafts",JSON.stringify(d))}catch(e){}}
 function renderReplyBar(){const b=$("#replybar");if(!replyTo){b.classList.remove("show");b.innerHTML="";return}
@@ -722,6 +737,8 @@ function openChatSheet(c){
     ${muted?'<button data-ca="unmute">🔔 Sesi aç</button>':'<button data-ca="m8">🔕 8 saat sessize al</button><button data-ca="m168">🔕 1 hafta sessize al</button><button data-ca="minf">🔕 Her zaman sessiz</button>'}
     <button data-ca="arch">${prefs.arch.includes(c)?"📤 Arşivden çıkar":"🗄️ Arşivle"}</button>
     <button data-ca="read">✔️ Okundu say</button>
+    <button data-ca="sel">☑️ Birden çok seç</button>
+    <button data-ca="del">🗑️ Sohbeti sil (benden)</button>
     <button data-ca="tone">🔔 Bildirim sesi: ${esc((TONES[(tonesMap()[c])||0]||TONES[0])[0])}</button>
     <button data-ca="ttl">⏱️ Kaybolan mesajlar · ${esc(ttlLabel(convTTL(c)))}</button>`;
   sheetFor=null;$("#msheet").dataset.conv=c;overlay.classList.add("show");$("#msheet").classList.add("show");
@@ -729,6 +746,8 @@ function openChatSheet(c){
 $("#msheet").addEventListener("click",e=>{
   const b=e.target.closest("[data-ca]");if(!b)return;const c=$("#msheet").dataset.conv,a=b.dataset.ca;closeSheet();
   if(a==="ttl"){openTTL(c);return}
+  if(a==="sel"){selMode=true;selSet=new Set([c]);renderChats();return}
+  if(a==="del"){hideChats([c]);return}
   if(a==="tone"){openInfoModal("🔔 Bildirim sesi",TONES.map((t,i)=>`<div class="pk" data-tone="${i}" style="cursor:pointer"><b style="flex:1">${t[0]}</b>${(tonesMap()[c]||0)===i?"✅":""}</div>`).join("")+'<p class="isub">Uygulama açıkken bu sohbetten mesaj gelince çalar.</p>');
     $("#eBody").onclick=e=>{const r=e.target.closest("[data-tone]");if(!r)return;const m=tonesMap();m[c]=+r.dataset.tone;localStorage.setItem("tr-tones",JSON.stringify(m));playTone(+r.dataset.tone);closeE()};return}
   const tog=(k)=>prefs[k].includes(c)?prefs[k].filter(x=>x!==c):[...prefs[k],c].slice(-200);
@@ -952,12 +971,20 @@ function friendButtons(e){
 $("#frbar").addEventListener("click",friendButtons);
 function openFriends(){
   const list=Object.keys(friends).filter(isFriend).sort((a,b)=>realName(a).localeCompare(realName(b),"tr"));setTimeout(()=>loadFriendActivity(list),50);
+  // arkadaşları gruplara ayır (Aile, İş, Okey ekibi…) — yalnız sen görürsün
+  const grp=u=>String(prefs.fgr[u]||"").trim();const names=[...new Set(list.map(grp).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"tr"));
+  const item=u=>`<div class="gitem" data-fopen="${esc(u)}">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}${vipMark(u)}</b><span data-act-of="${esc(u)}">${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):""}</span></div><button type="button" class="ibtn" data-fgr="${esc(u)}" title="Gruba koy" style="width:34px;height:34px">🏷️</button></div>`;
+  const body=names.map(n=>`<div class="fgh">${esc(n)}</div>`+list.filter(u=>grp(u)===n).map(item).join("")).join("")+(names.length&&list.some(u=>!grp(u))?`<div class="fgh">Diğer</div>`:"")+list.filter(u=>!grp(u)).map(item).join("");
   openModal({title:"Arkadaşlarım ("+list.length+")",input:false,ok:"Arkadaş ekle",cancelText:"Kapat",
-    text:list.length?`<div class="flist">${list.map(u=>`<div class="gitem" data-fopen="${esc(u)}">${avHTML(u)}<div class="gn"><b>${esc(realName(u))}${vipMark(u)}</b><span data-act-of="${esc(u)}">${users[u]?.code?"TR ID "+esc(fmtCode(users[u].code)):""}</span></div></div>`).join("")}</div>`:"Henüz arkadaşın yok. TR ID ile istek gönderebilirsin."},askAdd);
+    text:list.length?`<div class="flist">${body}</div><p class="isub">🏷️ ile arkadaşlarını gruplara ayırabilirsin.</p>`:"Henüz arkadaşın yok. TR ID ile istek gönderebilirsin."},askAdd);
 }
+async function setFriendGroup(u){const names=[...new Set(Object.values(prefs.fgr).map(x=>String(x||"").trim()).filter(Boolean))];
+  const v=prompt(`${realName(u)} hangi grupta olsun?${names.length?"\nMevcut: "+names.join(", "):"\nÖrn: Aile, İş, Okey ekibi"}\n(Boş bırakırsan gruptan çıkar)`,prefs.fgr[u]||"");if(v===null)return;
+  await savePrefs({fgr:{...prefs.fgr,[u]:String(v).trim().slice(0,24)}});closeAll();openFriends()}
 function loadFriendActivity(list){list.slice(0,60).forEach(u=>getDoc(doc(fs,"presence",u)).then(s=>{if(!s.exists())return;const p=s.data(),el=document.querySelector(`[data-act-of="${CSS.escape(u)}"]`);if(!el)return;
   const on=p.at&&Date.now()-p.at<120000;if(on&&p.g){el.innerHTML=`<b style="color:#0E7C3A">${gk(p.g)[0]} ${gk(p.g)[1]} oynuyor</b>${p.gid?` · <a href="#" data-joing="${esc(p.gid)}">Katıl / izle</a>`:""}`}else if(on)el.innerHTML='<b style="color:#0E7C3A">● çevrimiçi</b>'}).catch(()=>{}))}
-$("#mText").addEventListener("click",e=>{const j=e.target.closest("[data-joing]");if(j){e.preventDefault();e.stopPropagation();closeAll();openGame(j.dataset.joing);return}
+$("#mText").addEventListener("click",e=>{const fg=e.target.closest("[data-fgr]");if(fg){e.preventDefault();e.stopPropagation();setFriendGroup(fg.dataset.fgr);return}
+  const j=e.target.closest("[data-joing]");if(j){e.preventDefault();e.stopPropagation();closeAll();openGame(j.dataset.joing);return}
   const r=e.target.closest("[data-fopen]");if(r){closeAll();openChat(r.dataset.fopen)}});
 
 /* ---------- gruplar ---------- */
@@ -1098,7 +1125,9 @@ $("#btnSearch").onclick=()=>{const sb=$("#searchbar");sb.classList.toggle("show"
 $("#searchInput").oninput=e=>{query_=e.target.value.toLocaleLowerCase("tr").trim();if(tabNow!=="chats")document.querySelector('[data-tab="chats"]').click();renderChats()};
 document.querySelector(".content").onclick=e=>{if(friendButtons(e))return;
   const cf=e.target.closest("[data-cf]");if(cf){chatFilter=cf.dataset.cf;renderChats();return}
+  const sa=e.target.closest("[data-sa]");if(sa){selAction(sa.dataset.sa);return}
   const r=e.target.closest(".row");if(!r)return;
+  if(selMode&&r.dataset.open){const c=r.dataset.open;selSet.has(c)?selSet.delete(c):selSet.add(c);renderChats();return}
   if(r.dataset.open)openChat(r.dataset.open);
   else if(r.dataset.story)openStory(r.dataset.story);
   else if(r.dataset.act==="mystatus")askStatus();
@@ -1463,7 +1492,7 @@ onAuthStateChanged(auth,async u=>{
 
   watchUser(me);
   unsubs.push(onSnapshot(doc(fs,"private",me,"data","prefs"),s=>{const x=s.exists()?s.data():{};
-    prefs={mute:x.mute&&typeof x.mute==="object"?x.mute:{},arch:Array.isArray(x.arch)?x.arch:[],pin:Array.isArray(x.pin)?x.pin:[],fav:Array.isArray(x.fav)?x.fav:[],star:Array.isArray(x.star)?x.star:[],pinMsg:x.pinMsg&&typeof x.pinMsg==="object"?x.pinMsg:{},noRead:!!x.noRead,vis:["all","friends","none"].includes(x.vis)?x.vis:"all",oncev:Array.isArray(x.oncev)?x.oncev.slice(-300):[]};
+    prefs={mute:x.mute&&typeof x.mute==="object"?x.mute:{},arch:Array.isArray(x.arch)?x.arch:[],pin:Array.isArray(x.pin)?x.pin:[],fav:Array.isArray(x.fav)?x.fav:[],star:Array.isArray(x.star)?x.star:[],pinMsg:x.pinMsg&&typeof x.pinMsg==="object"?x.pinMsg:{},noRead:!!x.noRead,vis:["all","friends","none"].includes(x.vis)?x.vis:"all",oncev:Array.isArray(x.oncev)?x.oncev.slice(-300):[],hid:x.hid&&typeof x.hid==="object"?x.hid:{},fgr:x.fgr&&typeof x.fgr==="object"?x.fgr:{}};
     renderAll();beat(true)},()=>{}));
   unsubs.push(onSnapshot(query(collection(fs,"blocks"),where("by","==",me)),s=>{
     const next={};s.docs.forEach(d=>{const t=d.data()?.target;if(typeof t==="string")next[t]=true});blocked=next;renderAll();
@@ -1891,6 +1920,7 @@ function renderGamesTab(){
     <button data-g="pub-tavla" class="pubtavla"><span>🎲</span><b>Tavla</b><small>Açık masalar · 2 kişilik</small></button>
     <button data-g="pub-batak" class="pubbatak"><span>♠️</span><b>İhaleli Batak</b><small>Açık masalar · 4 kişilik</small></button>
     <button data-g="pub-kizma" class="pubkizma"><span>🎯</span><b>Kızma Birader</b><small>Açık masalar · 4 kişilik</small></button>
+    <button data-g="pub-domino" class="pubdomino"><span>🁫</span><b>Domino</b><small>Açık masalar · 2 kişilik</small></button>
   </div>
   <div class="gbtns">
     ${(wallet.balance||0)<(catalog?.rescue?.below||1000)&&wallet.rescueDay!==wallet.today?`<button data-g="rescue" class="hot" style="grid-column:span 2;background:#fff4d6"><span>🆘</span>Jetonun bitti mi? ${fmtCoin(catalog?.rescue?.amount||10000)} jeton desteği al<i class="dot"></i></button>`:""}
@@ -1924,7 +1954,7 @@ function renderGamesTab(){
 }
 document.querySelector(".content").addEventListener("click",e=>{const b=e.target.closest("[data-g]");if(!b)return;const g=b.dataset.g;
   if(g==="play"){openInfoModal("Arkadaşınla oyna","Bir arkadaşının ya da grubunun sohbetini aç, üstteki 🎮 düğmesine dokun. Okey veya bilardo masası kurup davet gönderebilirsin.");}
-  if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");if(g==="pub-kizma")openPublic("kizma");
+  if(g==="pub-okey")openPublic("okey");if(g==="pub-pool")openPublic("pool");if(g==="pub-pisti")openPublic("pisti");if(g==="pub-tavla")openPublic("tavla");if(g==="pub-batak")openPublic("batak");if(g==="pub-kizma")openPublic("kizma");if(g==="pub-domino")openPublic("domino");
   if(g==="daily")openDaily();if(g==="spin")openSpin();if(g==="chest")claimGift("chest");if(g==="rescue")claimGift("rescue");if(g==="tasks")openTasks();if(g==="history")openHistory();if(g==="invite")openInvite();if(g==="ledger")openLedger();
   if(g==="store")openStore();if(g==="rank")openRanking("day");if(g==="league")openLeague();if(g==="tour")openTour();if(g==="ach")openAch();if(g==="club")openClub();if(g==="redeem")openRedeem();if(g==="kelime")openKelime();if(g==="quiz")openQuiz();if(g==="cafe")openCafe();if(g==="cal")openCalendar();if(g==="city")openCity();if(g==="records")openRecords();if(g==="cb")openCashback();if(g==="skins")openSkins();if(g==="admin")openAdmin();if(g==="vip")openVip()});
 /* ---------- bildirim merkezi ---------- */
@@ -2236,7 +2266,7 @@ const backHTML=(n=1)=>`<div class="tback">${Array.from({length:Math.min(n,3)},()
 let game=null;            // {id, data, hand, order, sel, unsubs, busy}
 async function gameApi(body,type){
   const t=type||(game&&game.data&&game.data.type);
-  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":t==="batak"?"/api/batak":t==="kizma"?"/api/kizma":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
+  const r=await callApi(t==="pool"?"/api/pool":t==="pisti"?"/api/pisti":t==="tavla"?"/api/tavla":t==="batak"?"/api/batak":t==="kizma"?"/api/kizma":t==="domino"?"/api/domino":"/api/game",body).catch(e=>({error:e.status===409?"busy":"net"}));
   return r;
 }
 $("#gameBtn").onclick=()=>{if(!cur)return;closeAll();{const gi=$("#gpick [data-gift-open]");if(gi)gi.style.display=isGroupConv(cur)||!isFriend(cur)?"none":""}overlay.classList.add("show");$("#gpick").classList.add("show")};
@@ -2273,6 +2303,7 @@ function openGame(id){
       if(prevD&&prevD.status!=="over"&&d.status==="over")postResult(d);
       if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){game.tvPath=[];game.tvSel=null;sfx("tile")}
       else if(prevD&&d.type==="batak"&&prevD.seq!==d.seq)sfx("tile");
+      else if(prevD&&d.type==="domino"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="kizma"&&prevD.seq!==d.seq){sfx("ball");if(d.last&&d.last.hit!=null)setTimeout(()=>sfx("win"),200)}
       else if(prevD&&d.type==="pisti"&&prevD.seq!==d.seq){sfx("tile");if(d.last&&d.last.pisti)setTimeout(()=>sfx("win"),250)}
       else if(prevD&&d.type!=="pool"&&d.type!=="pisti"&&JSON.stringify(prevD.discards)!==JSON.stringify(d.discards))sfx("tile")}
@@ -2323,6 +2354,7 @@ function renderGame(){
   if(d.type==="pisti"){gs.classList.add("pistig");return renderPisti(d,my)}
   if(d.type==="tavla"){gs.classList.add("tavlag");return renderTavla(d,my)}
   if(d.type==="kizma"){gs.classList.add("kizmag");return renderKizma(d,my)}
+  if(d.type==="domino"){gs.classList.add("dominog");return renderDomino(d,my)}
   if(d.type==="batak"){gs.classList.add("pistig","batakg");return renderBatak(d,my)}
   gs.classList.add("okeyg");
   if(d.status==="play"||d.status==="over")askLandscape();
@@ -2368,8 +2400,15 @@ function renderGame(){
     else if(canDraw)msg="Sıra sende: desteden çek ya da soldan gelen taşı al";
     else if(canDiscard)msg="Atacağın taşı sağ alttaki yere kaydır · el bitiyorsa otomatik biter";
     else msg=`${esc(seatName(d.seats[d.turn]))} oynuyor…`;
+    const pz=(d.pauseUntil||0)-Date.now();
+    if(pz>0){msg=`☕ Çay molası · ${Math.floor(pz/60000)}:${String(Math.ceil(pz/1000)%60).padStart(2,"0")}`;clearTimeout(game.teaT);game.teaT=setTimeout(()=>{if(game&&game.data===d)renderGame()},1000)}
+    else if(my>=0&&(d.teaVotes||[]).length&&Date.now()-(d.teaVoteAt||0)<60000)msg=(d.teaVotes.includes(me)?"☕ Çay molası isteğin gönderildi, diğerleri bekleniyor":`☕ Çay molası isteniyor (${d.teaVotes.length}) · <a href="#" id="gTeaYes">Katıl</a>`)+" · "+msg;
   }
   $("#gMsg").innerHTML=msg;
+  {const ty=$("#gTeaYes");if(ty)ty.onclick=e=>{e.preventDefault();askTea()}}
+  {const tb=$("#gTea");if(tb)tb.style.display=d.status==="play"&&my>=0?"":"none"}
+  {const humans=d.seats.filter(x=>x&&!x.bot&&x.uid).length,kb=$("#gKick");if(kb)kb.style.display=d.status==="play"&&my>=0&&d.public&&humans>=3?"":"none";
+   const k=d.kick;if(d.status==="play"&&my>=0&&k&&Date.now()-k.at<90000&&k.seat!==my&&!(k.votes||[]).includes(me)){$("#gMsg").innerHTML=`🚫 ${esc(seatName(d.seats[k.seat]))} için atma oylaması (${k.votes.length}) · <a href="#" id="gKickYes">Evet, at</a>`;$("#gKickYes").onclick=e=>{e.preventDefault();gameApi({action:"kick",id:game.id,seat:k.seat})}}}
   // ıstaka: iki kat, 13'er yuva
   syncSlots(game.hand);
   // yan yana duran geçerli perler/seriler yeşil çizgiyle işaretlenir
@@ -2395,7 +2434,7 @@ function renderLobby(d,my){
   if(d.status==="closed"){$("#gTable").innerHTML='<div class="lobby">Masa kapandı.</div>';return}
   const seats=d.seats.map(s=>`<div class="st">${seatAv(s)}<span>${esc(s?seatName(s):"Boş · bilgisayar oturur")}</span></div>`).join("");
   const host=d.host===me,free=d.seats.some(s=>!s),pool=d.type==="pool"||d.type==="pisti"||d.type==="tavla";
-  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?"Pişti masası · 2 kişilik":d.type==="tavla"?"Tavla masası · 2 kişilik":d.type==="batak"?"İhaleli Batak · 4 kişilik":d.type==="kizma"?"Kızma Birader · 4 kişilik":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
+  $("#gTable").innerHTML=`<div class="lobby"><div style="font-size:40px">${gk(d.type)[0]}</div><b style="font-size:20px">${d.type==="pool"?"Bilardo masası · 8 top":d.type==="pisti"?"Pişti masası · 2 kişilik":d.type==="tavla"?"Tavla masası · 2 kişilik":d.type==="batak"?"İhaleli Batak · 4 kişilik":d.type==="kizma"?"Kızma Birader · 4 kişilik":d.type==="domino"?"Domino · 2 kişilik":"Okey masası"}</b><div style="opacity:.9;text-align:center">${d.stake?`Masa ücreti <span class="coin"></span> ${fmtCoin(d.stake)}<br><span style="font-size:12.5px">Kazanan potu alır (%5 kesinti). Bilgisayar kazanırsa pot kasaya gider.</span>`:"Ücretsiz masa"}</div><div class="seats">${seats}</div>${my<0?(free?'<button id="gJoin">Masaya otur</button>':'<div>Masa dolu</div>'):host?'<button id="gStart">Oyunu başlat</button><div style="font-size:12.5px;opacity:.8">Boş yerlere bilgisayar oturur</div>':d.public?'<div style="opacity:.85">Oyuncular bekleniyor…</div>':'<div style="opacity:.85">Masa sahibinin başlatması bekleniyor…</div>'}${d.public?'<div id="pubCount" style="font-size:12.5px;opacity:.8"></div>':""}</div>`;
   const j=$("#gJoin");if(j)j.onclick=()=>{if(d.stake&&!wallet?.adult){if(wallet?.ageSet)toast("Jetonlu masalar 18 yaş üstüne açık",3000);else askAge(()=>gameMove({action:"join"}));return}gameMove({action:"join"})};
   const st=$("#gStart");if(st)st.onclick=()=>gameMove({action:"start"});
   if(d.public&&d.status==="lobby"){const lb=$("#gTable .lobby");if(lb&&!$("#gInvite")){const b=document.createElement("button");b.id="gInvite";b.className="ghostbtn";b.textContent="🔗 Davet bağlantısı";lb.appendChild(b);
@@ -2644,6 +2683,46 @@ function renderKizma(d,my){
   const kr=$("#kzRoll");if(kr)kr.onclick=()=>{game.kzRolled=kdk;game.kzJust=true;sfx("tile");renderGame()};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
+/* ---------- Domino ---------- */
+const DM_T=(()=>{const t=[];for(let a=0;a<=6;a++)for(let b=a;b<=6;b++)t.push([a,b]);return t})();
+const DM_PIP={0:[],1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+const dmHalf=n=>`<span class="dh">${Array.from({length:9},(_,k)=>`<i class="${DM_PIP[n].includes(k)?"on":""}"></i>`).join("")}</span>`;
+function dmTile(a,b,{vert,cls="",attr=""}={}){return`<div class="dmt ${vert?"v":"h"} ${cls}" ${attr}>${dmHalf(a)}<b></b>${dmHalf(b)}</div>`}
+function dmSides(chain,id){if(!chain.length)return["R"];const[x,y]=DM_T[id],l=chain[0].a,r=chain[chain.length-1].b,o=[];if(x===l||y===l)o.push("L");if(x===r||y===r)o.push("R");return o}
+function renderDomino(d,my){
+  $("#gTitleTxt").textContent="Domino";$("#gSub").textContent=d.status==="lobby"?"Oyuncular bekleniyor":d.round?`${d.round}. el`:"";
+  $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
+  if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
+  $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
+  const me2=my>=0?my:0,op=1-me2,chain=d.chain||[],hand=(game.hand||[]).filter(x=>x>=0&&x<28);
+  const isMy=d.status==="play"&&d.turn===my&&!game.busy;
+  const can=isMy?hand.filter(id=>dmSides(chain,id).length):[];const canS=new Set(can);
+  const newK=d.last&&d.last.tile!=null?d.last.at+"-"+d.last.tile:"";const fresh=newK&&game.dmLastK!==newK;game.dmLastK=newK;
+  const chainH=chain.map((t,i)=>dmTile(t.a,t.b,{vert:t.a===t.b,cls:(fresh&&t.id===d.last.tile?"land"+(d.last.seat!==my?" opl":""):"")})).join("");
+  const opN=(d.handCounts||[0,0])[op]||0;
+  const opH=`<div class="dmop"><div class="dmname ${d.status==="play"&&d.turn===op?"turn":""}">${esc(seatName(d.seats[op]))} · ${opN} taş · ${(d.scores||[0,0])[op]} galibiyet</div><div class="dmback">${Array.from({length:Math.min(opN,12)},()=>`<div class="dmt v back"></div>`).join("")}</div></div>`;
+  const sel=game.dmSel!=null&&hand.includes(game.dmSel)&&canS.has(game.dmSel)?game.dmSel:null;if(sel==null)game.dmSel=null;
+  const myH=hand.slice().sort((a,b)=>DM_T[a][0]-DM_T[b][0]||DM_T[a][1]-DM_T[b][1]).map(id=>dmTile(DM_T[id][0],DM_T[id][1],{vert:true,cls:(canS.has(id)?"can":isMy?"dim":"")+(sel===id?" sel":""),attr:`data-dm="${id}"`})).join("");
+  let ctl="";
+  if(isMy&&!can.length)ctl=(d.boneN||0)>0?`<button class="kzroll" id="dmDraw">🀫 Pazardan çek (${d.boneN})</button>`:`<button class="kzroll" id="dmPass">Pas geç</button>`;
+  if(sel!=null){const sd=dmSides(chain,sel);ctl=`<button class="dmside" data-side="L">◀ Sola koy</button><button class="dmside" data-side="R">Sağa koy ▶</button>`}
+  const msg=d.status!=="play"?"":isMy?(sel!=null?"Taşı hangi uca koyacaksın?":can.length?"Parlayan taşlardan birini seç":(d.boneN?"Uyan taşın yok · pazardan çek":"Uyan taşın yok · pas geç")):esc(seatName(d.seats[d.turn]))+" düşünüyor…";
+  let over="";if(d.status==="over"){const w=d.winner,f=d.final||{};const oh=f.hands?(f.hands[op]||f.hands[String(op)]||[]):[];
+    over=`<div class="overlay2"><div class="overbox"><b style="font-size:18px">${w==null?"Berabere":w===my?"🎉 Kazandın!":esc(seatName(d.seats[w]))+" kazandı"}</b><div style="font-size:13px;opacity:.9">${esc(d.log||"")}</div>
+      ${oh.length?`<div class="dmrev">${oh.map(id=>dmTile(DM_T[id][0],DM_T[id][1],{vert:true})).join("")}</div>`:""}
+      ${d.payout?(d.payout.house?`<div>Bilgisayar kazandı, pot kasaya gitti</div>`:d.payout.refund?`<div>Masa ücreti iade edildi</div>`:`<div><span class="coin"></span> +${fmtCoin(d.payout.amount)} jeton</div>`):""}${rateHTML(d)}
+      ${d.host===me?`<button id="gAgain">Yeni el</button>`:`<div style="font-size:12.5px;opacity:.8">Yeni eli masa sahibi başlatır</div>`}</div></div>`}
+  $("#gTable").innerHTML=`<div class="dmtable">${opH}<div class="dmchain">${chainH||'<div class="dmempty">İlk taşı koy</div>'}</div><div class="dmbone">Pazar: ${d.boneN||0} taş</div><div class="dmmsg">${msg}<small>${esc(d.log||"")}</small></div><div class="dmctl">${ctl}</div><div class="dmhand ${isMy?"my":""}">${myH}</div>${over}</div>`;
+  const ch=$("#gTable .dmchain");if(ch)ch.scrollTop=ch.scrollHeight;
+  $("#gTable .dmhand").onclick=e=>{const t=e.target.closest("[data-dm]");if(!t||!isMy)return;const id=+t.dataset.dm;if(!canS.has(id))return;
+    const sd=dmSides(chain,id);const ends=chain.length?[chain[0].a,chain[chain.length-1].b]:null;
+    if(sd.length===1||(ends&&ends[0]===ends[1])){game.dmSel=null;gameMove({action:"play",tile:id,side:sd[0]});return}
+    game.dmSel=sel===id?null:id;renderGame()};
+  $("#gTable .dmctl").onclick=e=>{const b=e.target.closest("[data-side]");if(b&&game.dmSel!=null){const id=game.dmSel;game.dmSel=null;gameMove({action:"play",tile:id,side:b.dataset.side})}};
+  const dr=$("#dmDraw");if(dr)dr.onclick=()=>gameMove({action:"draw"});
+  const ps=$("#dmPass");if(ps)ps.onclick=()=>gameMove({action:"pass"});
+  const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
+}
 /* ---------- Batak ---------- */
 const BK_S=["♠","♥","♦","♣"],bkVal=c=>c%13===0?14:c%13+1;
 function bkLegal(hand,trick,trump,broken){const su=c=>Math.floor(c/13);
@@ -2812,7 +2891,7 @@ function playShots(list,done){
   const next=()=>{
     if(!game)return;const sh=list.shift();
     if(!sh){game.anim=false;done();return}
-    const frames=[];P.simulate(sh.before,{x:sh.dx,y:sh.dy},sh.power,bs=>frames.push(bs));
+    const frames=[];P.simulate(sh.before,{x:sh.dx,y:sh.dy},sh.power,bs=>frames.push(bs),{x:sh.sx||0,y:sh.sy||0});
     let k=0;const d=game.data;
     $("#gMsg").innerHTML=`${esc(seatName(d.seats[sh.seat]))} vurdu…`;
     const tick=()=>{if(!game)return;game.pview=frames[Math.min(k,frames.length-1)];drawPool();k+=3;
@@ -2999,10 +3078,23 @@ async function shoot(power){
   await new Promise(res=>{const step=now=>{const k=Math.min(1,(now-t0)/110);game.pull=p0*(1-k);drawPool();if(k<1)requestAnimationFrame(step);else res()};requestAnimationFrame(step)});
   sfx("ball");
   const body={action:"shoot",dx:game.aim.x,dy:game.aim.y,power};
+  if(poolSpin.x||poolSpin.y){body.sx=+poolSpin.x.toFixed(2);body.sy=+poolSpin.y.toFixed(2)}poolSpin={x:0,y:0};drawSpin();
   if(game.place){body.cx=game.place.x;body.cy=game.place.y}
   game.aim=null;game.pull=0;game.aimTouched=false;$("#pPower").style.setProperty("--p",0);
   await gameMove(body);
 }
+async function askTea(){if(!game)return;const r=await gameApi({action:"tea",id:game.id}).catch(e=>({error:String(e)}));
+  if(r&&r.error==="teacd")toast("Çay molası 10 dakikada bir verilebilir");else if(r&&r.error)toast("Olmadı, tekrar dene")}
+$("#gTea").onclick=askTea;
+$("#gKick").onclick=()=>{const d=game&&game.data;if(!d)return;const my=mySeatIdx(d);
+  const opts=d.seats.map((x,i)=>({x,i})).filter(o=>o.x&&!o.x.bot&&o.x.uid&&o.i!==my);
+  openInfoModal("🚫 Oyuncuyu masadan at",`<p class="isub">Kötü davranan oyuncuyu seç. Masadaki diğer herkes onaylarsa çıkarılır, yerine bilgisayar oturur.</p>`+opts.map(o=>`<div class="pk" data-kick="${o.i}" style="cursor:pointer"><b style="flex:1">${esc(seatName(o.x))}</b>🚫</div>`).join(""));
+  $("#eBody").onclick=async e=>{const r=e.target.closest("[data-kick]");if(!r)return;closeE();const res=await gameApi({action:"kick",id:game.id,seat:+r.dataset.kick});toast(res&&res.error==="few"?"Oylama için masada en az 3 kişi olmalı":res&&res.ok?"Oylama başlatıldı":"Olmadı")}};
+// falso: beyaz topun neresine vurulacağını seç (üst = takip, alt = geri çekme, yan = bantta açı)
+let poolSpin={x:0,y:0};
+function drawSpin(){const d=$("#pSpinDot");if(d){d.style.left=(50+poolSpin.x*36)+"%";d.style.top=(50-poolSpin.y*36)+"%"}const l=$("#pSpinL");if(l)l.textContent=!poolSpin.x&&!poolSpin.y?"Falso":(poolSpin.y>0.25?"Takip":poolSpin.y<-0.25?"Çekme":"")+(Math.abs(poolSpin.x)>0.25?(poolSpin.y>0.25||poolSpin.y<-0.25?" · ":"")+(poolSpin.x>0?"Sağ":"Sol"):"")}
+{const pad=$("#pSpin");let dn=false;const set=e=>{const r=pad.getBoundingClientRect();let x=(e.clientX-r.left)/r.width*2-1,y=-((e.clientY-r.top)/r.height*2-1);const m=Math.hypot(x,y);if(m>1){x/=m;y/=m}if(m<0.18){x=0;y=0}poolSpin={x,y};drawSpin()};
+  pad.addEventListener("pointerdown",e=>{dn=true;pad.setPointerCapture(e.pointerId);set(e);e.stopPropagation()});pad.addEventListener("pointermove",e=>{if(dn)set(e)});pad.addEventListener("pointerup",()=>{dn=false})}
 // ince nişan düğmeleri (basılı tutunca döner)
 for(const [id,dir] of [["pRotL",-1],["pRotR",1]]){let t=null;const b=$("#"+id);
   const tick=()=>{if(!game||!game.aim)return;const a=Math.atan2(game.aim.y,game.aim.x)+dir*0.0035;game.aim={x:Math.cos(a),y:Math.sin(a)};drawPool()};

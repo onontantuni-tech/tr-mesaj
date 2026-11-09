@@ -43,7 +43,8 @@ const cloneBalls = (balls) => balls.map((b) => ({ i: b.i, x: b.x, y: b.y }));
 
 // Vuruşu simüle et. balls: masadaki toplar [{i,x,y}], açı (radyan), güç 0..1.
 // onFrame(balls) verilirse her adımda çağrılır (animasyon için).
-export function simulate(balls0, angle, power, onFrame) {
+// spin: {x: yan falso -1..1, y: üst(+)/alt(-) falso -1..1}
+export function simulate(balls0, angle, power, onFrame, spin) {
   const bs = cloneBalls(balls0).map((b) => ({ ...b, vx: 0, vy: 0, on: true }));
   const cue = bs.find((b) => b.i === 0);
   const v = Math.max(0.02, Math.min(1, power)) * MAXV;
@@ -51,6 +52,9 @@ export function simulate(balls0, angle, power, onFrame) {
   const dir = typeof angle === "object" ? angle : { x: Math.cos(angle), y: Math.sin(angle) };
   const dl = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
   cue.vx = (dir.x / dl) * v; cue.vy = (dir.y / dl) * v;
+  const clamp = (a) => (isFinite(a) ? Math.max(-1, Math.min(1, a)) : 0);
+  let spx = clamp(spin && spin.x), spy = clamp(spin && spin.y);
+  const ux = dir.x / dl, uy = dir.y / dl;
   const res = { firstHit: null, pocketed: [], cushionAfter: false, steps: 0 };
   const n = bs.length;
   for (let step = 0; step < 3000; step++) {
@@ -69,8 +73,12 @@ export function simulate(balls0, angle, power, onFrame) {
           p.x -= nx * ov; p.y -= ny * ov; q.x += nx * ov; q.y += ny * ov;
           const vn = (p.vx - q.vx) * nx + (p.vy - q.vy) * ny;
           if (vn > 0) {
+            const cueIn = p.i === 0 ? p : q.i === 0 ? q : null;
+            const sp0 = cueIn ? Math.sqrt(cueIn.vx * cueIn.vx + cueIn.vy * cueIn.vy) : 0;
             const k = ((1 + E_BALL) / 2) * vn;
             p.vx -= k * nx; p.vy -= k * ny; q.vx += k * nx; q.vy += k * ny;
+            // üst/alt falso: ilk temasta beyaz top ileri gider (takip) ya da geri döner (çekme)
+            if (cueIn && spy && res.firstHit === null) { cueIn.vx += ux * spy * 0.55 * sp0; cueIn.vy += uy * spy * 0.55 * sp0; spy = 0; }
             if (res.firstHit === null && (p.i === 0 || q.i === 0)) res.firstHit = p.i === 0 ? q.i : p.i;
           }
         }
@@ -81,13 +89,19 @@ export function simulate(balls0, angle, power, onFrame) {
         const inMouthX = b.y < MOUTH_C || b.y > H - MOUTH_C;
         const inMouthY = b.x < MOUTH_C || b.x > W - MOUTH_C || (b.x > W / 2 - MOUTH_M && b.x < W / 2 + MOUTH_M);
         if (!inMouthX) {
-          if (b.x < R) { b.x = R; if (b.vx < 0) { b.vx = -b.vx * E_WALL; b.vy *= 0.97; if (res.firstHit !== null) res.cushionAfter = true; } }
-          else if (b.x > W - R) { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_WALL; b.vy *= 0.97; if (res.firstHit !== null) res.cushionAfter = true; } }
+          if (b.x < R) { b.x = R; if (b.vx < 0) { b.vx = -b.vx * E_WALL; b.vy *= 0.97; b._bounced = true; if (res.firstHit !== null) res.cushionAfter = true; } }
+          else if (b.x > W - R) { b.x = W - R; if (b.vx > 0) { b.vx = -b.vx * E_WALL; b.vy *= 0.97; b._bounced = true; if (res.firstHit !== null) res.cushionAfter = true; } }
         }
         if (!inMouthY) {
-          if (b.y < R) { b.y = R; if (b.vy < 0) { b.vy = -b.vy * E_WALL; b.vx *= 0.97; if (res.firstHit !== null) res.cushionAfter = true; } }
-          else if (b.y > H - R) { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_WALL; b.vx *= 0.97; if (res.firstHit !== null) res.cushionAfter = true; } }
+          if (b.y < R) { b.y = R; if (b.vy < 0) { b.vy = -b.vy * E_WALL; b.vx *= 0.97; b._bounced = true; if (res.firstHit !== null) res.cushionAfter = true; } }
+          else if (b.y > H - R) { b.y = H - R; if (b.vy > 0) { b.vy = -b.vy * E_WALL; b.vx *= 0.97; b._bounced = true; if (res.firstHit !== null) res.cushionAfter = true; } }
         }
+        if (b.i === 0 && spx && b._bounced) {
+          // yan falso: bantta beyaz topun açısı değişir, her bantta yarıya iner
+          const a = spx * 0.35, c = Math.cos(a), sn = Math.sin(a);
+          const vx = b.vx * c - b.vy * sn, vy = b.vx * sn + b.vy * c; b.vx = vx; b.vy = vy; spx *= 0.5; if (Math.abs(spx) < 0.05) spx = 0;
+        }
+        b._bounced = false;
         let inPocket = false;
         for (const [px, py, pr] of POCKETS) { const dx = b.x - px, dy = b.y - py; if (dx * dx + dy * dy < pr * pr) { inPocket = true; break; } }
         if (!inPocket && (b.x < -2 * R || b.x > W + 2 * R || b.y < -2 * R || b.y > H + 2 * R)) inPocket = true;

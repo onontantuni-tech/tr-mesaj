@@ -29,6 +29,10 @@
       "destination": "/api/play?k=kizma"
     },
     {
+      "source": "/api/domino",
+      "destination": "/api/play?k=domino"
+    },
+    {
       "source": "/__/auth/:path*",
       "destination": "https://trtr-f0f6d.firebaseapp.com/__/auth/:path*"
     },

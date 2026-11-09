@@ -80,6 +80,7 @@ export default async (req) => {
       if (act === "join") {
         if (g.status !== "lobby") return { status: 409, body: { error: "started" } };
         if (mySeat >= 0) return { status: 200, body: { ok: true } };
+        if ((g.banned || []).includes(uid)) return { status: 403, body: { error: "banned" } };
         if (g.stake) {
           const mw = await tx.get(db.doc(`wallets/${uid}`));
           if (!(mw.exists && mw.data().adult)) return { status: 403, body: { error: "age" } };
@@ -189,8 +190,54 @@ export default async (req) => {
         return { status: 200, body: { ok: true, idle: true } };
       }
 
+      // Çay molası: masadaki tüm oyuncular isterse oyun 2 dakika durur (10 dakikada bir)
+      if (act === "tea") {
+        if (mySeat < 0) return { status: 403, body: { error: "seat" } };
+        const now = Date.now();
+        if ((st.pauseUntil || 0) > now) return { status: 200, body: { ok: true } };
+        if (st.teaAt && now - st.teaAt < 10 * 60 * 1000) return { status: 200, body: { ok: false, error: "teacd" } };
+        let votes = st.teaVoteAt && now - st.teaVoteAt < 60000 ? (st.teaVotes || []).slice() : [];
+        if (!votes.includes(uid)) votes.push(uid);
+        const humans = st.seats.filter((x) => x && !x.bot && x.uid).map((x) => x.uid);
+        if (humans.every((u) => votes.includes(u))) {
+          st.pauseUntil = now + 120000; st.teaAt = now; st.teaVotes = []; st.teaVoteAt = 0;
+          st.lastMoveAt = now + 120000; st.log = "☕ Çay molası: oyun 2 dakika durdu";
+        } else { st.teaVotes = votes; st.teaVoteAt = now; st.log = "☕ Çay molası istendi (" + votes.length + "/" + humans.length + ")"; }
+        st.updatedAt = now;
+        saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        return { status: 200, body: { ok: true } };
+      }
+
+      // Açık masada oylamayla atma: hedef dışındaki oyuncuların hepsi (en az 2 kişi) oy verirse
+      // oyuncu masadan çıkarılır, yerine bilgisayar geçer, bu masaya tekrar oturamaz
+      if (act === "kick") {
+        if (mySeat < 0 || !st.public) return { status: 403, body: { error: "seat" } };
+        const t = Number(b.seat), ts = st.seats[t];
+        if (!(t >= 0 && t < 4) || t === mySeat || !ts || ts.bot || !ts.uid) return { status: 400, body: { error: "target" } };
+        const now = Date.now();
+        const others = st.seats.filter((x, i) => x && !x.bot && x.uid && i !== t).map((x) => x.uid);
+        if (others.length < 2) return { status: 200, body: { ok: false, error: "few" } };
+        let k = st.kick && st.kick.seat === t && now - st.kick.at < 90000 ? { ...st.kick, votes: st.kick.votes.slice() } : { seat: t, votes: [], at: now };
+        if (!k.votes.includes(uid)) k.votes.push(uid);
+        if (others.every((u) => k.votes.includes(u))) {
+          const out = ts.uid;
+          secret.bots[t] = hands[out]; delete hands[out];
+          const used = st.seats.filter((x) => x && x.bot).map((x) => x.name);
+          st.seats[t] = { uid: null, bot: true, name: BOT_NAMES.find((n) => !used.includes(n)) || "Bot" };
+          st.banned = [...new Set([...(st.banned || []), out])];
+          st.kick = null; st.log = "🚫 Bir oyuncu oylamayla masadan çıkarıldı, yerine bilgisayar geçti";
+          runBots(st, secret, hands);
+          saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats, out);
+        } else {
+          st.kick = k; st.log = "🚫 " + (ts.name || "Bir oyuncu") + " için atma oylaması (" + k.votes.length + "/" + others.length + ")";
+          saveW(); writeAll(tx, gref, sref, id, st, secret, hands, g.seats);
+        }
+        return { status: 200, body: { ok: true } };
+      }
+
       if (mySeat < 0) return { status: 403, body: { error: "seat" } };
       if (st.turn !== mySeat) return { status: 409, body: { error: "turn" } };
+      if ((st.pauseUntil || 0) > Date.now()) return { status: 409, body: { error: "pause" } };
       const hand = hands[uid];
       const okey = O.okeyOf(st.indicator);
 

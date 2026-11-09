@@ -179,7 +179,9 @@ export default async (req) => {
           } else if (!hasCue) return { status: 400, body: { error: "place" } };
         }
         st.lastShots = [];
-        doShot(st, mySeat, { cue, dir: { x: dx, y: dy }, power });
+        const sx = num(b.sx), sy = num(b.sy);
+        const spin = { x: isFinite(sx) ? Math.max(-1, Math.min(1, sx)) : 0, y: isFinite(sy) ? Math.max(-1, Math.min(1, sy)) : 0 };
+        doShot(st, mySeat, { cue, dir: { x: dx, y: dy }, power, spin });
         runBots(st);
         st.seq = (st.seq || 0) + 1;
         save();
@@ -198,9 +200,9 @@ export default async (req) => {
 function doShot(st, seat, sh) {
   let before = st.balls.slice();
   if (sh.cue) before = before.filter((x) => x.i !== 0).concat([{ i: 0, x: sh.cue.x, y: sh.cue.y }]);
-  const res = P.simulate(before, sh.dir, sh.power);
+  const res = P.simulate(before, sh.dir, sh.power, null, sh.spin);
   const r = P.applyShot(st, seat, res, before);
-  st.lastShots = [...(st.lastShots || []), { seat, before, dx: sh.dir.x, dy: sh.dir.y, power: sh.power, pocketed: res.pocketed, foul: r.foul, reason: r.reason || "" }].slice(-30);
+  st.lastShots = [...(st.lastShots || []), { seat, before, dx: sh.dir.x, dy: sh.dir.y, power: sh.power, sx: (sh.spin && sh.spin.x) || 0, sy: (sh.spin && sh.spin.y) || 0, pocketed: res.pocketed, foul: r.foul, reason: r.reason || "" }].slice(-30);
   st.lastMoveAt = Date.now();
   const name = st.seats[seat].bot ? st.seats[seat].name : null;
   if (r.winner != null) {

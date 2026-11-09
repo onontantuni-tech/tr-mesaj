@@ -878,6 +878,36 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
   .gamescr.pool .p-ctrl button{width:40px;height:40px;font-size:19px}
   .ppower{top:52px;bottom:12px}
 }
+.selbar{position:sticky;top:0;z-index:3;display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:var(--brand,#C8102E);color:#fff}
+.selbar b{flex:1;min-width:80px}.selbar button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:14px;padding:6px 10px;font-size:13px;cursor:pointer}
+.row.selm{gap:8px}.selck{width:22px;height:22px;border-radius:50%;border:2px solid #aaa;display:grid;place-items:center;flex:none;font-weight:800;color:#fff;font-size:13px}
+.row.sel{background:rgba(200,16,46,.08)}.row.sel .selck{background:#C8102E;border-color:#C8102E}
+.fgh{padding:8px 4px 2px;font-weight:700;color:var(--brand,#C8102E);font-size:13px}
+.pspinw{display:flex;flex-direction:column;align-items:center;gap:2px;flex:none;font-size:10px;color:#fff;opacity:.95}
+.pspin{position:relative;width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#e8e4d8 60%,#b9b3a3);box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.2);touch-action:none;cursor:crosshair}
+.pspin::before,.pspin::after{content:"";position:absolute;background:rgba(0,0,0,.15)}.pspin::before{left:50%;top:6px;bottom:6px;width:1px}.pspin::after{top:50%;left:6px;right:6px;height:1px}
+.pspin i{position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#e5263b;box-shadow:0 0 0 2px #fff,0 0 6px #e5263b}
+.pubdomino{background:linear-gradient(135deg,#37474f,#102027)!important;color:#fff!important}.pubdomino small{display:block;font-size:12px;opacity:.85}
+.gamescr.dominog{background:radial-gradient(ellipse at 50% 40%,#1d6b4a,#0b3324)}
+.dmtable{position:relative;height:100%;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px 6px;box-sizing:border-box;color:#fff}
+.dmop{display:flex;flex-direction:column;align-items:center;gap:6px}.dmname{background:rgba(0,0,0,.3);padding:5px 12px;border-radius:14px;font-size:13px}.dmname.turn{box-shadow:0 0 0 2px #ffd54f}
+.dmback{display:flex;gap:3px}.dmback .dmt{--s:9px}
+.dmchain{flex:1;width:100%;max-width:820px;overflow:auto;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;align-items:center;gap:3px;padding:10px;box-sizing:border-box;border-radius:18px;background:rgba(0,0,0,.14);box-shadow:inset 0 0 30px rgba(0,0,0,.3)}
+.dmempty{opacity:.7}.dmbone{font-size:12px;opacity:.8}
+.dmmsg{text-align:center;font-weight:700;font-size:15px}.dmmsg small{display:block;font-weight:400;opacity:.75;font-size:12px}
+.dmctl{display:flex;gap:10px;min-height:10px}.dmside{background:#fff;color:#0b3324;border:0;border-radius:14px;padding:10px 16px;font-weight:800;cursor:pointer}
+.dmhand{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 6px 12px}.dmhand .dmt{--s:15px;cursor:pointer;transition:transform .15s}
+.dmhand .dmt.can{box-shadow:0 0 0 2px #ffd54f,0 0 14px #ffd54f,0 4px 8px rgba(0,0,0,.4);transform:translateY(-6px)}.dmhand .dmt.sel{transform:translateY(-16px);box-shadow:0 0 0 3px #fff,0 0 18px #fff}
+.dmhand .dmt.dim{opacity:.55}
+.dmt{--s:11px;display:inline-flex;align-items:center;background:linear-gradient(150deg,#fffef8,#efe9d8);border-radius:calc(var(--s)*.6);box-shadow:0 3px 6px rgba(0,0,0,.45),inset 0 -2px 0 rgba(0,0,0,.12);padding:calc(var(--s)*.25);flex:none}
+.dmt.h{flex-direction:row}.dmt.v{flex-direction:column}
+.dmt b{background:rgba(0,0,0,.35);flex:none}.dmt.h b{width:1.5px;height:calc(var(--s)*2.6)}.dmt.v b{height:1.5px;width:calc(var(--s)*2.6)}
+.dmt .dh{display:grid;grid-template-columns:repeat(3,var(--s));grid-template-rows:repeat(3,var(--s));padding:calc(var(--s)*.15)}
+.dmt .dh i{width:calc(var(--s)*.62);height:calc(var(--s)*.62);margin:auto;border-radius:50%}.dmt .dh i.on{background:radial-gradient(circle at 35% 30%,#555,#111)}
+.dmt.back{background:linear-gradient(150deg,#c8102e,#7a0718);width:calc(var(--s)*3.4);height:calc(var(--s)*6.6);box-shadow:inset 0 0 0 2px rgba(255,255,255,.7),0 2px 4px rgba(0,0,0,.4)}
+.dmt.land{animation:pland .5s cubic-bezier(.2,.8,.25,1) both}.dmt.land.opl{animation:ploff .6s cubic-bezier(.2,.8,.25,1) .3s both}
+.dmtable .overlay2{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.5);z-index:5;border-radius:12px}
+.dmrev{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}.dmrev .dmt{--s:8px}
 </style>
 </head>
 <body>
@@ -1034,6 +1064,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <div class="gitem soon"><div class="av" style="background:#555">💯</div><div class="gn"><b>101 Okey</b><span>Yakında</span></div></div>
       <div class="gitem" data-newgame="pisti"><div class="av" style="background:#7a1020">🃏</div><div class="gn"><b>Pişti</b><span>2 kişilik · kart</span></div></div>
       <div class="gitem" data-newgame="batak"><div class="av" style="background:#1e3a5f">♠️</div><div class="gn"><b>İhaleli Batak</b><span>4 kişilik · koz seçmeli</span></div></div>
+      <div class="gitem" data-newgame="domino"><div class="av" style="background:#37474f">🁫</div><div class="gn"><b>Domino</b><span>2 kişilik · pazarlı</span></div></div>
       <div class="gitem" data-newgame="kizma"><div class="av" style="background:#e53935">🎯</div><div class="gn"><b>Kızma Birader</b><span>4 kişilik · zar</span></div></div>
       <div class="gitem soon"><div class="av" style="background:#555">👑</div><div class="gn"><b>King</b><span>Yakında</span></div></div>
       <div class="gitem" data-newgame="tavla"><div class="av" style="background:#6b3f1d">🎲</div><div class="gn"><b>Tavla</b><span>2 kişilik · mars çifte sayı</span></div></div>
@@ -1066,6 +1097,8 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
     <div class="g-msg" id="gMsg"></div>
     <div class="g-rack" id="gRack"></div>
     <div class="g-actions" id="gActions">
+      <button id="gKick" title="Oylamayla masadan at" style="display:none">🚫</button>
+      <button id="gTea" title="Herkes onaylarsa oyun 2 dakika durur">☕</button>
       <button id="gSortRun">Per / seri diz</button>
       <button id="gSortPair">Çift diz</button>
     </div>
@@ -1073,6 +1106,7 @@ button.vipbuy{background:linear-gradient(135deg,#c9a43a,#f2d36b)!important;color
       <button id="pRotL" aria-label="Nişanı sola çevir">⟲</button>
       <div class="pl"><b>Nişan:</b> masada parmağını kaydır · <b>Vuruş:</b> sağdaki ıstakayı aşağı çek, bırak <span id="pPowV">0%</span></div>
       <button id="pRotR" aria-label="Nişanı sağa çevir">⟳</button>
+      <div class="pspinw"><div class="pspin" id="pSpin" aria-label="Falso: beyaz topun vurulacak noktasını seç"><i id="pSpinDot"></i></div><span id="pSpinL">Falso</span></div>
     </div>
     <div class="rothint" id="rotHint"><div class="rotbox"><div class="rotph">📱</div><b>Yatay ekranda daha güzel</b><span>Telefonunu yan çevir; ıstaka ve taşlar büyür.</span><button id="rotGo">Yatay ekrana geç</button><button id="rotSkip" class="sk">Dikey devam et</button></div></div>
     <div class="ppower" id="pPower" aria-label="Vuruş gücü: aşağı çek ve bırak"><div class="pfill"></div><div class="pcue"></div></div>

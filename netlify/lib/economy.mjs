@@ -212,6 +212,7 @@ export const TASKS = [
   { id: "okeyW3", text: "Okey'de 3 galibiyet", need: (t) => (t.w?.okey || 0) >= 3, goal: (t) => [t.w?.okey || 0, 3], prize: 20000 },
   { id: "poolW3", text: "Bilardoda 3 galibiyet", need: (t) => (t.w?.pool || 0) >= 3, goal: (t) => [t.w?.pool || 0, 3], prize: 20000 },
   { id: "pistiW3", text: "Piştide 3 galibiyet", need: (t) => (t.w?.pisti || 0) >= 3, goal: (t) => [t.w?.pisti || 0, 3], prize: 20000 },
+  { id: "dominoW3", text: "Dominoda 3 galibiyet", need: (t) => (t.w?.domino || 0) >= 3, goal: (t) => [t.w?.domino || 0, 3], prize: 20000 },
   { id: "tavlaW3", text: "Tavlada 3 galibiyet", need: (t) => (t.w?.tavla || 0) >= 3, goal: (t) => [t.w?.tavla || 0, 3], prize: 20000 },
 ];
 // Günün meydan okuması: her gün sırayla bir oyunda 2 galibiyet, büyük ödül
