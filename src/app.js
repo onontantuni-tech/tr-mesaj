@@ -2367,6 +2367,7 @@ function setPlaying(type,gid){if(!me||prefs.vis==="none")return;setDoc(doc(fs,"p
 function openGame(id){
   closeGame(true);try{localStorage.setItem("tr-lastgame",id)}catch(e){}
   game={id,data:null,hand:[],order:[],sel:null,unsubs:[],busy:false,lastHand:new Set()};
+  fetch("/api/pisti").catch(()=>{});
   $("#gamescr").classList.add("show");$("#gTable").innerHTML='<div class="lobby">Masa yükleniyor…</div>';$("#gRack").innerHTML="";$("#gMsg").textContent="";
   try{history.pushState({game:id,chat:cur},"")}catch(e){}
   game.unsubs.push(onSnapshot(doc(fs,"games",id),s=>{
@@ -2377,7 +2378,8 @@ function openGame(id){
       if(prevD&&d.status==="play"&&d.turn===my&&(prevD.turn!==my||prevD.status!=="play"))setTimeout(()=>sfx("turn"),d.type==="pool"?1500:0);
       if(prevD&&prevD.status==="play"&&d.status==="over"&&d.winner===my)setTimeout(()=>sfx("win"),d.type==="pool"?2500:300);
       if(prevD&&prevD.status!=="over"&&d.status==="over")postResult(d);
-      if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){const path=game.tvPath||[];game.tvPath=[];game.tvSel=null;tvAnimate(prevD,d,path)}
+      if(prevD&&prevD.seq!==d.seq)game.pCardOut=null;
+      if(prevD&&d.type==="tavla"&&prevD.seq!==d.seq){const path=game.tvPend||game.tvPath||[];game.tvPend=null;game.tvPath=[];game.tvSel=null;tvAnimate(prevD,d,path)}
       else if(prevD&&d.type==="batak"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="domino"&&prevD.seq!==d.seq)sfx("tile");
       else if(prevD&&d.type==="kizma"&&prevD.seq!==d.seq)kzAnimate(prevD,d)
@@ -2532,13 +2534,15 @@ async function gameMove(body){
   if(!game||game.busy)return;const id=game.id;game.busy=true;renderGame();
   const r=await gameApi({...body,id});
   if(game&&game.id===id){game.busy=false;
-    if(r&&r.error&&game.pCardOut!=null&&!game.cards.includes(game.pCardOut)){game.cards=[...game.cards,game.pCardOut]}game.pCardOut=null;
+    if(r&&r.error){if(game.pCardOut!=null&&!game.cards.includes(game.pCardOut))game.cards=[...game.cards,game.pCardOut];game.pCardOut=null;game.pShown=null}
+    else if(game.pCardOut!=null){const pc=game.pCardOut;setTimeout(()=>{if(game&&game.id===id&&game.pCardOut===pc){game.pCardOut=null;renderGame()}},5000)}
     if(r&&r.error&&game.pendingOut!=null){const t=game.pendingOut;game.pendingOut=null;if(game.pendingSlot>=0&&game.slots[game.pendingSlot]==null)game.slots[game.pendingSlot]=t}
     if(r&&r.error==="nowin")toast("El bitmiyor. Taşlar seri ya da çift oluşturmalı.",3000);
     else if(r&&r.error==="balance"){if(r.who&&r.who.includes(me))noFunds("Bakiyen masa ücretine yetmiyor.");else toast("Masadaki birinin bakiyesi yetmiyor",3500)}
     else if(r&&r.error&&r.error!=="busy")toast("Hamle yapılamadı ("+r.error+")");
     if(body.action==="discard"||body.action==="finish")game.sel=null;
     renderGame();}
+  return r;
 }
 /* ---------- masa sohbeti ---------- */
 const QUICK=["👏","☕ Çay ısmarladım","Selam 👋","İyi oyunlar","Hadi! ⏳","Tebrikler 👏","Şanslısın 😄","Bir dakika","Rövanş? 🔁","😂","👍","🙏"];
@@ -2719,12 +2723,25 @@ function renderPisti(d,my){
   $("#gLeave").style.display=my>=0&&d.status!=="over"?"":"none";
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
-  const me2=my>=0?my:0,op=1-me2,isMy=d.status==="play"&&d.turn===my&&!game.busy;
+  const me2=my>=0?my:0,op=1-me2,isMy=d.status==="play"&&d.turn===my&&!game.busy&&game.pCardOut==null;
   const hc=d.handCounts||[0,0],tk=d.takenN||[0,0],pi=d.pisti||[0,0];
   const side=(i,top)=>`<div class="pside ${top?"top":"bot"} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div class="pinfo"><b>${esc(seatName(d.seats[i]))}${d.seats[i]&&!d.seats[i].bot?vipMark(d.seats[i].uid):""}</b><span>🂠 ${tk[i]} kart${pi[i]?` · <em>${pi[i]/10>=1?"PİŞTİ "+pi[i]:""}</em>`:""} · ${(d.scores||[])[i]||0}🏆</span></div></div>`;
   const opp=`<div class="phand opp">${Array.from({length:hc[op]||0},()=>cardHTML(null,{back:true})).join("")}</div>`;
-  const pileN=d.pileN||0;const lk=d.last?d.last.at+"-"+d.last.seat:"";if(lk&&game.pLastK!==lk){game.pLastK=lk;game.pAnimUntil=Date.now()+2600;clearTimeout(game.pAnimT);game.pAnimT=setTimeout(()=>{if(game&&game.data===d)renderGame()},2700)}const pNew=!!lk&&Date.now()<(game.pAnimUntil||0);
-  const stack=pileN?`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${cardHTML(d.top,{cls:"st1 "+(d.last&&d.last.card===d.top&&!d.last.captured?(pNew&&d.last.seat!==me2?"land opl":"land"):"")})}`:(pNew&&d.last&&d.last.captured?`<span class="bkw ${d.last.seat===me2?"to-bottom":"to-top"}" style="animation-delay:${d.last.seat!==me2?1.5:0.9}s">${cardHTML(d.last.card,{cls:"st1 land"+(d.last.seat!==me2?" opl":"")})}</span>`:"")+`<div class="pempty ${pNew&&d.last&&d.last.captured?"late2":pNew&&d.last&&d.last.seat!==me2?"late":""}">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ! ":"")+(d.last.seat===me2?"Kartları sen aldın ⬇":esc(seatName(d.seats[d.last.seat]))+" aldı ⬆"):"Yer boş"}</div>`;
+  // attığım kart sunucuyu beklemeden hemen yere düşer; sunucu onaylayınca aynı kart bir daha "atılmaz".
+  // Ekran animasyon sürerken yeniden çizilirse animasyon baştan başlamaz, kaldığı yerden sürer (eksi gecikme).
+  const pileN=d.pileN||0,pend=game.pCardOut!=null&&d.status==="play"&&d.turn===my;
+  if(d.last&&d.last.seat!==me2)game.pShown=null;
+  const lk=pend?"p"+game.pCardOut:(d.last?d.last.at+"-"+d.last.seat:"");
+  if(lk&&game.pLastK!==lk){game.pLastK=lk;game.pAnimStart=Date.now();game.pAnimUntil=Date.now()+2600;clearTimeout(game.pAnimT);game.pAnimT=setTimeout(()=>{if(game&&game.data===d)renderGame()},2700)}
+  const pNew=!!lk&&Date.now()<(game.pAnimUntil||0),pEl=pNew?(Date.now()-game.pAnimStart)/1000:0;
+  const adl=b=>`animation-delay:${(b-pEl).toFixed(2)}s`,withDl=(h,b)=>h.replace('class="pcard',`style="${adl(b)}" class="pcard`);
+  const mineShown=!!d.last&&d.last.seat===me2&&game.pShown===d.last.card; // bu kartı zaten yere düşürdüm
+  let stack;
+  if(pend)stack=`${pileN>1?`<div class="pcard back st3"></div>`:""}${pileN>0?cardHTML(d.top,{cls:"st2"}):""}${withDl(cardHTML(game.pCardOut,{cls:"st1 land"}),0)}`;
+  else if(pileN){const lands=d.last&&d.last.card===d.top&&!d.last.captured&&pNew&&!mineShown,opl=lands&&d.last.seat!==me2;
+    stack=`${pileN>2?`<div class="pcard back st3"></div>`:""}${pileN>1?(d.under!=null?cardHTML(d.under,{cls:"st2"}):`<div class="pcard back st2"></div>`):""}${lands?withDl(cardHTML(d.top,{cls:"st1 land"+(opl?" opl":"")}),opl?0.8:0):cardHTML(d.top,{cls:"st1"})}`}
+  else{const cap=pNew&&d.last&&d.last.captured,opl=cap&&d.last.seat!==me2;
+    stack=(cap?`<span class="bkw ${d.last.seat===me2?"to-bottom":"to-top"}" style="${adl(opl?1.5:mineShown?0.35:0.9)}">${mineShown?cardHTML(d.last.card,{cls:"st1"}):withDl(cardHTML(d.last.card,{cls:"st1 land"+(opl?" opl":"")}),opl?0.8:0)}</span>`:"")+`<div class="pempty ${cap||(pNew&&d.last&&d.last.seat!==me2)?"late":""}" style="${cap?adl(mineShown?1.05:1.6):pNew&&d.last&&d.last.seat!==me2?adl(1):""}">${d.last&&d.last.captured?(d.last.pisti?"PİŞTİ! ":"")+(d.last.seat===me2?"Kartları sen aldın ⬇":esc(seatName(d.seats[d.last.seat]))+" aldı ⬆"):"Yer boş"}</div>`}
   const deck=d.deckN?`<div class="pdeck"><div class="pcard back"></div><span>${d.deckN}</span></div>`:`<div class="pdeck empty"><span>Deste bitti</span></div>`;
   const mine=(game.cards||[]).slice().sort((a,b)=>(pSuit(a)-pSuit(b))||(pRank(a)-pRank(b)));
   const hand=`<div class="phand me ${isMy?"can":""}">${mine.map(c=>cardHTML(c,{cls:"mine"})).join("")}</div>`;
@@ -2741,7 +2758,7 @@ function renderPisti(d,my){
   {const pf=d.prevFinal;if(pf&&d.status==="play")over+=handSummary(d,my,`${esc(seatName(d.seats[me2]))} <b>${pf.pts[me2]}</b> · ${esc(seatName(d.seats[op]))} <b>${pf.pts[op]}</b>`)}
   $("#gTable").innerHTML=`<div class="ptable">${side(op,true)}${opp}<div class="pcenter">${deck}<div class="ppile">${stack}</div></div>${flash}<div class="plog">${esc(d.status==="play"?(isMy?"Sıra sende · bir kart seç":d.turn===my?"…":esc(seatName(d.seats[d.turn]))+" düşünüyor…"):"")}${d.log&&d.status==="play"?`<small>${esc(d.log)}</small>`:""}</div>${hand}${side(me2,false)}${over}</div>`;
   const hb=$(".phand.me");if(hb)hb.onclick=e=>{const c=e.target.closest(".pcard[data-c]");if(!c||!isMy)return;const v=+c.dataset.c;
-    c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),320)};
+    game.pCardOut=v;game.pShown=v;game.cards=(game.cards||[]).filter(x=>x!==v);sfx("tile");gameMove({action:"play",card:v})};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 /* ---------- Kızma Birader ---------- */
@@ -2874,14 +2891,16 @@ function renderBatak(d,my){
   if(d.status==="lobby"||d.status==="closed")return renderLobby(d,my);
   askLandscape();
   $("#gRack").style.display="none";$("#gActions").style.display="none";$("#pCtrl").style.display="none";$("#gMsg").textContent="";
-  const me4=my>=0?my:0,pos=i=>["bottom","right","top","left"][(i-me4+4)%4],isMy=d.status==="play"&&d.turn===my&&!game.busy;
+  const me4=my>=0?my:0,pos=i=>["bottom","right","top","left"][(i-me4+4)%4],isMy=d.status==="play"&&d.turn===my&&!game.busy&&game.pCardOut==null;
   const hc=d.handCounts||[0,0,0,0],tk=d.tricks||[0,0,0,0],bids=d.bids||[];
   const seatBox=i=>`<div class="bkseat bk-${pos(i)} ${d.status==="play"&&d.turn===i?"turn":""}">${seatAv(d.seats[i])}<div><b>${esc(seatName(d.seats[i]))}${d.bidder===i?" 🎯":""}</b><span>${d.phase==="bid"?(bids[i]==null?"…":bids[i]?bids[i]+" dedi":"pas"):`${tk[i]} el`}${pos(i)!=="bottom"?` · 🂠 ${hc[i]}`:""} · ${(d.scores||[])[i]||0}p</span></div></div>`;
   // kartlar tek tek, gerçekçi hızda düşer; biten el bir süre masada kalır
   const ltK=d.lastTrick?"l"+d.lastTrick.at:"";
   if(ltK&&game.bkLtK!==ltK){const seen=game.bkLtK===undefined?d.lastTrick.cards.length:(game.bkSeenK&&game.bkSeenK[0]==="t"?game.bkSeenN:0);game.bkLtK=ltK;game.bkLtSeen=seen;game.bkLtUntil=Date.now()+1450+Math.max(0,d.lastTrick.cards.length-seen)*650}
   const inLast=!!d.lastTrick&&Date.now()<(game.bkLtUntil||0);
-  const showTrick=inLast?d.lastTrick.cards:(d.trick||[]);
+  // attığım kart sunucuyu beklemeden hemen masaya düşer
+  const bkPend=!inLast&&game.pCardOut!=null&&d.status==="play"&&d.phase==="play"&&d.turn===my&&!(d.trick||[]).some(t=>t.c===game.pCardOut);
+  const showTrick=inLast?d.lastTrick.cards:bkPend?[...(d.trick||[]),{p:my,c:game.pCardOut}]:(d.trick||[]);
   const tkey=inLast?ltK:"t"+d.round+"-"+(d.tricks||[]).reduce((a,b)=>a+b,0);
   const seenN=inLast?(game.bkSeenK===tkey?game.bkSeenN:game.bkLtSeen):(game.bkSeenK===tkey?game.bkSeenN:0);
   game.bkSeenK=tkey;game.bkSeenN=showTrick.length;
@@ -2904,7 +2923,7 @@ function renderBatak(d,my){
   $("#gTable").innerHTML=`<div class="bktable">${d.seats.map((_,i)=>seatBox(i)).join("")}${center}<div class="bkmsg">${msg}<small>${esc(d.log||"")}</small></div>${ctrl}${hand}${over}</div>`;
   const bt=$("#gTable .bktable");bt.onclick=e=>{const b=e.target.closest("[data-bid]");if(b){gameMove({action:"bid",v:+b.dataset.bid});return}
     const t=e.target.closest("[data-trump]");if(t){gameMove({action:"trump",suit:+t.dataset.trump});return}
-    const c=e.target.closest(".bkhand .pcard[data-c]");if(c&&legal.has(+c.dataset.c)){const v=+c.dataset.c;c.classList.add("go");game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);setTimeout(()=>gameMove({action:"play",card:v}),300)}};
+    const c=e.target.closest(".bkhand .pcard[data-c]");if(c&&legal.has(+c.dataset.c)){const v=+c.dataset.c;game.pCardOut=v;game.cards=(game.cards||[]).filter(x=>x!==v);sfx("tile");gameMove({action:"play",card:v})}};
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
   if(inLast){clearTimeout(game.bkT);game.bkT=setTimeout(()=>{if(game&&game.data===d)renderGame()},game.bkLtUntil-Date.now()+50)}
 }
@@ -2926,9 +2945,11 @@ function renderTavla(d,my){
   else if(d.status==="play"&&d.dice){
     if(d.turn===my){if(game.tvRolled!==dkey){if(tmode==="auto"){game.tvRolled=dkey;animDice=true}else needRoll=true}}
     else if(game.tvSeen!==dkey){game.tvSeen=dkey;animDice=true}}
-  const isMy=!A&&d.status==="play"&&d.turn===my&&!game.busy&&!needRoll;
+  const isMy=!A&&d.status==="play"&&d.turn===my&&!game.busy&&!needRoll&&!game.tvPend;
   game.tvPath=game.tvPath||[];
-  let r=TV.rel(tvS,me2);for(const m of game.tvPath)r=TV.applyRel(r,m);
+  // gönderilen hamle sunucu onaylayana kadar tahtada kalır (pullar geri dönüp sonradan gelmez)
+  const tvShown=!A&&game.tvPend&&d.turn===my?game.tvPend:game.tvPath;
+  let r=TV.rel(tvS,me2);for(const m of tvShown)r=TV.applyRel(r,m);
   const nx=isMy?tvNext(d,my):{next:[],done:false};
   const srcs=new Set(nx.next.map(m=>m.from)),tgts=new Set(nx.next.filter(m=>m.from===game.tvSel).map(m=>m.to));
   const chk=(n,mine)=>{const a=Math.abs(n),show=Math.min(a,5);return Array.from({length:show},(_,i)=>`<i class="ck ${mine?"w":"b"}">${i===show-1&&a>5?a:""}</i>`).join("")};
@@ -2937,7 +2958,7 @@ function renderTavla(d,my){
   const bar=`<div class="tvbar"><div class="bo">${r.obar?chk(-r.obar,false):""}</div><div class="bm ${srcs.has(24)&&game.tvSel==null?"src":""} ${game.tvSel===24?"sel":""}" data-p="24">${r.bar?chk(r.bar,true):""}</div></div>`;
   const offT=`<div class="toff"><div class="oo"><b>${tvS.off[op]}</b><span>${Array.from({length:Math.min(tvS.off[op],15)},()=>'<u class="b"></u>').join("")}</span></div><div class="om ${tgts.has(-1)?"tgt":""}" data-p="-1"><span>${Array.from({length:Math.min(r.off,15)},()=>'<u class="w"></u>').join("")}</span><b>${r.off}</b></div></div>`;
   const usedN=game.tvPath.length,dice=(A?A.dice:d.dice)||[];const dl=dice.length?(dice[0]===dice[1]?[dice[0],dice[0],dice[0],dice[0]]:dice):[];
-  const usedVals=game.tvPath.map(m=>m.d);const dUsed=dl.map(()=>false);usedVals.forEach(v=>{const k=dl.findIndex((x,i)=>x===v&&!dUsed[i]);if(k>=0)dUsed[k]=true});
+  const usedVals=tvShown.map(m=>m.d);const dUsed=dl.map(()=>false);usedVals.forEach(v=>{const k=dl.findIndex((x,i)=>x===v&&!dUsed[i]);if(k>=0)dUsed[k]=true});
   const pipsTxt=`${TV.pips(tvS,me2)} / ${TV.pips(tvS,op)}`;
   const PIP={1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
   const dieH=(v,used,hide)=>`<span class="die ${used?"used":""} ${animDice?"roll":""}">${Array.from({length:9},(_,k)=>`<i class="${!hide&&PIP[v]&&PIP[v].includes(k)?"on":""}"></i>`).join("")}</span>`;
@@ -2968,7 +2989,9 @@ function renderTavla(d,my){
   const ag=$("#gAgain");if(ag)ag.onclick=()=>gameMove({action:"again"});
 }
 function tvAfter(d,my){const nx=tvNext(d,my);
-  if(nx.done){const seq=game.tvPath.map(m=>({from:m.from,to:m.to}));game.tvPath=[];gameMove({action:"move",seq}).then(()=>{if(game)renderGame()});return}
+  if(nx.done){const sent=game.tvPath,seq=sent.map(m=>({from:m.from,to:m.to})),gid=game.id;game.tvPend=sent;game.tvPath=[];
+    gameMove({action:"move",seq}).then(r=>{if(!game||game.id!==gid)return;if((!r||r.error)&&game.tvPend===sent)game.tvPend=null;renderGame();
+      setTimeout(()=>{if(game&&game.id===gid&&game.tvPend===sent){game.tvPend=null;renderGame()}},6000)});return}
   renderGame()}
 function renderPool(d,my){
   $("#gTitleTxt").textContent="Bilardo";

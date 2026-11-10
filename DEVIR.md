@@ -1,6 +1,6 @@
 # TR — Devir notu (Claude Code için)
 
-Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v50** (`public/sw.js` içindeki `C`)
+Son güncelleme: 10 Kasım 2026 · son commit `37d1a69` · yayındaki sürüm **tr-v51** (`public/sw.js` içindeki `C`)
 
 Kullanıcıyla **her zaman Türkçe** konuş. Kullanıcı teknik değil; kısa, net, adım adım anlat.
 
@@ -94,6 +94,11 @@ Kontrol adresi (gizli bilgi döndürmez): `https://tr-mesaj.vercel.app/api/turn-
 - Sunucu: `notify.mjs` → `callTargets()` (arama/cevapsız/test bildirimi `ntokens`'a da gider, `nweb` atlanır), `{stop:id[,tok]}` (zili sustur), `{decline:id,key}` (girişsiz; anahtar = HMAC, `declineKey`). Mesaj bildirimleri hâlâ web push.
 - Ahize/hoparlör: arama ekranında `#csSpk`. Android Chrome'da çıkış, mikrofon aygıtı seçimiyle değişiyor ("Headset earpiece"/"Speakerphone" etiketleri); sesli aramada ahize varsayılan. Aygıt etiketleri yoksa düğme gizli.
 - Derleme: `cd android && KEYSTORE_FILE=… KEYSTORE_PASSWORD=… KEY_ALIAS=tr KEY_PASSWORD=… gradle assembleRelease bundleRelease` (JDK 17+, Android SDK 36; bulut ortamında `dl.google.com` izinli olmalı).
+
+### B1. Oyunlarda "kasma" düzeltmesi (10 Kasım, tr-v51)
+- Pişti/Batak: atılan kart sunucu beklenmeden masaya düşer (`game.pCardOut`, anlık görüntüde `seq` değişince temizlenir). Pişti'de animasyon yeniden çizimde baştan başlamaz (eksi `animation-delay`, `game.pAnimStart`); kendi kartım ikinci kez "atılmaz" (`game.pShown`).
+- Tavla: gönderilen hamle onaylanana kadar tahtada kalır (`game.tvPend`); önceden pullar geri dönüp sonradan geliyordu.
+- Masa açılırken oyun fonksiyonu ısıtılır (`fetch("/api/pisti")`). Domino/Kızma/Okey'e dokunulmadı.
 
 ### B. (eski plan, başvuru için) **Android'de gerçek gelen arama ekranı**
 Sorun: uygulama kapalıyken arama bildirimi web push ile Chrome üzerinden geliyor, telefon pil tasarrufunda düşürüyor. Kullanıcı native çözüm istedi.
